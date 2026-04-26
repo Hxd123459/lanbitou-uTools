@@ -6,7 +6,8 @@
     </section>
     <section class="bubble answer">
       <div class="label">答</div>
-      <p>{{ item.answer }}</p>
+      <p>{{ item.answer || '思考中...' }}</p>
+      <span v-if="item.isStreaming" class="streaming-dot"></span>
     </section>
   </article>
 </template>
@@ -52,5 +53,25 @@ defineProps({
 .answer {
   border-color: #dbeafe;
   background: #f8fbff;
+}
+
+.streaming-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin-top: 8px;
+  border-radius: 50%;
+  background: var(--color-accent);
+  animation: blink 1s infinite;
+}
+
+@keyframes blink {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.2;
+  }
 }
 </style>

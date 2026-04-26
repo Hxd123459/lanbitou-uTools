@@ -1,6 +1,6 @@
 <template>
   <Transition name="toast">
-    <div v-if="visible" class="copy-toast">
+    <div v-if="visible" class="copy-toast" :class="type">
       {{ text }}
     </div>
   </Transition>
@@ -15,6 +15,10 @@ defineProps({
   text: {
     type: String,
     default: '复制成功',
+  },
+  type: {
+    type: String,
+    default: 'success',
   },
 })
 </script>
@@ -33,6 +37,10 @@ defineProps({
   color: #fff;
   background: var(--color-success);
   font-size: 13px;
+}
+
+.copy-toast.error {
+  background: var(--color-error);
 }
 
 .toast-enter-active,

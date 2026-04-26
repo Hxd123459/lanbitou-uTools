@@ -3,14 +3,16 @@ import { onBeforeUnmount, ref } from 'vue'
 export function useCopyNote() {
   const showToast = ref(false)
   const toastText = ref('复制成功')
+  const toastType = ref('success')
   let timer = null
 
   const closeToast = () => {
     showToast.value = false
   }
 
-  const openToast = (text = '复制成功') => {
+  const openToast = (text = '复制成功', type = 'success') => {
     toastText.value = text
+    toastType.value = type
     showToast.value = true
     if (timer) clearTimeout(timer)
     timer = window.setTimeout(() => {
@@ -24,7 +26,7 @@ export function useCopyNote() {
       openToast('复制成功')
       return true
     } catch {
-      openToast('复制失败')
+      openToast('复制失败', 'error')
       return false
     }
   }
@@ -36,7 +38,9 @@ export function useCopyNote() {
   return {
     showToast,
     toastText,
+    toastType,
     closeToast,
+    openToast,
     copyText,
   }
 }
