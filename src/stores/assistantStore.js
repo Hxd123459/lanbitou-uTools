@@ -1,6 +1,5 @@
 import { computed, ref } from 'vue'
 import { defineStore } from 'pinia'
-import { streamChat } from '../api/chat'
 import {
   createBlock,
   fetchBlockListByDate,
@@ -129,12 +128,8 @@ export const useAssistantStore = defineStore('assistant', () => {
       createdAt: new Date().toISOString(),
     },
   ])
-  const loadingAsk = ref(false)
 
-  const addQARecord = async (question) => {
-    if (loadingAsk.value) return
-    loadingAsk.value = true
-
+  const createQARecord = (question) => {
     const record = {
       id: `qa_${Date.now()}`,
       question,
@@ -143,20 +138,22 @@ export const useAssistantStore = defineStore('assistant', () => {
       isStreaming: true,
     }
     qaRecords.value.unshift(record)
+    return qaRecords.value[0]
+  }
 
-    try {
-      await streamChat(question, {
-        onDelta: (delta) => {
-          record.answer += delta
-        },
-      })
-      if (!record.answer.trim()) {
-        record.answer = '已收到请求，但暂无回答内容。'
-      }
-    } finally {
-      record.isStreaming = false
-      loadingAsk.value = false
+  const appendQARecordAnswer = (recordId, chunk) => {
+    if (!recordId || !chunk) return
+    const target = qaRecords.value.find((item) => item.id === recordId)
+    if (!target) return
+    target.answer += chunk
+  }
+
+  const finishQARecord = (record, fallbackAnswer = '已收到请求，但暂无回答内容。') => {
+    if (!record) return
+    if (!record.answer.trim()) {
+      record.answer = fallbackAnswer
     }
+    record.isStreaming = false
   }
 
   return {
@@ -164,11 +161,12 @@ export const useAssistantStore = defineStore('assistant', () => {
     groupedNotes,
     loadingNotes,
     loadingMoreNotes,
-    loadingAsk,
     qaRecords,
     addNote,
     loadInitialNotes,
     loadMoreNotes,
-    addQARecord,
+    createQARecord,
+    appendQARecordAnswer,
+    finishQARecord,
   }
 })
