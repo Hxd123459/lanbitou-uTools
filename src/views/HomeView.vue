@@ -12,7 +12,6 @@
       <NoteTimeline
         :groups="assistantStore.groupedNotes"
         :loading="assistantStore.loadingNotes"
-        @copy="handleCopyNote"
       />
     </template>
   </MainFrame>
@@ -33,7 +32,7 @@ import { useAssistantStore } from '../stores/assistantStore'
 const inputValue = ref('')
 const noteSubmitting = ref(false)
 const assistantStore = useAssistantStore()
-const { showToast, toastText, toastType, openToast, copyText } = useCopyNote()
+const { showToast, toastText, toastType, openToast } = useCopyNote()
 
 const handleSubmit = async (text) => {
   if (noteSubmitting.value) return
@@ -46,10 +45,6 @@ const handleSubmit = async (text) => {
   } finally {
     noteSubmitting.value = false
   }
-}
-
-const handleCopyNote = (text) => {
-  copyText(text)
 }
 
 const notifyError = (error) => {

@@ -1,5 +1,5 @@
 <template>
-  <article class="note-card" @click="emit('copy', contentText)">
+  <article class="note-card">
     <div class="note-meta">
       <span v-if="titleText" class="note-tag">{{ titleText }}</span>
       <span class="note-time">{{ timeText }}</span>
@@ -39,7 +39,6 @@ const props = defineProps({
   },
 })
 
-const emit = defineEmits(['copy'])
 const contentText = computed(
   () => props.note?.updateContent || props.note?.text || '',
 )
@@ -81,7 +80,6 @@ function formatTime(dateValue) {
   border-radius: var(--radius-md);
   background: var(--color-surface);
   box-shadow: var(--shadow-card);
-  cursor: pointer;
   transition: border-color var(--motion-fast), box-shadow var(--motion-fast);
 }
 

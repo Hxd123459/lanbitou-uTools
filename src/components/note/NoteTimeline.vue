@@ -14,7 +14,6 @@
           v-for="item in group.items"
           :key="item.id"
           :note="item"
-          @copy="emit('copy', $event)"
         />
       </div>
     </div>
@@ -34,15 +33,41 @@ defineProps({
     default: false,
   },
 })
-
-const emit = defineEmits(['copy'])
 </script>
 
 <style scoped>
 .note-timeline {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 18px 10px 28px 0;
   display: flex;
   flex-direction: column;
   gap: 24px;
+
+  scrollbar-width: thin;
+  scrollbar-color: rgba(24, 24, 27, 0.18) transparent;
+}
+
+.note-timeline::-webkit-scrollbar {
+  width: 8px;
+}
+
+.note-timeline::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.note-timeline::-webkit-scrollbar-thumb {
+  background: rgba(24, 24, 27, 0.18);
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+
+.note-timeline::-webkit-scrollbar-thumb:hover {
+  background: rgba(24, 24, 27, 0.32);
+  background-clip: content-box;
 }
 
 .empty-state {

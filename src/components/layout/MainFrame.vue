@@ -25,22 +25,22 @@ import BrandArea from '../brand/BrandArea.vue'
 
 <style scoped>
 .main-frame {
-  min-height: 100vh;
+  height: 100vh;
   background: var(--color-bg);
   font-family: var(--font-base);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 
 .top-bar {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  z-index: 30;
+  flex: 0 0 auto;
   padding: 14px 24px 12px;
-  background: rgba(250, 250, 250, 0.85);
+  background: rgba(250, 250, 250, 0.92);
   backdrop-filter: saturate(160%) blur(12px);
   -webkit-backdrop-filter: saturate(160%) blur(12px);
   border-bottom: 1px solid rgba(228, 228, 231, 0.6);
+  z-index: 5;
 }
 
 .top-bar-inner {
@@ -64,12 +64,19 @@ import BrandArea from '../brand/BrandArea.vue'
 }
 
 .page-content {
-  padding: 132px 0 80px;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  justify-content: center;
+  overflow: hidden;
 }
 
 .content-inner {
   width: min(760px, 92vw);
-  margin: 0 auto;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
 }
 
 @media (max-width: 720px) {
@@ -80,10 +87,6 @@ import BrandArea from '../brand/BrandArea.vue'
   .top-bar-brand {
     left: 16px;
     max-width: 32%;
-  }
-
-  .page-content {
-    padding-top: 124px;
   }
 }
 </style>
