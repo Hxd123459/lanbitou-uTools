@@ -1,13 +1,21 @@
 <template>
   <Transition name="toast">
     <div v-if="visible" class="copy-toast" :class="type">
-      {{ text }}
+      <span class="toast-text">{{ text }}</span>
+      <button
+        v-if="actionLabel"
+        class="toast-action"
+        type="button"
+        @click="onActionClick"
+      >
+        {{ actionLabel }}
+      </button>
     </div>
   </Transition>
 </template>
 
 <script setup>
-defineProps({
+const props = defineProps({
   visible: {
     type: Boolean,
     default: false,
@@ -20,32 +28,72 @@ defineProps({
     type: String,
     default: 'success',
   },
+  actionLabel: {
+    type: String,
+    default: '',
+  },
 })
+
+const emit = defineEmits(['action'])
+
+const onActionClick = () => {
+  emit('action')
+}
 </script>
 
 <style scoped>
 .copy-toast {
   position: fixed;
-  right: 24px;
+  left: 24px;
   bottom: 24px;
   z-index: 120;
-  height: 36px;
+  height: 40px;
   display: inline-flex;
   align-items: center;
-  padding: 0 14px;
+  gap: 12px;
+  padding: 0 14px 0 16px;
   border-radius: 10px;
   color: #fff;
-  background: var(--color-success);
+  background: rgba(24, 24, 27, 0.92);
+  backdrop-filter: saturate(160%) blur(8px);
+  -webkit-backdrop-filter: saturate(160%) blur(8px);
   font-size: 13px;
+  box-shadow: 0 10px 30px rgba(24, 24, 27, 0.18);
+}
+
+.copy-toast.success {
+  background: rgba(24, 24, 27, 0.92);
 }
 
 .copy-toast.error {
   background: var(--color-error);
 }
 
+.toast-text {
+  white-space: nowrap;
+  letter-spacing: 0.2px;
+}
+
+.toast-action {
+  height: 26px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.16);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background var(--motion-fast);
+}
+
+.toast-action:hover {
+  background: rgba(255, 255, 255, 0.28);
+}
+
 .toast-enter-active,
 .toast-leave-active {
-  transition: all var(--motion-fast);
+  transition: opacity var(--motion-fast), transform var(--motion-fast);
 }
 
 .toast-enter-from,

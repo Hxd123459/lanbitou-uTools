@@ -14,6 +14,8 @@
           v-for="item in group.items"
           :key="item.id"
           :note="item"
+          @edit-save="(payload) => emit('edit-save', payload)"
+          @delete="(payload) => emit('delete', payload)"
         />
       </div>
     </div>
@@ -33,6 +35,8 @@ defineProps({
     default: false,
   },
 })
+
+const emit = defineEmits(['edit-save', 'delete'])
 </script>
 
 <style scoped>

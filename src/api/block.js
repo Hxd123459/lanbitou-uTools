@@ -42,3 +42,12 @@ export async function createBlock(content) {
   const data = await post('/api/note/insert', { original_content: content })
   return data
 }
+
+export async function updateBlock(id, content) {
+  const data = await post('/api/note/update', { id, content })
+  return data
+}
+
+export async function deleteBlock(id) {
+  return post('/api/note/delete', { id })
+}

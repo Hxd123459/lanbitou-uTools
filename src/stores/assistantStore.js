@@ -2,9 +2,11 @@ import { computed, ref } from 'vue'
 import { defineStore } from 'pinia'
 import {
   createBlock,
+  deleteBlock,
   fetchBlockListByDate,
   formatDateParam,
   shiftDateString,
+  updateBlock,
 } from '../api/block'
 
 const DAY_MS = 24 * 60 * 60 * 1000
@@ -45,10 +47,12 @@ export const useAssistantStore = defineStore('assistant', () => {
   const noteIdSet = ref(new Set())
   const loadingNotes = ref(false)
   const nextDateCursor = ref(formatDateParam(new Date()))
+  const editingNoteId = ref(null)
 
   const groupedNotes = computed(() => {
     const map = new Map()
     notes.value.forEach((note) => {
+      if (note.pendingDelete) return
       const key = formatDateKey(note.createdAt)
       if (!map.has(key)) {
         map.set(key, {
@@ -64,6 +68,20 @@ export const useAssistantStore = defineStore('assistant', () => {
       a.dateKey > b.dateKey ? -1 : 1,
     )
   })
+
+  const setEditingNoteId = (id) => {
+    editingNoteId.value = id || null
+  }
+
+  const setNotePendingDelete = (id, value) => {
+    const target = notes.value.find((item) => item.id === id)
+    if (target) target.pendingDelete = !!value
+  }
+
+  const removeNoteLocal = (id) => {
+    notes.value = notes.value.filter((item) => item.id !== id)
+    noteIdSet.value.delete(id)
+  }
 
   const appendNotes = (list) => {
     const next = []
@@ -112,24 +130,56 @@ export const useAssistantStore = defineStore('assistant', () => {
     notes.value.unshift(pendingNote)
 
     try {
-      const title = await createBlock(text)
+      const result = await createBlock(text)
       const target = notes.value.find((item) => item.id === pendingId)
-      if (target) {
-        target.title = typeof title === 'string' ? title : ''
-        target.isPending = false
-      }
-      return target || pendingNote
+      if (!target) return result
+      const data =
+        result && typeof result === 'object' ? result : { title: result }
+      const finalId = data.id ?? pendingId
+      target.id = finalId
+      target.title = data.title || ''
+      target.text = data.content || text
+      target.updateContent = data.content || text
+      target.isPending = false
+      noteIdSet.value.add(finalId)
+      return target
     } catch (error) {
       notes.value = notes.value.filter((item) => item.id !== pendingId)
       throw error
     }
   }
 
+  const updateNote = async (id, content) => {
+    const target = notes.value.find((item) => item.id === id)
+    if (!target) return null
+    const result = await updateBlock(id, content)
+    const data =
+      result && typeof result === 'object' ? result : null
+    target.text = data?.content || content
+    target.updateContent = data?.content || content
+    if (data?.title !== undefined && data?.title !== null) {
+      target.title = data.title
+    }
+    return target
+  }
+
+  const removeNote = async (id) => {
+    await deleteBlock(id)
+    notes.value = notes.value.filter((item) => item.id !== id)
+    noteIdSet.value.delete(id)
+  }
+
   return {
     notes,
     groupedNotes,
     loadingNotes,
+    editingNoteId,
     addNote,
+    updateNote,
+    removeNote,
     loadInitialNotes,
+    setEditingNoteId,
+    setNotePendingDelete,
+    removeNoteLocal,
   }
 })
