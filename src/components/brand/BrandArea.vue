@@ -9,7 +9,7 @@
         <h1 class="brand-title">烂笔头</h1>
         <span class="env-tag">{{ envLabel }}</span>
       </div>
-      <div class="brand-slogan">好记性不如烂笔头</div>
+      <div class="brand-slogan">好记性，不如烂笔头</div>
     </div>
   </div>
 </template>
