@@ -45,3 +45,8 @@ async function request(path, options = {}) {
 export function post(path, body = {}) {
   return request(path, { method: 'POST', body })
 }
+
+export function get(path, params = {}) {
+  const query = new URLSearchParams(params).toString()
+  return request(query ? `${path}?${query}` : path)
+}

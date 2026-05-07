@@ -1,7 +1,14 @@
 <template>
-  <section class="note-timeline" @scroll="onScroll">
+  <section class="note-timeline">
+    <div v-if="!groups.length && !loading" class="empty-state">
+      <p>还没有笔记，先记录一条吧。</p>
+    </div>
+
     <div v-for="group in groups" :key="group.dateKey" class="date-group">
-      <div class="date-label">{{ group.label }}</div>
+      <div class="date-label">
+        <span class="date-text">{{ group.label }}</span>
+        <span class="date-line" />
+      </div>
       <div class="card-list">
         <NoteCard
           v-for="item in group.items"
@@ -11,7 +18,6 @@
         />
       </div>
     </div>
-    <div v-if="loading" class="loading-more">加载中...</div>
   </section>
 </template>
 
@@ -29,43 +35,48 @@ defineProps({
   },
 })
 
-const emit = defineEmits(['copy', 'load-more'])
-
-const onScroll = (event) => {
-  const { scrollTop, scrollHeight, clientHeight } = event.target
-  if (scrollHeight - (scrollTop + clientHeight) <= 48) {
-    emit('load-more')
-  }
-}
+const emit = defineEmits(['copy'])
 </script>
 
 <style scoped>
 .note-timeline {
-  max-height: calc(100vh - 250px);
-  overflow: auto;
-  padding-right: 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
 }
 
-.date-group + .date-group {
-  margin-top: 18px;
+.empty-state {
+  padding: 48px 0;
+  text-align: center;
+  color: var(--color-secondary-text);
+  font-size: 14px;
+}
+
+.date-group {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
 }
 
 .date-label {
-  margin-bottom: 10px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
   color: var(--color-secondary-text);
   font-size: 13px;
+  font-weight: 500;
+  letter-spacing: 0.2px;
+}
+
+.date-line {
+  flex: 1;
+  height: 1px;
+  background: var(--color-border);
 }
 
 .card-list {
   display: flex;
   flex-direction: column;
   gap: 10px;
-}
-
-.loading-more {
-  padding: 14px 0 8px;
-  color: var(--color-secondary-text);
-  font-size: 12px;
-  text-align: center;
 }
 </style>

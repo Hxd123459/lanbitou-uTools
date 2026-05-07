@@ -44,7 +44,6 @@ export const useAssistantStore = defineStore('assistant', () => {
   const notes = ref([])
   const noteIdSet = ref(new Set())
   const loadingNotes = ref(false)
-  const loadingMoreNotes = ref(false)
   const nextDateCursor = ref(formatDateParam(new Date()))
 
   const groupedNotes = computed(() => {
@@ -78,12 +77,8 @@ export const useAssistantStore = defineStore('assistant', () => {
   }
 
   const loadNotesByDate = async (currentDate, isInitial) => {
-    if (isInitial) {
-      loadingNotes.value = true
-    } else {
-      if (loadingMoreNotes.value) return
-      loadingMoreNotes.value = true
-    }
+    if (!isInitial) return
+    loadingNotes.value = true
 
     try {
       const list = await fetchBlockListByDate(currentDate)
@@ -92,7 +87,6 @@ export const useAssistantStore = defineStore('assistant', () => {
       nextDateCursor.value = shiftDateString(baseDate, -1)
     } finally {
       loadingNotes.value = false
-      loadingMoreNotes.value = false
     }
   }
 
@@ -103,70 +97,39 @@ export const useAssistantStore = defineStore('assistant', () => {
     await loadNotesByDate(undefined, true)
   }
 
-  const loadMoreNotes = async () => {
-    await loadNotesByDate(nextDateCursor.value, false)
-  }
-
   const addNote = async (text) => {
-    const id = await createBlock(text)
-    if (!id || noteIdSet.value.has(id)) return id
-
-    noteIdSet.value.add(id)
-    notes.value.unshift({
-      id,
+    const pendingId = `pending_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
+    const pendingNote = {
+      id: pendingId,
+      title: '',
+      fineTitle: '',
       text,
+      updateContent: text,
       createdAt: new Date().toISOString(),
-    })
-    return id
-  }
-
-  const qaRecords = ref([
-    {
-      id: 'qa1',
-      question: '今天重点做什么？',
-      answer: '今天重点是先完成首页布局与输入交互，保证记录体验顺畅。',
-      createdAt: new Date().toISOString(),
-    },
-  ])
-
-  const createQARecord = (question) => {
-    const record = {
-      id: `qa_${Date.now()}`,
-      question,
-      answer: '',
-      createdAt: new Date().toISOString(),
-      isStreaming: true,
+      isPending: true,
     }
-    qaRecords.value.unshift(record)
-    return qaRecords.value[0]
-  }
 
-  const appendQARecordAnswer = (recordId, chunk) => {
-    if (!recordId || !chunk) return
-    const target = qaRecords.value.find((item) => item.id === recordId)
-    if (!target) return
-    target.answer += chunk
-  }
+    notes.value.unshift(pendingNote)
 
-  const finishQARecord = (record, fallbackAnswer = '已收到请求，但暂无回答内容。') => {
-    if (!record) return
-    if (!record.answer.trim()) {
-      record.answer = fallbackAnswer
+    try {
+      const title = await createBlock(text)
+      const target = notes.value.find((item) => item.id === pendingId)
+      if (target) {
+        target.title = typeof title === 'string' ? title : ''
+        target.isPending = false
+      }
+      return target || pendingNote
+    } catch (error) {
+      notes.value = notes.value.filter((item) => item.id !== pendingId)
+      throw error
     }
-    record.isStreaming = false
   }
 
   return {
     notes,
     groupedNotes,
     loadingNotes,
-    loadingMoreNotes,
-    qaRecords,
     addNote,
     loadInitialNotes,
-    loadMoreNotes,
-    createQARecord,
-    appendQARecordAnswer,
-    finishQARecord,
   }
 })

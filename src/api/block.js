@@ -1,4 +1,4 @@
-import { post } from './http'
+import { post, get } from './http'
 
 export function formatDateParam(date) {
   const year = date.getFullYear()
@@ -16,22 +16,29 @@ export function shiftDateString(dateString, offsetDays) {
 function mapBlockToNote(item) {
   return {
     id: item.id,
-    text: item.content || '',
-    createdAt: item.createdAt,
-    updatedAt: item.updatedAt,
-    type: item.type,
-    source: item.source,
-    summary: item.summary,
+    title: item.title || '',
+    fineTitle: item.fineTitle || '',
+    text: item.originalContent || '',
+    updateContent: item.updateContent || '',
+    createdAt: item.createTime,
+    tokenUsage: item.tokenUsage,
   }
 }
 
 export async function fetchBlockListByDate(currentDate) {
-  const body = currentDate ? { currentDate } : {}
-  const data = await post('/api/block/listByDate', body)
+  let date = currentDate
+  if (!date) {
+    date = formatDateParam(new Date())
+  } else if (date instanceof Date) {
+    date = formatDateParam(date)
+  }
+
+  const params = { date }
+  const data = await get('/api/note/listByDay', params)
   return Array.isArray(data) ? data.map(mapBlockToNote) : []
 }
 
 export async function createBlock(content) {
-  const data = await post('/api/block/create', { content })
+  const data = await post('/api/note/insert', { original_content: content })
   return data
 }
