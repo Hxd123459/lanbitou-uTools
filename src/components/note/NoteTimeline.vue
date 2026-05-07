@@ -16,6 +16,8 @@
           :note="item"
           @edit-save="(payload) => emit('edit-save', payload)"
           @delete="(payload) => emit('delete', payload)"
+          @copied="emit('copied')"
+          @copy-failed="emit('copy-failed')"
         />
       </div>
     </div>
@@ -36,7 +38,7 @@ defineProps({
   },
 })
 
-const emit = defineEmits(['edit-save', 'delete'])
+const emit = defineEmits(['edit-save', 'delete', 'copied', 'copy-failed'])
 </script>
 
 <style scoped>
@@ -45,13 +47,20 @@ const emit = defineEmits(['edit-save', 'delete'])
   min-height: 0;
   overflow-y: auto;
   overflow-x: hidden;
-  padding: 18px 10px 28px 0;
+  padding: 18px 0 28px 0;
   display: flex;
   flex-direction: column;
+  align-items: flex-start;
   gap: 24px;
 
   scrollbar-width: thin;
   scrollbar-color: rgba(24, 24, 27, 0.18) transparent;
+}
+
+.note-timeline > * {
+  width: 100%;
+  max-width: var(--frame-inner-width);
+  box-sizing: border-box;
 }
 
 .note-timeline::-webkit-scrollbar {

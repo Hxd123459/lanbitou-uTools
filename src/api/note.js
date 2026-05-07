@@ -49,5 +49,5 @@ export async function updateBlock(id, content) {
 }
 
 export async function deleteBlock(id) {
-  return post('/api/note/delete', { id })
+  return get('/api/note/delete', { id })
 }

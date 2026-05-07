@@ -135,6 +135,11 @@ onMounted(() => {
   line-height: 1.55;
   font-family: inherit;
   scrollbar-width: none;
+  transition: min-height var(--motion-fast);
+}
+
+.input-shell:focus-within .main-input {
+  min-height: 112px;
 }
 
 .main-input::-webkit-scrollbar {

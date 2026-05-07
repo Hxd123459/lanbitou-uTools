@@ -25,6 +25,9 @@ import BrandArea from '../brand/BrandArea.vue'
 
 <style scoped>
 .main-frame {
+  --frame-width: min(760px, 92vw);
+  --frame-gutter: 14px;
+  --frame-inner-width: calc(var(--frame-width) - var(--frame-gutter));
   height: 100vh;
   background: var(--color-bg);
   font-family: var(--font-base);
@@ -59,7 +62,9 @@ import BrandArea from '../brand/BrandArea.vue'
 }
 
 .top-bar-input {
-  width: min(760px, 92vw);
+  width: var(--frame-width);
+  padding-right: var(--frame-gutter);
+  box-sizing: border-box;
   min-width: 0;
 }
 
@@ -72,7 +77,7 @@ import BrandArea from '../brand/BrandArea.vue'
 }
 
 .content-inner {
-  width: min(760px, 92vw);
+  width: var(--frame-width);
   height: 100%;
   display: flex;
   flex-direction: column;

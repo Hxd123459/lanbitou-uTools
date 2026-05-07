@@ -14,6 +14,8 @@
         :loading="assistantStore.loadingNotes"
         @edit-save="handleEditSave"
         @delete="handleDelete"
+        @copied="handleCopied"
+        @copy-failed="handleCopyFailed"
       />
     </template>
   </MainFrame>
@@ -35,7 +37,7 @@ import MainFrame from '../components/layout/MainFrame.vue'
 import NoteTimeline from '../components/note/NoteTimeline.vue'
 import { useCopyNote } from '../composables/useCopyNote'
 import { ApiError } from '../api/http'
-import { deleteBlock } from '../api/block'
+import { deleteBlock } from '../api/note'
 import { useAssistantStore } from '../stores/assistantStore'
 
 const inputValue = ref('')
@@ -108,6 +110,14 @@ const handleDelete = ({ id }) => {
       assistantStore.setNotePendingDelete(id, false)
     },
   })
+}
+
+const handleCopied = () => {
+  openToast('已复制纯文本', 'success', { duration: 1600 })
+}
+
+const handleCopyFailed = () => {
+  openToast('复制失败', 'error', { duration: 1600 })
 }
 
 const notifyError = (error) => {

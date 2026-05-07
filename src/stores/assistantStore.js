@@ -7,7 +7,7 @@ import {
   formatDateParam,
   shiftDateString,
   updateBlock,
-} from '../api/block'
+} from '../api/note'
 
 const DAY_MS = 24 * 60 * 60 * 1000
 

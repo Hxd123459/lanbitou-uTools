@@ -10,6 +10,20 @@
           v-if="!isEditing"
           class="icon-btn"
           type="button"
+          title="复制纯文本"
+          @click="onCopy"
+        >
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="none"
+            stroke="currentColor" stroke-width="1.8" stroke-linecap="round"
+            stroke-linejoin="round" aria-hidden="true">
+            <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+          </svg>
+        </button>
+        <button
+          v-if="!isEditing"
+          class="icon-btn"
+          type="button"
           title="编辑"
           @click="enterEdit"
         >
@@ -117,7 +131,7 @@ const props = defineProps({
   },
 })
 
-const emit = defineEmits(['edit-save', 'delete'])
+const emit = defineEmits(['edit-save', 'delete', 'copied', 'copy-failed'])
 
 const assistantStore = useAssistantStore()
 
@@ -216,6 +230,22 @@ const onDelete = () => {
   emit('delete', { id: props.note.id })
 }
 
+const onCopy = async () => {
+  const plain = stripMarkdown(contentText.value)
+  if (!plain) return
+  try {
+    if (navigator.clipboard && window.isSecureContext) {
+      await navigator.clipboard.writeText(plain)
+    } else {
+      legacyCopy(plain)
+    }
+    emit('copied')
+  } catch (error) {
+    console.error('[NoteCard] copy failed:', error)
+    emit('copy-failed')
+  }
+}
+
 watch(
   () => assistantStore.editingNoteId,
   (newId) => {
@@ -232,6 +262,44 @@ onMounted(() => {
     ''
   isMac.value = /Mac|iPhone|iPad|iPod/i.test(platform)
 })
+
+function stripMarkdown(md) {
+  if (!md) return ''
+  return md
+    .replace(/```[\s\S]*?```/g, (block) =>
+      block.replace(/```[^\n]*\n?|```/g, ''),
+    )
+    .replace(/`([^`]+)`/g, '$1')
+    .replace(/!\[([^\]]*)\]\([^)]*\)/g, '$1')
+    .replace(/\[([^\]]*)\]\([^)]*\)/g, '$1')
+    .replace(/^#{1,6}\s+/gm, '')
+    .replace(/^>\s?/gm, '')
+    .replace(/^\s*[-+*]\s+\[[xX ]\]\s+/gm, '')
+    .replace(/^\s*[-+*]\s+/gm, '')
+    .replace(/^\s*\d+\.\s+/gm, '')
+    .replace(/\*\*([^*]+)\*\*/g, '$1')
+    .replace(/__([^_]+)__/g, '$1')
+    .replace(/\*([^*\n]+)\*/g, '$1')
+    .replace(/_([^_\n]+)_/g, '$1')
+    .replace(/~~([^~]+)~~/g, '$1')
+    .replace(/^[-*_]{3,}\s*$/gm, '')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim()
+}
+
+function legacyCopy(text) {
+  const ta = document.createElement('textarea')
+  ta.value = text
+  ta.style.position = 'fixed'
+  ta.style.opacity = '0'
+  document.body.appendChild(ta)
+  ta.select()
+  try {
+    document.execCommand('copy')
+  } finally {
+    document.body.removeChild(ta)
+  }
+}
 
 function formatTime(dateValue) {
   if (!dateValue) return '----'
