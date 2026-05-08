@@ -67,9 +67,9 @@ const handleSubmit = async (text) => {
   }
 }
 
-const handleEditSave = async ({ id, content }) => {
+const handleEditSave = async ({ id, title, content }) => {
   try {
-    await assistantStore.updateNote(id, content)
+    await assistantStore.updateNote(id, title, content)
     openToast('已保存修改', 'success')
   } catch (error) {
     notifyError(error)

@@ -2,7 +2,26 @@
   <article class="note-card" :class="{ 'is-editing': isEditing }">
     <div class="note-meta">
       <div class="meta-left">
-        <span v-if="titleText" class="note-tag">{{ titleText }}</span>
+        <label
+          v-if="isEditing"
+          class="tag-input-wrap"
+          :class="{ 'is-invalid': !draftTitle.trim() }"
+        >
+          <span class="tag-input-shadow" aria-hidden="true">{{
+            draftTitle || '标签'
+          }}</span>
+          <input
+            v-model="draftTitle"
+            class="tag-input"
+            type="text"
+            maxlength="4"
+            placeholder="标签"
+            spellcheck="false"
+            :disabled="saving"
+            @keydown="onTitleKeydown"
+          />
+        </label>
+        <span v-else-if="titleText" class="note-tag">{{ titleText }}</span>
         <span class="note-time">{{ timeText }}</span>
       </div>
       <div v-if="!note?.isPending" class="meta-actions">
@@ -136,6 +155,7 @@ const emit = defineEmits(['edit-save', 'delete', 'copied', 'copy-failed'])
 const assistantStore = useAssistantStore()
 
 const draftContent = ref('')
+const draftTitle = ref('')
 const saving = ref(false)
 const editorRef = ref(null)
 const isMac = ref(false)
@@ -156,7 +176,9 @@ const timeText = computed(() => formatTime(props.note?.createdAt))
 const canSave = computed(
   () =>
     draftContent.value.trim().length > 0 &&
-    draftContent.value !== contentText.value,
+    draftTitle.value.trim().length > 0 &&
+    (draftContent.value !== contentText.value ||
+      draftTitle.value !== titleText.value),
 )
 
 const md = getMarkdown('note-card')
@@ -173,6 +195,7 @@ const markdownNodes = computed(() => {
 
 const enterEdit = async () => {
   draftContent.value = contentText.value
+  draftTitle.value = titleText.value
   assistantStore.setEditingNoteId(props.note.id)
   await nextTick()
   autoGrow()
@@ -182,8 +205,25 @@ const enterEdit = async () => {
 const cancelEdit = () => {
   if (saving.value) return
   draftContent.value = ''
+  draftTitle.value = ''
   if (assistantStore.editingNoteId === props.note.id) {
     assistantStore.setEditingNoteId(null)
+  }
+}
+
+const onTitleKeydown = (event) => {
+  if (event.isComposing) return
+  if (event.key === 'Escape') {
+    event.preventDefault()
+    cancelEdit()
+    return
+  }
+  if (event.key === 'Enter') {
+    const modifierPressed = isMac.value ? event.metaKey : event.ctrlKey
+    if (modifierPressed) {
+      event.preventDefault()
+      saveEdit()
+    }
   }
 }
 
@@ -215,9 +255,14 @@ const saveEdit = async () => {
   saving.value = true
   try {
     await Promise.resolve(
-      emit('edit-save', { id: props.note.id, content: draftContent.value }),
+      emit('edit-save', {
+        id: props.note.id,
+        title: draftTitle.value.trim(),
+        content: draftContent.value,
+      }),
     )
     draftContent.value = ''
+    draftTitle.value = ''
     if (assistantStore.editingNoteId === props.note.id) {
       assistantStore.setEditingNoteId(null)
     }
@@ -249,8 +294,9 @@ const onCopy = async () => {
 watch(
   () => assistantStore.editingNoteId,
   (newId) => {
-    if (newId !== props.note.id && draftContent.value) {
-      draftContent.value = ''
+    if (newId !== props.note.id) {
+      if (draftContent.value) draftContent.value = ''
+      if (draftTitle.value) draftTitle.value = ''
     }
   },
 )
@@ -362,6 +408,79 @@ function formatTime(dateValue) {
   line-height: 1.5;
   letter-spacing: 0.2px;
   white-space: nowrap;
+}
+
+.tag-input-wrap {
+  position: relative;
+  display: inline-grid;
+  vertical-align: middle;
+  font-size: 12px;
+  line-height: 1.5;
+  letter-spacing: 0.2px;
+  font-family: inherit;
+}
+
+.tag-input-shadow,
+.tag-input {
+  grid-area: 1 / 1;
+  height: 22px;
+  padding: 0 10px;
+  border-radius: 999px;
+  border: 1.5px dashed rgba(24, 24, 27, 0.22);
+  font: inherit;
+  letter-spacing: inherit;
+  white-space: pre;
+  box-sizing: border-box;
+}
+
+.tag-input-shadow {
+  visibility: hidden;
+  pointer-events: none;
+  min-width: 56px;
+  border-color: transparent;
+  background: transparent;
+  white-space: pre;
+}
+
+.tag-input {
+  width: 100%;
+  background: rgba(24, 24, 27, 0.04);
+  color: var(--color-text);
+  outline: 0;
+  text-align: center;
+  transition: border-color var(--motion-fast), background var(--motion-fast),
+    border-width var(--motion-fast);
+}
+
+.tag-input::placeholder {
+  color: #a1a1aa;
+}
+
+.tag-input:hover:not(:disabled) {
+  border-color: rgba(24, 24, 27, 0.4);
+  background: rgba(24, 24, 27, 0.06);
+}
+
+.tag-input:focus {
+  border-width: 2px;
+  border-color: rgba(24, 24, 27, 0.7);
+  background: var(--color-surface);
+}
+
+.tag-input-wrap.is-invalid .tag-input,
+.tag-input-wrap.is-invalid .tag-input-shadow {
+  border-color: var(--color-error, #dc2626);
+}
+
+.tag-input-wrap.is-invalid .tag-input:focus {
+  border-width: 2px;
+  border-color: var(--color-error, #dc2626);
+  background: rgba(220, 38, 38, 0.04);
+}
+
+.tag-input:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
 .note-time {
@@ -560,20 +679,21 @@ function formatTime(dateValue) {
 .primary-btn {
   height: 30px;
   padding: 0 14px;
-  border: 1px solid var(--color-accent);
+  border: 0;
   border-radius: 8px;
-  background: var(--color-accent);
+  background: rgba(24, 24, 27, 0.92);
   color: #fff;
   font-size: 12px;
   font-weight: 500;
   cursor: pointer;
-  transition: background var(--motion-fast), border-color var(--motion-fast),
+  box-shadow: 0 4px 12px rgba(24, 24, 27, 0.18);
+  transition: background var(--motion-fast), box-shadow var(--motion-fast),
     opacity var(--motion-fast);
 }
 
 .primary-btn:hover:not(:disabled) {
-  background: #1d4ed8;
-  border-color: #1d4ed8;
+  background: rgba(24, 24, 27, 1);
+  box-shadow: 0 6px 16px rgba(24, 24, 27, 0.24);
 }
 
 .primary-btn:disabled {

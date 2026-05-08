@@ -43,8 +43,8 @@ export async function createBlock(content) {
   return data
 }
 
-export async function updateBlock(id, content) {
-  const data = await post('/api/note/update', { id, content })
+export async function updateBlock(id, title, content) {
+  const data = await post('/api/note/update', { id, title, content })
   return data
 }
 

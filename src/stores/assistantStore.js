@@ -149,17 +149,15 @@ export const useAssistantStore = defineStore('assistant', () => {
     }
   }
 
-  const updateNote = async (id, content) => {
+  const updateNote = async (id, title, content) => {
     const target = notes.value.find((item) => item.id === id)
     if (!target) return null
-    const result = await updateBlock(id, content)
-    const data =
-      result && typeof result === 'object' ? result : null
+    const result = await updateBlock(id, title, content)
+    const data = result && typeof result === 'object' ? result : null
     target.text = data?.content || content
     target.updateContent = data?.content || content
-    if (data?.title !== undefined && data?.title !== null) {
-      target.title = data.title
-    }
+    target.title =
+      data?.title !== undefined && data?.title !== null ? data.title : title
     return target
   }
 
