@@ -1,5 +1,12 @@
 <template>
-  <article class="note-card" :class="{ 'is-editing': isEditing }">
+  <article
+    class="note-card"
+    :class="{
+      'is-editing': isEditing,
+      'is-pinned-top': isPinnedTop,
+      'is-pinned-bottom': isPinnedBottom,
+    }"
+  >
     <div class="note-meta">
       <div class="meta-left">
         <label
@@ -22,9 +29,45 @@
           />
         </label>
         <span v-else-if="titleText" class="note-tag">{{ titleText }}</span>
+        <span v-if="isPinnedTop" class="pin-badge pin-badge-top">置顶</span>
+        <span v-else-if="isPinnedBottom" class="pin-badge pin-badge-bottom"
+          >置底</span
+        >
         <span class="note-time">{{ timeText }}</span>
       </div>
       <div v-if="!note?.isPending" class="meta-actions">
+        <button
+          v-if="!isEditing"
+          class="icon-btn"
+          :class="{ 'is-active': isPinnedTop }"
+          type="button"
+          :title="isPinnedTop ? '取消置顶' : '置顶'"
+          @click="onTogglePin('TOP')"
+        >
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="none"
+            stroke="currentColor" stroke-width="1.8" stroke-linecap="round"
+            stroke-linejoin="round" aria-hidden="true">
+            <path d="M12 17v5" />
+            <path d="M5 9l7-7 7 7" />
+            <path d="M9 9h6v6H9z" />
+          </svg>
+        </button>
+        <button
+          v-if="!isEditing"
+          class="icon-btn"
+          :class="{ 'is-active': isPinnedBottom }"
+          type="button"
+          :title="isPinnedBottom ? '取消置底' : '置底'"
+          @click="onTogglePin('BOTTOM')"
+        >
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="none"
+            stroke="currentColor" stroke-width="1.8" stroke-linecap="round"
+            stroke-linejoin="round" aria-hidden="true">
+            <path d="M12 2v5" />
+            <path d="M5 15l7 7 7-7" />
+            <path d="M9 9h6v6H9z" />
+          </svg>
+        </button>
         <button
           v-if="!isEditing"
           class="icon-btn"
@@ -150,7 +193,13 @@ const props = defineProps({
   },
 })
 
-const emit = defineEmits(['edit-save', 'delete', 'copied', 'copy-failed'])
+const emit = defineEmits([
+  'edit-save',
+  'delete',
+  'copied',
+  'copy-failed',
+  'pin',
+])
 
 const assistantStore = useAssistantStore()
 
@@ -173,6 +222,9 @@ const contentText = computed(
 )
 const titleText = computed(() => props.note?.title || '')
 const timeText = computed(() => formatTime(props.note?.createdAt))
+const pinType = computed(() => props.note?.pinWeightType || 'DEFAULT')
+const isPinnedTop = computed(() => pinType.value === 'TOP')
+const isPinnedBottom = computed(() => pinType.value === 'BOTTOM')
 const canSave = computed(
   () =>
     draftContent.value.trim().length > 0 &&
@@ -273,6 +325,11 @@ const saveEdit = async () => {
 
 const onDelete = () => {
   emit('delete', { id: props.note.id })
+}
+
+const onTogglePin = (target) => {
+  const next = pinType.value === target ? 'DEFAULT' : target
+  emit('pin', { id: props.note.id, pinWeightValue: next })
 }
 
 const onCopy = async () => {
@@ -408,6 +465,63 @@ function formatTime(dateValue) {
   line-height: 1.5;
   letter-spacing: 0.2px;
   white-space: nowrap;
+}
+
+.pin-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.2px;
+  white-space: nowrap;
+}
+
+.pin-badge-top {
+  background: rgba(37, 99, 235, 0.12);
+  color: var(--color-accent);
+}
+
+.pin-badge-bottom {
+  background: rgba(24, 24, 27, 0.08);
+  color: var(--color-secondary-text);
+}
+
+.note-card.is-pinned-top {
+  border-color: rgba(37, 99, 235, 0.32);
+  background: linear-gradient(
+    180deg,
+    rgba(37, 99, 235, 0.04) 0%,
+    var(--color-surface) 60%
+  );
+}
+
+.note-card.is-pinned-top::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 14px;
+  bottom: 14px;
+  width: 3px;
+  border-radius: 0 3px 3px 0;
+  background: var(--color-accent);
+}
+
+.note-card.is-pinned-bottom {
+  border-style: dashed;
+  border-color: rgba(24, 24, 27, 0.18);
+  background: rgba(24, 24, 27, 0.015);
+}
+
+.icon-btn.is-active {
+  background: rgba(37, 99, 235, 0.12);
+  color: var(--color-accent);
+}
+
+.icon-btn.is-active:hover {
+  background: rgba(37, 99, 235, 0.18);
+  color: var(--color-accent);
 }
 
 .tag-input-wrap {

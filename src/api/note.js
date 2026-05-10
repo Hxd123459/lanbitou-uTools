@@ -22,6 +22,7 @@ function mapBlockToNote(item) {
     updateContent: item.updateContent || '',
     createdAt: item.createTime,
     tokenUsage: item.tokenUsage,
+    pinWeightType: item.pinWeightType || 'DEFAULT',
   }
 }
 
@@ -50,4 +51,9 @@ export async function updateBlock(id, title, content) {
 
 export async function deleteBlock(id) {
   return get('/api/note/delete', { id })
+}
+
+export async function setPinBlock(id, pinWeightValue) {
+  const data = await post('/api/note/setPin', { id, pinWeightValue })
+  return data
 }

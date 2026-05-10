@@ -9,14 +9,25 @@
     </template>
 
     <template #content>
-      <NoteTimeline
-        :groups="assistantStore.groupedNotes"
-        :loading="assistantStore.loadingNotes"
-        @edit-save="handleEditSave"
-        @delete="handleDelete"
-        @copied="handleCopied"
-        @copy-failed="handleCopyFailed"
-      />
+      <section class="note-list">
+        <p
+          v-if="!assistantStore.visibleNotes.length && !assistantStore.loadingNotes"
+          class="empty-state"
+        >
+          还没有笔记，先记录一条吧。
+        </p>
+
+        <NoteCard
+          v-for="note in assistantStore.visibleNotes"
+          :key="note.id"
+          :note="note"
+          @edit-save="handleEditSave"
+          @delete="handleDelete"
+          @copied="handleCopied"
+          @copy-failed="handleCopyFailed"
+          @pin="handlePin"
+        />
+      </section>
     </template>
   </MainFrame>
 
@@ -34,7 +45,7 @@ import { onBeforeUnmount, onMounted, ref } from 'vue'
 import CopyToast from '../components/feedback/CopyToast.vue'
 import FloatingInputBar from '../components/input/FloatingInputBar.vue'
 import MainFrame from '../components/layout/MainFrame.vue'
-import NoteTimeline from '../components/note/NoteTimeline.vue'
+import NoteCard from '../components/note/NoteCard.vue'
 import { useCopyNote } from '../composables/useCopyNote'
 import { ApiError } from '../api/http'
 import { deleteBlock } from '../api/note'
@@ -112,6 +123,21 @@ const handleDelete = ({ id }) => {
   })
 }
 
+const handlePin = async ({ id, pinWeightValue }) => {
+  try {
+    await assistantStore.setPinNote(id, pinWeightValue)
+    const tip =
+      pinWeightValue === 'TOP'
+        ? '已置顶'
+        : pinWeightValue === 'BOTTOM'
+          ? '已置底'
+          : '已取消'
+    openToast(tip, 'success', { duration: 1600 })
+  } catch (error) {
+    notifyError(error)
+  }
+}
+
 const handleCopied = () => {
   openToast('已复制纯文本', 'success', { duration: 1600 })
 }
@@ -142,3 +168,53 @@ onBeforeUnmount(() => {
   deleteTimers.clear()
 })
 </script>
+
+<style scoped>
+.note-list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 18px 0 28px 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+
+  scrollbar-width: thin;
+  scrollbar-color: rgba(24, 24, 27, 0.18) transparent;
+}
+
+.note-list > * {
+  width: 100%;
+  max-width: var(--frame-inner-width);
+  box-sizing: border-box;
+}
+
+.note-list::-webkit-scrollbar {
+  width: 8px;
+}
+
+.note-list::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.note-list::-webkit-scrollbar-thumb {
+  background: rgba(24, 24, 27, 0.18);
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+
+.note-list::-webkit-scrollbar-thumb:hover {
+  background: rgba(24, 24, 27, 0.32);
+  background-clip: content-box;
+}
+
+.empty-state {
+  margin: 48px 0;
+  text-align: center;
+  color: var(--color-secondary-text);
+  font-size: 14px;
+}
+</style>

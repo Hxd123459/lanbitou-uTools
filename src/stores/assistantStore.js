@@ -5,41 +5,15 @@ import {
   deleteBlock,
   fetchBlockListByDate,
   formatDateParam,
+  setPinBlock,
   shiftDateString,
   updateBlock,
 } from '../api/note'
 
-const DAY_MS = 24 * 60 * 60 * 1000
+const PIN_WEIGHT = { TOP: 0, DEFAULT: 1, BOTTOM: 2 }
 
-function parseDateTime(value) {
-  if (value instanceof Date) return value
-  if (typeof value !== 'string') return new Date(value)
-  const normalized = value.replace(
-    /\.(\d{3})\d*/,
-    (_, milliseconds) => `.${milliseconds}`,
-  )
-  return new Date(normalized)
-}
-
-function formatDateLabel(date) {
-  const today = new Date()
-  const d = parseDateTime(date)
-  const dayDelta = Math.floor(
-    (new Date(today.getFullYear(), today.getMonth(), today.getDate()) -
-      new Date(d.getFullYear(), d.getMonth(), d.getDate())) /
-      DAY_MS,
-  )
-
-  if (dayDelta === 0) return '今天'
-  if (dayDelta === 1) return '昨天'
-  return `${d.getMonth() + 1}月${d.getDate()}日`
-}
-
-function formatDateKey(date) {
-  const d = parseDateTime(date)
-  const month = `${d.getMonth() + 1}`.padStart(2, '0')
-  const day = `${d.getDate()}`.padStart(2, '0')
-  return `${d.getFullYear()}-${month}-${day}`
+function pinRank(type) {
+  return PIN_WEIGHT[type] ?? PIN_WEIGHT.DEFAULT
 }
 
 export const useAssistantStore = defineStore('assistant', () => {
@@ -49,25 +23,12 @@ export const useAssistantStore = defineStore('assistant', () => {
   const nextDateCursor = ref(formatDateParam(new Date()))
   const editingNoteId = ref(null)
 
-  const groupedNotes = computed(() => {
-    const map = new Map()
-    notes.value.forEach((note) => {
-      if (note.pendingDelete) return
-      const key = formatDateKey(note.createdAt)
-      if (!map.has(key)) {
-        map.set(key, {
-          dateKey: key,
-          label: formatDateLabel(note.createdAt),
-          items: [],
-        })
-      }
-      map.get(key).items.push(note)
-    })
-
-    return Array.from(map.values()).sort((a, b) =>
-      a.dateKey > b.dateKey ? -1 : 1,
-    )
-  })
+  const visibleNotes = computed(() =>
+    notes.value
+      .filter((note) => !note.pendingDelete)
+      .slice()
+      .sort((a, b) => pinRank(a.pinWeightType) - pinRank(b.pinWeightType)),
+  )
 
   const setEditingNoteId = (id) => {
     editingNoteId.value = id || null
@@ -125,6 +86,7 @@ export const useAssistantStore = defineStore('assistant', () => {
       updateContent: text,
       createdAt: new Date().toISOString(),
       isPending: true,
+      pinWeightType: 'DEFAULT',
     }
 
     notes.value.unshift(pendingNote)
@@ -167,14 +129,33 @@ export const useAssistantStore = defineStore('assistant', () => {
     noteIdSet.value.delete(id)
   }
 
+  const setPinNote = async (id, pinWeightValue) => {
+    const target = notes.value.find((item) => item.id === id)
+    if (!target) return null
+    const previous = target.pinWeightType || 'DEFAULT'
+    target.pinWeightType = pinWeightValue
+    try {
+      const result = await setPinBlock(id, pinWeightValue)
+      const data = result && typeof result === 'object' ? result : null
+      if (data?.pinWeightType) {
+        target.pinWeightType = data.pinWeightType
+      }
+      return target
+    } catch (error) {
+      target.pinWeightType = previous
+      throw error
+    }
+  }
+
   return {
     notes,
-    groupedNotes,
+    visibleNotes,
     loadingNotes,
     editingNoteId,
     addNote,
     updateNote,
     removeNote,
+    setPinNote,
     loadInitialNotes,
     setEditingNoteId,
     setNotePendingDelete,
