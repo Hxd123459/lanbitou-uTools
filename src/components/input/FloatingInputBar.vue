@@ -10,22 +10,141 @@
         rows="1"
         @input="onInput"
         @keydown="onKeydown"
+        @paste="onPaste"
       />
-      <div class="input-footer">
-        <span class="hint">
-          <kbd>{{ shortcutLabel }}</kbd>
-          <span class="hint-plus">+</span>
-          <kbd>Enter</kbd>
-          <span class="hint-text">保存</span>
-        </span>
-        <span v-if="submitting" class="status">提交中…</span>
+
+      <div v-if="images.length" class="thumb-strip">
+        <div v-for="item in images" :key="item.id" class="thumb">
+          <img :src="item.url" alt="预览" />
+          <button
+            type="button"
+            class="thumb-remove"
+            :disabled="submitting"
+            aria-label="移除图片"
+            @click="removeImage(item.id)"
+          >
+            <svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true">
+              <path
+                d="M6 6l12 12M18 6L6 18"
+                stroke="currentColor"
+                stroke-width="2.4"
+                stroke-linecap="round"
+                fill="none"
+              />
+            </svg>
+          </button>
+        </div>
+
+        <button
+          v-if="!submitting && images.length < MAX_IMAGES"
+          type="button"
+          class="btn btn-dashed-tile thumb-add"
+          aria-label="添加图片"
+          title="继续添加图片"
+          @click="openFilePicker"
+        >
+          <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
+            <path
+              d="M12 5v14M5 12h14"
+              stroke="currentColor"
+              stroke-width="1.8"
+              stroke-linecap="round"
+              fill="none"
+            />
+          </svg>
+        </button>
       </div>
+
+      <div
+        v-if="showProgress"
+        class="upload-progress"
+        role="progressbar"
+        :aria-valuenow="progressPercent"
+        aria-valuemin="0"
+        aria-valuemax="100"
+      >
+        <div class="upload-progress-bar" :style="{ width: `${progressPercent}%` }"></div>
+      </div>
+
+      <div class="input-footer">
+        <div class="footer-left">
+          <button
+            type="button"
+            class="btn btn-icon"
+            :disabled="submitting || images.length >= MAX_IMAGES"
+            :title="
+              images.length >= MAX_IMAGES
+                ? `最多 ${MAX_IMAGES} 张`
+                : '从本地选择图片'
+            "
+            aria-label="选择本地图片"
+            @click="openFilePicker"
+          >
+            <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+              <rect
+                x="3"
+                y="4"
+                width="18"
+                height="16"
+                rx="2.5"
+                stroke="currentColor"
+                stroke-width="1.6"
+                fill="none"
+              />
+              <circle cx="8.5" cy="9.5" r="1.5" fill="currentColor" />
+              <path
+                d="M4.5 17.5l4.5-5 4 4 2.5-3 4 5"
+                stroke="currentColor"
+                stroke-width="1.6"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                fill="none"
+              />
+            </svg>
+          </button>
+        </div>
+
+        <div class="footer-right">
+          <span
+            v-if="images.length"
+            class="counter"
+            :class="{ 'counter-full': images.length >= MAX_IMAGES }"
+          >
+            {{ images.length }}<span class="counter-divider">/</span>{{ MAX_IMAGES }}
+          </span>
+          <span v-if="submitting" class="status">
+            {{ showProgress ? `上传中 ${progressPercent}%` : '提交中…' }}
+          </span>
+          <span class="hint">
+            <kbd>{{ shortcutLabel }}</kbd>
+            <span class="hint-plus">+</span>
+            <kbd>Enter</kbd>
+          </span>
+          <button
+            type="button"
+            class="btn btn-primary"
+            :disabled="!canSubmit"
+            @click="onSubmit"
+          >
+            保存
+          </button>
+        </div>
+      </div>
+
+      <input
+        ref="fileInputRef"
+        type="file"
+        accept="image/*"
+        multiple
+        class="hidden-file-input"
+        @change="onFilePicked"
+      />
     </div>
   </div>
 </template>
 
 <script setup>
-import { computed, nextTick, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 
 const props = defineProps({
   modelValue: {
@@ -40,15 +159,34 @@ const props = defineProps({
     type: String,
     default: '记录此刻想法',
   },
+  uploadProgress: {
+    type: Number,
+    default: 0,
+  },
 })
 
-const emit = defineEmits(['update:modelValue', 'submit'])
+const emit = defineEmits(['update:modelValue', 'submit', 'limit-exceeded'])
 
 const MAX_HEIGHT = 280
+const MAX_IMAGES = 20
+
 const textareaRef = ref(null)
+const fileInputRef = ref(null)
 const isMac = ref(false)
+const images = ref([])
 
 const shortcutLabel = computed(() => (isMac.value ? '⌘' : 'Ctrl'))
+const progressPercent = computed(() =>
+  Math.max(0, Math.min(100, Math.round((props.uploadProgress || 0) * 100))),
+)
+const showProgress = computed(
+  () => props.submitting && images.value.length > 0 && progressPercent.value < 100,
+)
+const canSubmit = computed(
+  () =>
+    !props.submitting &&
+    (props.modelValue.trim().length > 0 || images.value.length > 0),
+)
 
 const adjustHeight = () => {
   const el = textareaRef.value
@@ -72,10 +210,70 @@ const onKeydown = (event) => {
   onSubmit()
 }
 
+const onPaste = (event) => {
+  if (props.submitting) return
+  const items = Array.from(event.clipboardData?.items || [])
+  const files = items
+    .filter((item) => item.kind === 'file' && item.type.startsWith('image/'))
+    .map((item) => item.getAsFile())
+    .filter(Boolean)
+
+  if (!files.length) return
+  event.preventDefault()
+  addImages(files)
+}
+
+const openFilePicker = () => {
+  if (props.submitting) return
+  if (images.value.length >= MAX_IMAGES) {
+    emit('limit-exceeded', MAX_IMAGES)
+    return
+  }
+  fileInputRef.value?.click()
+}
+
+const onFilePicked = (event) => {
+  const picked = Array.from(event.target.files || []).filter((f) =>
+    f.type.startsWith('image/'),
+  )
+  if (picked.length) addImages(picked)
+  event.target.value = ''
+}
+
+const addImages = (files) => {
+  const remaining = MAX_IMAGES - images.value.length
+  if (remaining <= 0) {
+    emit('limit-exceeded', MAX_IMAGES)
+    return
+  }
+  const accepted = files.slice(0, remaining)
+  accepted.forEach((file) => {
+    const id = `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
+    images.value.push({ id, file, url: URL.createObjectURL(file) })
+  })
+  if (files.length > remaining) emit('limit-exceeded', MAX_IMAGES)
+}
+
+const removeImage = (id) => {
+  const idx = images.value.findIndex((item) => item.id === id)
+  if (idx === -1) return
+  URL.revokeObjectURL(images.value[idx].url)
+  images.value.splice(idx, 1)
+}
+
+const reset = () => {
+  images.value.forEach((item) => URL.revokeObjectURL(item.url))
+  images.value = []
+}
+
 const onSubmit = () => {
   if (props.submitting) return
-  if (!props.modelValue.trim()) return
-  emit('submit', props.modelValue)
+  const text = props.modelValue
+  if (!text.trim() && images.value.length === 0) return
+  emit('submit', {
+    text,
+    images: images.value.map((item) => item.file),
+  })
 }
 
 watch(
@@ -91,6 +289,12 @@ onMounted(() => {
   isMac.value = /Mac|iPhone|iPad|iPod/i.test(platform)
   nextTick(adjustHeight)
 })
+
+onBeforeUnmount(() => {
+  images.value.forEach((item) => URL.revokeObjectURL(item.url))
+})
+
+defineExpose({ reset, addImages })
 </script>
 
 <style scoped>
@@ -106,6 +310,7 @@ onMounted(() => {
   border-radius: var(--radius-lg);
   background: var(--color-surface);
   box-shadow: var(--shadow-card);
+  overflow: hidden;
   transition: border-color var(--motion-fast),
     box-shadow var(--motion-fast);
 }
@@ -154,13 +359,103 @@ onMounted(() => {
   cursor: not-allowed;
 }
 
+.thumb-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 6px 16px 10px;
+}
+
+.thumb {
+  position: relative;
+  width: 64px;
+  height: 64px;
+  border-radius: 8px;
+  overflow: visible;
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  flex-shrink: 0;
+  animation: thumb-pop var(--motion-fast) ease-out;
+}
+
+.thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 7px;
+  display: block;
+}
+
+.thumb-remove {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: rgba(24, 24, 27, 0.85);
+  color: #fff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.18);
+  transition: background var(--motion-fast), transform var(--motion-fast);
+}
+
+.thumb-remove:hover {
+  background: #18181b;
+  transform: scale(1.08);
+}
+
+.thumb-remove:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.thumb-add {
+  width: 64px;
+  height: 64px;
+  border-radius: 8px;
+  flex-shrink: 0;
+  animation: thumb-pop var(--motion-fast) ease-out;
+}
+
+.upload-progress {
+  height: 2px;
+  width: 100%;
+  background: rgba(0, 0, 0, 0.06);
+  overflow: hidden;
+}
+
+.upload-progress-bar {
+  height: 100%;
+  background: var(--color-accent);
+  border-radius: 2px;
+  transition: width 120ms linear;
+}
+
 .input-footer {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 4px 16px 10px;
+  gap: 8px;
+  padding: 6px 12px 10px;
   color: var(--color-secondary-text);
   font-size: 12px;
+}
+
+.footer-left {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.hidden-file-input {
+  display: none;
 }
 
 .hint {
@@ -191,8 +486,52 @@ onMounted(() => {
   text-align: center;
 }
 
+.footer-right {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.counter {
+  font-variant-numeric: tabular-nums;
+  color: var(--color-secondary-text);
+}
+
+.counter-divider {
+  color: #a1a1aa;
+  margin: 0 1px;
+}
+
+.counter-full {
+  color: #d97706;
+  font-weight: 500;
+}
+
 .status {
   color: var(--color-accent);
   font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+
+@keyframes thumb-pop {
+  from {
+    opacity: 0;
+    transform: scale(0.92);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .thumb,
+  .thumb-add {
+    animation: none;
+  }
+  .thumb-remove,
+  .upload-progress-bar {
+    transition: none;
+  }
 }
 </style>

@@ -150,7 +150,7 @@
           </button>
           <button
             type="button"
-            class="primary-btn"
+            class="btn btn-primary"
             :disabled="saving || !canSave"
             @click="saveEdit"
           >
@@ -162,6 +162,7 @@
 
     <template v-else>
       <MarkdownRender
+        v-if="markdownNodes.length"
         :nodes="markdownNodes"
         :typewriter="false"
         :batch-rendering="false"
@@ -170,9 +171,14 @@
         code-block-dark-theme="github-light"
         :themes="codeThemes"
       />
-      <p v-if="!markdownNodes.length" class="note-text-fallback">
+      <p
+        v-else-if="!images.length"
+        class="note-text-fallback"
+      >
         {{ contentText || '（暂无内容）' }}
       </p>
+
+      <NoteImageGallery v-if="images.length" :images="images" />
     </template>
   </article>
 </template>
@@ -185,6 +191,7 @@ import {
   parseMarkdownToStructure,
 } from 'vue-renderer-markdown'
 import { useAssistantStore } from '../../stores/assistantStore'
+import NoteImageGallery from './NoteImageGallery.vue'
 
 const props = defineProps({
   note: {
@@ -218,7 +225,10 @@ const isEditing = computed(
 const shortcutLabel = computed(() => (isMac.value ? '⌘' : 'Ctrl'))
 
 const contentText = computed(
-  () => props.note?.updateContent || props.note?.text || '',
+  () => props.note?.markdownContent || props.note?.text || '',
+)
+const images = computed(() =>
+  Array.isArray(props.note?.images) ? props.note.images : [],
 )
 const titleText = computed(() => props.note?.title || '')
 const timeText = computed(() => formatTime(props.note?.createdAt))
@@ -786,31 +796,6 @@ function formatTime(dateValue) {
 }
 
 .link-btn:disabled {
-  cursor: not-allowed;
-  opacity: 0.55;
-}
-
-.primary-btn {
-  height: 30px;
-  padding: 0 14px;
-  border: 0;
-  border-radius: 8px;
-  background: rgba(24, 24, 27, 0.92);
-  color: #fff;
-  font-size: 12px;
-  font-weight: 500;
-  cursor: pointer;
-  box-shadow: 0 4px 12px rgba(24, 24, 27, 0.18);
-  transition: background var(--motion-fast), box-shadow var(--motion-fast),
-    opacity var(--motion-fast);
-}
-
-.primary-btn:hover:not(:disabled) {
-  background: rgba(24, 24, 27, 1);
-  box-shadow: 0 6px 16px rgba(24, 24, 27, 0.24);
-}
-
-.primary-btn:disabled {
   cursor: not-allowed;
   opacity: 0.55;
 }

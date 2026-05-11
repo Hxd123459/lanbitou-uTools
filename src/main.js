@@ -3,6 +3,7 @@ import { createPinia } from 'pinia'
 import VueRendererMarkdown from 'vue-renderer-markdown'
 import 'vue-renderer-markdown/index.css'
 import './assets/styles/tokens.css'
+import './assets/styles/buttons.css'
 
 import App from './App.vue'
 import router from './router'

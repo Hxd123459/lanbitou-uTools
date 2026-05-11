@@ -2,9 +2,12 @@
   <MainFrame>
     <template #input>
       <FloatingInputBar
+        ref="inputBarRef"
         v-model="inputValue"
         :submitting="noteSubmitting"
+        :upload-progress="uploadProgress"
         @submit="handleSubmit"
+        @limit-exceeded="handleLimitExceeded"
       />
     </template>
 
@@ -53,6 +56,8 @@ import { useAssistantStore } from '../stores/assistantStore'
 
 const inputValue = ref('')
 const noteSubmitting = ref(false)
+const uploadProgress = ref(0)
+const inputBarRef = ref(null)
 const assistantStore = useAssistantStore()
 const {
   showToast,
@@ -65,17 +70,26 @@ const {
 
 const deleteTimers = new Map()
 
-const handleSubmit = async (text) => {
+const handleSubmit = async ({ text, images }) => {
   if (noteSubmitting.value) return
   noteSubmitting.value = true
+  uploadProgress.value = 0
   try {
-    await assistantStore.addNote(text)
+    await assistantStore.addNote(text, images, (p) => {
+      uploadProgress.value = p
+    })
     inputValue.value = ''
+    inputBarRef.value?.reset()
   } catch (error) {
     notifyError(error)
   } finally {
     noteSubmitting.value = false
+    uploadProgress.value = 0
   }
+}
+
+const handleLimitExceeded = (max) => {
+  openToast(`最多支持 ${max} 张图片`, 'error', { duration: 1800 })
 }
 
 const handleEditSave = async ({ id, title, content }) => {

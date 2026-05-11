@@ -1,0 +1,108 @@
+/* ============================================================
+ * Button theme — global, reusable button classes.
+ *
+ * 用法：在元素上叠加 .btn + 一个变体（也可附加位置/尺寸的局部类）
+ *   <button class="btn btn-primary">保存</button>
+ *   <button class="btn btn-icon" aria-label="...">...</button>
+ *   <button class="btn btn-dashed-tile">+</button>
+ *
+ * 变体：
+ *   .btn-primary       —— 主操作（黑底白字 + 阴影）
+ *   .btn-icon          —— 图标按钮（30x30 + 边框，hover 变 accent）
+ *   .btn-dashed-tile   —— 虚线占位（hover 仅加深背景与加粗虚线）
+ * ============================================================ */
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: var(--btn-radius);
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.2px;
+  cursor: pointer;
+  user-select: none;
+  transition: background var(--motion-fast), color var(--motion-fast),
+    border-color var(--motion-fast), box-shadow var(--motion-fast),
+    opacity var(--motion-fast);
+}
+
+.btn:disabled {
+  cursor: not-allowed;
+  opacity: var(--btn-disabled-opacity);
+}
+
+.btn:focus-visible {
+  outline: none;
+}
+
+/* ---------- 主操作按钮 ---------- */
+.btn-primary {
+  height: 30px;
+  padding: 0 14px;
+  background: var(--btn-primary-bg);
+  color: var(--btn-primary-fg);
+  box-shadow: var(--btn-primary-shadow);
+}
+
+.btn-primary:hover:not(:disabled) {
+  background: var(--btn-primary-bg-hover);
+  box-shadow: var(--btn-primary-shadow-hover);
+}
+
+.btn-primary:focus-visible {
+  box-shadow: var(--btn-primary-shadow), var(--focus-ring);
+}
+
+/* ---------- 图标按钮 ---------- */
+.btn-icon {
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: 1px solid var(--color-border);
+  background: var(--color-bg);
+  color: var(--color-secondary-text);
+}
+
+.btn-icon:hover:not(:disabled) {
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+}
+
+.btn-icon:focus-visible {
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+  box-shadow: var(--focus-ring);
+}
+
+/* ---------- 虚线占位按钮 ---------- */
+.btn-dashed-tile {
+  box-sizing: border-box;
+  padding: 0;
+  border: 1.5px dashed var(--btn-dashed-border);
+  background: transparent;
+  color: var(--color-secondary-text);
+  transition: background var(--motion-fast), border-color var(--motion-fast),
+    border-width var(--motion-fast);
+}
+
+.btn-dashed-tile:hover:not(:disabled) {
+  border-width: 2px;
+  border-color: var(--btn-dashed-border-hover);
+  background: var(--btn-dashed-bg-hover);
+}
+
+.btn-dashed-tile:focus-visible {
+  border-width: 2px;
+  border-color: var(--btn-dashed-border-focus);
+  background: var(--btn-dashed-bg-hover);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .btn,
+  .btn-dashed-tile {
+    transition: none;
+  }
+}

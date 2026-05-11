@@ -5,6 +5,7 @@ import {
   deleteBlock,
   fetchBlockListByDate,
   formatDateParam,
+  mapBlockResources,
   setPinBlock,
   shiftDateString,
   updateBlock,
@@ -76,23 +77,24 @@ export const useAssistantStore = defineStore('assistant', () => {
     await loadNotesByDate(undefined, true)
   }
 
-  const addNote = async (text) => {
+  const addNote = async (text, images = [], onProgress) => {
     const pendingId = `pending_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
     const pendingNote = {
       id: pendingId,
       title: '',
       fineTitle: '',
       text,
-      updateContent: text,
+      markdownContent: text,
       createdAt: new Date().toISOString(),
       isPending: true,
       pinWeightType: 'DEFAULT',
+      images: [],
     }
 
     notes.value.unshift(pendingNote)
 
     try {
-      const result = await createBlock(text)
+      const result = await createBlock(text, images, onProgress)
       const target = notes.value.find((item) => item.id === pendingId)
       if (!target) return result
       const data =
@@ -101,7 +103,8 @@ export const useAssistantStore = defineStore('assistant', () => {
       target.id = finalId
       target.title = data.title || ''
       target.text = data.content || text
-      target.updateContent = data.content || text
+      target.markdownContent = data.content || text
+      target.images = mapBlockResources(data.blocks)
       target.isPending = false
       noteIdSet.value.add(finalId)
       return target
@@ -117,7 +120,7 @@ export const useAssistantStore = defineStore('assistant', () => {
     const result = await updateBlock(id, title, content)
     const data = result && typeof result === 'object' ? result : null
     target.text = data?.content || content
-    target.updateContent = data?.content || content
+    target.markdownContent = data?.content || content
     target.title =
       data?.title !== undefined && data?.title !== null ? data.title : title
     return target

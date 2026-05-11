@@ -50,3 +50,41 @@ export function get(path, params = {}) {
   const query = new URLSearchParams(params).toString()
   return request(query ? `${path}?${query}` : path)
 }
+
+export function postForm(path, formData, { onProgress } = {}) {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest()
+    xhr.open('POST', `${BASE_URL}${path}`, true)
+
+    if (typeof onProgress === 'function' && xhr.upload) {
+      xhr.upload.onprogress = (event) => {
+        if (event.lengthComputable) {
+          onProgress(event.loaded / event.total)
+        }
+      }
+    }
+
+    xhr.onerror = () => reject(new ApiError('NETWORK_ERROR', '网络连接异常'))
+    xhr.onabort = () => reject(new ApiError('ABORTED', '请求已取消'))
+
+    xhr.onload = () => {
+      let payload = null
+      try {
+        payload = JSON.parse(xhr.responseText)
+      } catch {
+        reject(new ApiError(xhr.status || 'PARSE_ERROR', '响应解析失败'))
+        return
+      }
+      if (payload?.code === 200) {
+        if (typeof onProgress === 'function') onProgress(1)
+        resolve(payload.data)
+        return
+      }
+      const code = payload?.code ?? xhr.status ?? 'SYSTEM_ERROR'
+      const msg = payload?.msg || '系统异常'
+      reject(new ApiError(code, msg))
+    }
+
+    xhr.send(formData)
+  })
+}

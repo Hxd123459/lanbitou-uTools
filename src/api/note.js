@@ -1,4 +1,4 @@
-import { post, get } from './http'
+import { post, get, postForm } from './http'
 
 export function formatDateParam(date) {
   const year = date.getFullYear()
@@ -13,16 +13,30 @@ export function shiftDateString(dateString, offsetDays) {
   return formatDateParam(date)
 }
 
+export function mapBlockResources(blocks) {
+  if (!Array.isArray(blocks)) return []
+  return blocks
+    .filter((b) => b && b.type === 'image' && b.fileUrl)
+    .slice()
+    .sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0))
+    .map((b) => ({
+      id: b.id,
+      url: b.fileUrl,
+      sortOrder: b.sortOrder ?? 0,
+    }))
+}
+
 function mapBlockToNote(item) {
   return {
     id: item.id,
     title: item.title || '',
     fineTitle: item.fineTitle || '',
-    text: item.originalContent || '',
-    updateContent: item.updateContent || '',
+    text: item.rawContent || '',
+    markdownContent: item.markdownContent || '',
     createdAt: item.createTime,
     tokenUsage: item.tokenUsage,
     pinWeightType: item.pinWeightType || 'DEFAULT',
+    images: mapBlockResources(item.blocks),
   }
 }
 
@@ -39,9 +53,20 @@ export async function fetchBlockListByDate(currentDate) {
   return Array.isArray(data) ? data.map(mapBlockToNote) : []
 }
 
-export async function createBlock(content) {
-  const data = await post('/api/note/insert', { original_content: content })
-  return data
+export async function createBlock(content, images = [], onProgress) {
+  if (!images || images.length === 0) {
+    const data = await post('/api/note/insert', { rawContent: content })
+    return data
+  }
+
+  const form = new FormData()
+  form.append('rawContent', content ?? '')
+  images.forEach((file, index) => {
+    const filename = file.name || `image_${index}.png`
+    form.append('images', file, filename)
+  })
+
+  return postForm('/api/note/insert', form, { onProgress })
 }
 
 export async function updateBlock(id, title, content) {
