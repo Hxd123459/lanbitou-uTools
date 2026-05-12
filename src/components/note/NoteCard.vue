@@ -161,22 +161,24 @@
     </template>
 
     <template v-else>
-      <MarkdownRender
-        v-if="markdownNodes.length"
-        :nodes="markdownNodes"
-        :typewriter="false"
-        :batch-rendering="false"
-        :defer-nodes-until-visible="false"
-        code-block-light-theme="github-light"
-        code-block-dark-theme="github-light"
-        :themes="codeThemes"
-      />
-      <p
-        v-else-if="!images.length"
-        class="note-text-fallback"
-      >
-        {{ contentText || '（暂无内容）' }}
-      </p>
+      <div ref="contentRootRef" class="note-content-root">
+        <MarkdownRender
+          v-if="markdownNodes.length"
+          :nodes="markdownNodes"
+          :typewriter="false"
+          :batch-rendering="false"
+          :defer-nodes-until-visible="false"
+          code-block-light-theme="github-light"
+          code-block-dark-theme="github-light"
+          :themes="codeThemes"
+        />
+        <p
+          v-else-if="!images.length"
+          class="note-text-fallback"
+        >
+          {{ contentText || '（暂无内容）' }}
+        </p>
+      </div>
 
       <NoteImageGallery v-if="images.length" :images="images" />
     </template>
@@ -198,6 +200,10 @@ const props = defineProps({
     type: Object,
     required: true,
   },
+  highlight: {
+    type: String,
+    default: '',
+  },
 })
 
 const emit = defineEmits([
@@ -214,7 +220,12 @@ const draftContent = ref('')
 const draftTitle = ref('')
 const saving = ref(false)
 const editorRef = ref(null)
+const contentRootRef = ref(null)
 const isMac = ref(false)
+
+const HIGHLIGHT_CLASS = 'note-highlight'
+const HIGHLIGHT_SKIP_SELECTOR =
+  'pre, code, .monaco-editor, .shiki, .code-action-btn, .copy-button'
 
 const codeThemes = { light: 'github-light', dark: 'github-light' }
 
@@ -374,7 +385,87 @@ onMounted(() => {
       (navigator.userAgentData?.platform || navigator.platform || '')) ||
     ''
   isMac.value = /Mac|iPhone|iPad|iPod/i.test(platform)
+  scheduleHighlight()
 })
+
+function clearHighlight(root) {
+  if (!root) return
+  const marks = root.querySelectorAll(`mark.${HIGHLIGHT_CLASS}`)
+  marks.forEach((mark) => {
+    const parent = mark.parentNode
+    if (!parent) return
+    parent.replaceChild(document.createTextNode(mark.textContent || ''), mark)
+  })
+  root.normalize()
+}
+
+function applyHighlight() {
+  const root = contentRootRef.value
+  if (!root) return
+  clearHighlight(root)
+  const keyword = (props.highlight || '').trim()
+  if (!keyword) return
+
+  const lowerKeyword = keyword.toLowerCase()
+  const targets = []
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
+    acceptNode(node) {
+      if (!node.nodeValue) return NodeFilter.FILTER_REJECT
+      const parent = node.parentNode
+      if (!parent || parent.nodeType !== 1) return NodeFilter.FILTER_REJECT
+      const tag = parent.nodeName.toLowerCase()
+      if (tag === 'mark' || tag === 'script' || tag === 'style') {
+        return NodeFilter.FILTER_REJECT
+      }
+      if (parent.closest && parent.closest(HIGHLIGHT_SKIP_SELECTOR)) {
+        return NodeFilter.FILTER_REJECT
+      }
+      return NodeFilter.FILTER_ACCEPT
+    },
+  })
+
+  let current = walker.nextNode()
+  while (current) {
+    targets.push(current)
+    current = walker.nextNode()
+  }
+
+  targets.forEach((textNode) => {
+    const text = textNode.nodeValue || ''
+    const lowerText = text.toLowerCase()
+    let cursor = 0
+    let idx = lowerText.indexOf(lowerKeyword, cursor)
+    if (idx === -1) return
+    const frag = document.createDocumentFragment()
+    while (idx !== -1) {
+      if (idx > cursor) {
+        frag.appendChild(document.createTextNode(text.slice(cursor, idx)))
+      }
+      const mark = document.createElement('mark')
+      mark.className = HIGHLIGHT_CLASS
+      mark.textContent = text.slice(idx, idx + keyword.length)
+      frag.appendChild(mark)
+      cursor = idx + keyword.length
+      idx = lowerText.indexOf(lowerKeyword, cursor)
+    }
+    if (cursor < text.length) {
+      frag.appendChild(document.createTextNode(text.slice(cursor)))
+    }
+    textNode.parentNode?.replaceChild(frag, textNode)
+  })
+}
+
+const scheduleHighlight = () => {
+  nextTick(applyHighlight)
+}
+
+watch(
+  () => [props.highlight, contentText.value, isEditing.value],
+  () => {
+    scheduleHighlight()
+  },
+  { flush: 'post' },
+)
 
 function stripMarkdown(md) {
   if (!md) return ''
@@ -664,6 +755,19 @@ function formatTime(dateValue) {
   font-size: 14px;
   line-height: 1.6;
   word-break: break-word;
+}
+
+.note-content-root {
+  width: 100%;
+}
+
+.note-card :deep(mark.note-highlight) {
+  background: rgba(37, 99, 235, 0.16);
+  color: var(--color-accent);
+  font-weight: 600;
+  border-radius: 3px;
+  padding: 0 2px;
+  margin: 0 -1px;
 }
 
 .note-text-fallback {

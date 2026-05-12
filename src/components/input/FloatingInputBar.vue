@@ -1,7 +1,11 @@
 <template>
-  <div class="input-bar" :class="{ 'is-submitting': submitting }">
+  <div
+    class="input-bar"
+    :class="{ 'is-submitting': submitting, 'is-searching': isSearchMode }"
+  >
     <div class="input-shell">
       <textarea
+        v-if="!isSearchMode"
         ref="textareaRef"
         :value="modelValue"
         class="main-input"
@@ -13,7 +17,62 @@
         @paste="onPaste"
       />
 
-      <div v-if="images.length" class="thumb-strip">
+      <div v-else class="search-input-row">
+        <svg
+          class="search-input-icon"
+          viewBox="0 0 24 24"
+          width="16"
+          height="16"
+          aria-hidden="true"
+        >
+          <circle
+            cx="11"
+            cy="11"
+            r="6.5"
+            stroke="currentColor"
+            stroke-width="1.6"
+            fill="none"
+          />
+          <path
+            d="M20 20l-4-4"
+            stroke="currentColor"
+            stroke-width="1.6"
+            stroke-linecap="round"
+          />
+        </svg>
+        <input
+          ref="searchInputRef"
+          v-model="searchKeyword"
+          class="main-input search-input"
+          type="search"
+          :placeholder="searchPlaceholder"
+          :maxlength="SEARCH_MAX_LEN"
+          autocomplete="off"
+          spellcheck="false"
+          @keydown="onSearchKeydown"
+          @input="onSearchInput"
+        />
+        <button
+          v-if="searchKeyword"
+          type="button"
+          class="search-clear"
+          aria-label="清空关键词"
+          title="清空"
+          @click="clearSearchKeyword"
+        >
+          <svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true">
+            <path
+              d="M6 6l12 12M18 6L6 18"
+              stroke="currentColor"
+              stroke-width="2.4"
+              stroke-linecap="round"
+              fill="none"
+            />
+          </svg>
+        </button>
+      </div>
+
+      <div v-if="!isSearchMode && images.length" class="thumb-strip">
         <div v-for="item in images" :key="item.id" class="thumb">
           <img :src="item.url" alt="预览" />
           <button
@@ -56,7 +115,7 @@
       </div>
 
       <div
-        v-if="showProgress"
+        v-if="!isSearchMode && showProgress"
         class="upload-progress"
         role="progressbar"
         :aria-valuenow="progressPercent"
@@ -68,66 +127,124 @@
 
       <div class="input-footer">
         <div class="footer-left">
-          <button
-            type="button"
-            class="btn btn-icon"
-            :disabled="submitting || images.length >= MAX_IMAGES"
-            :title="
-              images.length >= MAX_IMAGES
-                ? `最多 ${MAX_IMAGES} 张`
-                : '从本地选择图片'
-            "
-            aria-label="选择本地图片"
-            @click="openFilePicker"
-          >
-            <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
-              <rect
-                x="3"
-                y="4"
-                width="18"
-                height="16"
-                rx="2.5"
-                stroke="currentColor"
-                stroke-width="1.6"
-                fill="none"
-              />
-              <circle cx="8.5" cy="9.5" r="1.5" fill="currentColor" />
-              <path
-                d="M4.5 17.5l4.5-5 4 4 2.5-3 4 5"
-                stroke="currentColor"
-                stroke-width="1.6"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                fill="none"
-              />
-            </svg>
-          </button>
+          <template v-if="!isSearchMode">
+            <button
+              type="button"
+              class="btn btn-icon"
+              :disabled="submitting || images.length >= MAX_IMAGES"
+              :title="
+                images.length >= MAX_IMAGES
+                  ? `最多 ${MAX_IMAGES} 张`
+                  : '从本地选择图片'
+              "
+              aria-label="选择本地图片"
+              @click="openFilePicker"
+            >
+              <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+                <rect
+                  x="3"
+                  y="4"
+                  width="18"
+                  height="16"
+                  rx="2.5"
+                  stroke="currentColor"
+                  stroke-width="1.6"
+                  fill="none"
+                />
+                <circle cx="8.5" cy="9.5" r="1.5" fill="currentColor" />
+                <path
+                  d="M4.5 17.5l4.5-5 4 4 2.5-3 4 5"
+                  stroke="currentColor"
+                  stroke-width="1.6"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  fill="none"
+                />
+              </svg>
+            </button>
+            <button
+              type="button"
+              class="btn btn-icon"
+              :disabled="submitting"
+              title="搜索笔记"
+              aria-label="搜索笔记"
+              @click="enterSearchMode"
+            >
+              <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+                <circle
+                  cx="11"
+                  cy="11"
+                  r="6.5"
+                  stroke="currentColor"
+                  stroke-width="1.6"
+                  fill="none"
+                />
+                <path
+                  d="M20 20l-4-4"
+                  stroke="currentColor"
+                  stroke-width="1.6"
+                  stroke-linecap="round"
+                />
+              </svg>
+            </button>
+          </template>
+          <template v-else>
+            <button
+              type="button"
+              class="btn btn-icon"
+              title="退出搜索（Esc）"
+              aria-label="退出搜索"
+              @click="exitSearchMode"
+            >
+              <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+                <path
+                  d="M15 6l-6 6 6 6"
+                  stroke="currentColor"
+                  stroke-width="1.6"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  fill="none"
+                />
+              </svg>
+            </button>
+          </template>
         </div>
 
         <div class="footer-right">
-          <span
-            v-if="images.length"
-            class="counter"
-            :class="{ 'counter-full': images.length >= MAX_IMAGES }"
-          >
-            {{ images.length }}<span class="counter-divider">/</span>{{ MAX_IMAGES }}
-          </span>
-          <span v-if="submitting" class="status">
-            {{ showProgress ? `上传中 ${progressPercent}%` : '提交中…' }}
-          </span>
-          <span class="hint">
-            <kbd>{{ shortcutLabel }}</kbd>
-            <span class="hint-plus">+</span>
-            <kbd>Enter</kbd>
-          </span>
-          <button
-            type="button"
-            class="btn btn-primary"
-            :disabled="!canSubmit"
-            @click="onSubmit"
-          >
-            保存
-          </button>
+          <template v-if="!isSearchMode">
+            <span
+              v-if="images.length"
+              class="counter"
+              :class="{ 'counter-full': images.length >= MAX_IMAGES }"
+            >
+              {{ images.length }}<span class="counter-divider">/</span>{{ MAX_IMAGES }}
+            </span>
+            <span v-if="submitting" class="status">
+              {{ showProgress ? `上传中 ${progressPercent}%` : '提交中…' }}
+            </span>
+            <span class="hint">
+              <kbd>{{ shortcutLabel }}</kbd>
+              <span class="hint-plus">+</span>
+              <kbd>Enter</kbd>
+            </span>
+            <button
+              type="button"
+              class="btn btn-primary"
+              :disabled="!canSubmit"
+              @click="onSubmit"
+            >
+              保存
+            </button>
+          </template>
+          <template v-else>
+            <span v-if="searchLoading" class="status">搜索中…</span>
+            <span class="hint">
+              <span class="hint-text">输入即搜</span>
+              <span class="hint-plus">·</span>
+              <kbd>Esc</kbd>
+              <span class="hint-text">退出</span>
+            </span>
+          </template>
         </div>
       </div>
 
@@ -163,17 +280,38 @@ const props = defineProps({
     type: Number,
     default: 0,
   },
+  searchLoading: {
+    type: Boolean,
+    default: false,
+  },
+  searchPlaceholder: {
+    type: String,
+    default: '搜索笔记标题与内容…',
+  },
 })
 
-const emit = defineEmits(['update:modelValue', 'submit', 'limit-exceeded'])
+const emit = defineEmits([
+  'update:modelValue',
+  'submit',
+  'limit-exceeded',
+  'search',
+  'search-cancel',
+])
 
 const MAX_HEIGHT = 280
 const MAX_IMAGES = 20
+const SEARCH_MAX_LEN = 50
+const SEARCH_DEBOUNCE = 250
 
 const textareaRef = ref(null)
 const fileInputRef = ref(null)
+const searchInputRef = ref(null)
 const isMac = ref(false)
 const images = ref([])
+const isSearchMode = ref(false)
+const searchKeyword = ref('')
+
+let searchDebounceTimer = null
 
 const shortcutLabel = computed(() => (isMac.value ? '⌘' : 'Ctrl'))
 const progressPercent = computed(() =>
@@ -187,6 +325,7 @@ const canSubmit = computed(
     !props.submitting &&
     (props.modelValue.trim().length > 0 || images.value.length > 0),
 )
+
 
 const adjustHeight = () => {
   const el = textareaRef.value
@@ -276,6 +415,75 @@ const onSubmit = () => {
   })
 }
 
+const cancelSearchDebounce = () => {
+  if (searchDebounceTimer) {
+    clearTimeout(searchDebounceTimer)
+    searchDebounceTimer = null
+  }
+}
+
+const dispatchSearch = (immediate = false) => {
+  cancelSearchDebounce()
+  const keyword = searchKeyword.value.trim()
+  if (!keyword) {
+    emit('search-cancel')
+    return
+  }
+  if (immediate) {
+    emit('search', { keyword })
+    return
+  }
+  searchDebounceTimer = window.setTimeout(() => {
+    searchDebounceTimer = null
+    emit('search', { keyword })
+  }, SEARCH_DEBOUNCE)
+}
+
+const enterSearchMode = () => {
+  if (props.submitting) return
+  isSearchMode.value = true
+  nextTick(() => searchInputRef.value?.focus())
+}
+
+const exitSearchMode = () => {
+  if (!isSearchMode.value) return
+  cancelSearchDebounce()
+  isSearchMode.value = false
+  searchKeyword.value = ''
+  emit('search-cancel')
+  nextTick(() => {
+    textareaRef.value?.focus()
+    adjustHeight()
+  })
+}
+
+const clearSearchKeyword = () => {
+  searchKeyword.value = ''
+  cancelSearchDebounce()
+  emit('search-cancel')
+  nextTick(() => searchInputRef.value?.focus())
+}
+
+const onSearchInput = () => {
+  if (searchKeyword.value.length > SEARCH_MAX_LEN) {
+    searchKeyword.value = searchKeyword.value.slice(0, SEARCH_MAX_LEN)
+  }
+  dispatchSearch(false)
+}
+
+const onSearchKeydown = (event) => {
+  if (event.isComposing) return
+  if (event.key === 'Escape') {
+    event.preventDefault()
+    exitSearchMode()
+    return
+  }
+  if (event.key === 'Enter') {
+    event.preventDefault()
+    dispatchSearch(true)
+  }
+}
+
 watch(
   () => props.modelValue,
   () => nextTick(adjustHeight),
@@ -292,9 +500,10 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   images.value.forEach((item) => URL.revokeObjectURL(item.url))
+  cancelSearchDebounce()
 })
 
-defineExpose({ reset, addImages })
+defineExpose({ reset, addImages, exitSearchMode })
 </script>
 
 <style scoped>
@@ -357,6 +566,62 @@ defineExpose({ reset, addImages })
 
 .main-input:disabled {
   cursor: not-allowed;
+}
+
+.search-input-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 14px 14px 6px 16px;
+  min-height: 56px;
+}
+
+.search-input-icon {
+  color: var(--color-secondary-text);
+  flex-shrink: 0;
+}
+
+.search-input {
+  flex: 1;
+  min-height: auto;
+  height: auto;
+  padding: 0;
+  font-size: 15px;
+  line-height: 1.55;
+  appearance: none;
+  -webkit-appearance: none;
+}
+
+.search-input::-webkit-search-cancel-button,
+.search-input::-webkit-search-decoration {
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.search-clear {
+  flex-shrink: 0;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: rgba(24, 24, 27, 0.08);
+  color: var(--color-secondary-text);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: background var(--motion-fast), color var(--motion-fast);
+}
+
+.search-clear:hover {
+  background: rgba(24, 24, 27, 0.18);
+  color: var(--color-primary);
+}
+
+.is-searching .input-shell:focus-within {
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 2px rgba(24, 24, 27, 0.08), var(--shadow-float);
 }
 
 .thumb-strip {

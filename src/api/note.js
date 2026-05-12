@@ -1,4 +1,4 @@
-import { post, get, postForm } from './http'
+import { post, get, postForm, resolveResourceUrl } from './http'
 
 export function formatDateParam(date) {
   const year = date.getFullYear()
@@ -21,7 +21,7 @@ export function mapBlockResources(blocks) {
     .sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0))
     .map((b) => ({
       id: b.id,
-      url: b.fileUrl,
+      url: resolveResourceUrl(b.fileUrl),
       sortOrder: b.sortOrder ?? 0,
     }))
 }
@@ -81,4 +81,23 @@ export async function deleteBlock(id) {
 export async function setPinBlock(id, pinWeightValue) {
   const data = await post('/api/note/setPin', { id, pinWeightValue })
   return data
+}
+
+export async function searchNotes({ keyword, page = 1, size = 20 } = {}) {
+  const safePage = Number.isFinite(page) && page >= 1 ? Math.floor(page) : 1
+  const safeSize = Math.min(
+    Math.max(Number.isFinite(size) ? Math.floor(size) : 20, 1),
+    50,
+  )
+  const data = await get('/api/note/search', {
+    keyword: (keyword ?? '').trim(),
+    page: safePage,
+    size: safeSize,
+  })
+  return {
+    total: data?.total ?? 0,
+    page: data?.page ?? safePage,
+    size: data?.size ?? safeSize,
+    list: Array.isArray(data?.list) ? data.list.map(mapBlockToNote) : [],
+  }
 }

@@ -28,6 +28,9 @@
   --btn-dashed-border-hover: rgba(24, 24, 27, 0.4);
   --btn-dashed-border-focus: rgba(24, 24, 27, 0.7);
   --btn-dashed-bg-hover: rgba(24, 24, 27, 0.06);
+  --btn-icon-bg-hover: rgba(24, 24, 27, 0.06);
+  --btn-icon-border-hover: rgba(24, 24, 27, 0.4);
+  --btn-icon-color-hover: var(--color-primary);
 
   --font-base: "Inter", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei",
     "Helvetica Neue", Arial, sans-serif;

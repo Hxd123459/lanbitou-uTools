@@ -1,6 +1,16 @@
-const BASE_URL =
+export const BASE_URL =
   import.meta.env.VITE_API_BASE_URL ||
   (import.meta.env.DEV ? 'http://localhost:8080' : '')
+
+/**
+ * 把后端返回的资源路径解析为可被 <img>/<video> 直接使用的完整 URL。
+ * 已是 http(s) 绝对地址 → 原样返回；否则拼上 BASE_URL。
+ */
+export function resolveResourceUrl(path) {
+  if (!path) return ''
+  if (/^https?:\/\//i.test(path)) return path
+  return `${BASE_URL}${path}`
+}
 
 export class ApiError extends Error {
   constructor(code, msg) {

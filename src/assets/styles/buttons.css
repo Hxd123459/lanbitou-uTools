@@ -8,7 +8,7 @@
  *
  * 变体：
  *   .btn-primary       —— 主操作（黑底白字 + 阴影）
- *   .btn-icon          —— 图标按钮（30x30 + 边框，hover 变 accent）
+ *   .btn-icon          —— 图标按钮（30x30 + 边框，hover 温和加深）
  *   .btn-dashed-tile   —— 虚线占位（hover 仅加深背景与加粗虚线）
  * ============================================================ */
 
@@ -67,14 +67,22 @@
 }
 
 .btn-icon:hover:not(:disabled) {
-  border-color: var(--color-accent);
-  color: var(--color-accent);
+  border-color: var(--btn-icon-border-hover);
+  background: var(--btn-icon-bg-hover);
+  color: var(--btn-icon-color-hover);
 }
 
 .btn-icon:focus-visible {
-  border-color: var(--color-accent);
-  color: var(--color-accent);
+  border-color: var(--btn-icon-border-hover);
+  background: var(--btn-icon-bg-hover);
+  color: var(--btn-icon-color-hover);
   box-shadow: var(--focus-ring);
+}
+
+.btn-icon.is-active {
+  border-color: var(--btn-icon-border-hover);
+  background: var(--btn-icon-bg-hover);
+  color: var(--btn-icon-color-hover);
 }
 
 /* ---------- 虚线占位按钮 ---------- */

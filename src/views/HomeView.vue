@@ -6,13 +6,16 @@
         v-model="inputValue"
         :submitting="noteSubmitting"
         :upload-progress="uploadProgress"
+        :search-loading="searchState.loading"
         @submit="handleSubmit"
         @limit-exceeded="handleLimitExceeded"
+        @search="handleSearch"
+        @search-cancel="handleSearchCancel"
       />
     </template>
 
     <template #content>
-      <section class="note-list">
+      <section v-show="!searchState.active" class="note-list">
         <p
           v-if="!assistantStore.visibleNotes.length && !assistantStore.loadingNotes"
           class="empty-state"
@@ -24,6 +27,42 @@
           v-for="note in assistantStore.visibleNotes"
           :key="note.id"
           :note="note"
+          @edit-save="handleEditSave"
+          @delete="handleDelete"
+          @copied="handleCopied"
+          @copy-failed="handleCopyFailed"
+          @pin="handlePin"
+        />
+      </section>
+
+      <section v-if="searchState.active" class="note-list">
+        <header class="search-summary">
+          <span class="search-summary-label">
+            搜索结果
+            <span class="search-summary-keyword">「{{ searchState.keyword }}」</span>
+          </span>
+          <span class="search-summary-count">
+            <template v-if="searchState.loading">搜索中…</template>
+            <template v-else>共 {{ searchState.total }} 条</template>
+          </span>
+          <button type="button" class="search-summary-clear" @click="exitSearch">
+            清空
+          </button>
+        </header>
+
+        <p
+          v-if="!searchState.loading && !searchState.list.length"
+          class="empty-state"
+        >
+          没有匹配 「{{ searchState.keyword }}」 的笔记。
+        </p>
+
+        <NoteCard
+          v-for="note in searchState.list"
+          :key="`search-${note.id}`"
+          :note="note"
+          :highlight="searchState.keyword"
+          :plain="true"
           @edit-save="handleEditSave"
           @delete="handleDelete"
           @copied="handleCopied"
@@ -44,14 +83,14 @@
 </template>
 
 <script setup>
-import { onBeforeUnmount, onMounted, ref } from 'vue'
+import { onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 import CopyToast from '../components/feedback/CopyToast.vue'
 import FloatingInputBar from '../components/input/FloatingInputBar.vue'
 import MainFrame from '../components/layout/MainFrame.vue'
 import NoteCard from '../components/note/NoteCard.vue'
 import { useCopyNote } from '../composables/useCopyNote'
 import { ApiError } from '../api/http'
-import { deleteBlock } from '../api/note'
+import { deleteBlock, searchNotes } from '../api/note'
 import { useAssistantStore } from '../stores/assistantStore'
 
 const inputValue = ref('')
@@ -59,6 +98,15 @@ const noteSubmitting = ref(false)
 const uploadProgress = ref(0)
 const inputBarRef = ref(null)
 const assistantStore = useAssistantStore()
+
+const searchState = reactive({
+  active: false,
+  loading: false,
+  keyword: '',
+  total: 0,
+  list: [],
+})
+let searchToken = 0
 const {
   showToast,
   toastText,
@@ -90,6 +138,44 @@ const handleSubmit = async ({ text, images }) => {
 
 const handleLimitExceeded = (max) => {
   openToast(`最多支持 ${max} 张图片`, 'error', { duration: 1800 })
+}
+
+const handleSearch = async ({ keyword }) => {
+  const trimmed = (keyword || '').trim()
+  if (!trimmed) return
+  const myToken = ++searchToken
+  searchState.active = true
+  searchState.keyword = trimmed
+  searchState.loading = true
+  try {
+    const result = await searchNotes({ keyword: trimmed, page: 1, size: 20 })
+    if (myToken !== searchToken) return
+    searchState.total = result.total
+    searchState.list = result.list
+  } catch (error) {
+    if (myToken !== searchToken) return
+    searchState.list = []
+    searchState.total = 0
+    notifyError(error)
+  } finally {
+    if (myToken === searchToken) {
+      searchState.loading = false
+    }
+  }
+}
+
+const handleSearchCancel = () => {
+  searchToken += 1
+  searchState.active = false
+  searchState.loading = false
+  searchState.keyword = ''
+  searchState.total = 0
+  searchState.list = []
+}
+
+const exitSearch = () => {
+  handleSearchCancel()
+  inputBarRef.value?.exitSearchMode?.()
 }
 
 const handleEditSave = async ({ id, title, content }) => {
@@ -230,5 +316,48 @@ onBeforeUnmount(() => {
   text-align: center;
   color: var(--color-secondary-text);
   font-size: 14px;
+}
+
+.search-summary {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  margin-bottom: 4px;
+  border-radius: var(--radius-md);
+  background: rgba(24, 24, 27, 0.04);
+  color: var(--color-secondary-text);
+  font-size: 13px;
+}
+
+.search-summary-label {
+  font-weight: 500;
+  color: var(--color-primary);
+}
+
+.search-summary-keyword {
+  color: var(--color-text);
+  font-weight: 600;
+}
+
+.search-summary-count {
+  flex: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.search-summary-clear {
+  border: 0;
+  background: transparent;
+  color: var(--color-secondary-text);
+  font-size: 13px;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 6px;
+  transition: background var(--motion-fast), color var(--motion-fast);
+}
+
+.search-summary-clear:hover {
+  background: rgba(24, 24, 27, 0.08);
+  color: var(--color-primary);
 }
 </style>
