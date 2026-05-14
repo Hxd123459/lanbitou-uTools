@@ -69,9 +69,51 @@ export async function createBlock(content, images = [], onProgress) {
   return postForm('/api/note/insert', form, { onProgress })
 }
 
-export async function updateBlock(id, title, content) {
-  const data = await post('/api/note/update', { id, title, content })
-  return data
+/**
+ * 更新笔记。无图片变更时走 JSON；有图片变更时：
+ * - 仅调整/删除已有图：JSON 带 retainedImageIds
+ * - 含新上传文件：multipart，字段 id、title、content、retainedImageIds（JSON 字符串）、images（文件，与 insert 一致）
+ */
+export async function updateBlock(
+  id,
+  title,
+  content,
+  { retainedImageIds, newImages = [], onProgress } = {},
+) {
+  const files = Array.isArray(newImages) ? newImages.filter(Boolean) : []
+  const hasImageMutation =
+    Array.isArray(retainedImageIds) || files.length > 0
+
+  if (!hasImageMutation) {
+    const data = await post('/api/note/update', { id, title, content })
+    return data
+  }
+
+  if (files.length === 0) {
+    const data = await post('/api/note/update', {
+      id,
+      title,
+      content,
+      retainedImageIds: Array.isArray(retainedImageIds)
+        ? retainedImageIds
+        : [],
+    })
+    return data
+  }
+
+  const form = new FormData()
+  form.append('id', String(id))
+  form.append('title', title ?? '')
+  form.append('content', content ?? '')
+  if (Array.isArray(retainedImageIds)) {
+    form.append('retainedImageIds', JSON.stringify(retainedImageIds))
+  }
+  files.forEach((file, index) => {
+    const filename = file.name || `image_${index}.png`
+    form.append('images', file, filename)
+  })
+
+  return postForm('/api/note/update', form, { onProgress })
 }
 
 export async function deleteBlock(id) {

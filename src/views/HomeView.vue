@@ -9,6 +9,7 @@
         :search-loading="searchState.loading"
         @submit="handleSubmit"
         @limit-exceeded="handleLimitExceeded"
+        @image-too-large="handleImageTooLarge"
         @search="handleSearch"
         @search-cancel="handleSearchCancel"
       />
@@ -32,6 +33,7 @@
           @copied="handleCopied"
           @copy-failed="handleCopyFailed"
           @pin="handlePin"
+          @image-too-large="handleImageTooLarge"
         />
       </section>
 
@@ -68,6 +70,7 @@
           @copied="handleCopied"
           @copy-failed="handleCopyFailed"
           @pin="handlePin"
+          @image-too-large="handleImageTooLarge"
         />
       </section>
     </template>
@@ -140,6 +143,10 @@ const handleLimitExceeded = (max) => {
   openToast(`最多支持 ${max} 张图片`, 'error', { duration: 1800 })
 }
 
+const handleImageTooLarge = () => {
+  openToast('单张图片须小于 10 MB', 'error', { duration: 2200 })
+}
+
 const handleSearch = async ({ keyword }) => {
   const trimmed = (keyword || '').trim()
   if (!trimmed) return
@@ -178,9 +185,18 @@ const exitSearch = () => {
   inputBarRef.value?.exitSearchMode?.()
 }
 
-const handleEditSave = async ({ id, title, content }) => {
+const handleEditSave = async ({
+  id,
+  title,
+  content,
+  retainedImageIds,
+  newImages,
+}) => {
   try {
-    await assistantStore.updateNote(id, title, content)
+    await assistantStore.updateNote(id, title, content, {
+      retainedImageIds,
+      newImages,
+    })
     openToast('已保存修改', 'success')
   } catch (error) {
     notifyError(error)

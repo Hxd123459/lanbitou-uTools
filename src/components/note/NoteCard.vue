@@ -131,15 +131,121 @@
         :disabled="saving"
         @input="autoGrow"
         @keydown="onEditorKeydown"
+        @paste="onEditorPaste"
       />
+
+      <div v-if="draftImageItems.length || canAddMoreImages" class="thumb-strip">
+        <div
+          v-for="(item, idx) in draftImageItems"
+          :key="item.key"
+          class="thumb"
+        >
+          <img
+            :src="item.previewUrl || item.url"
+            alt="预览"
+            draggable="false"
+          />
+          <button
+            type="button"
+            class="thumb-remove"
+            :disabled="saving"
+            aria-label="移除图片"
+            @click="removeDraftImage(idx)"
+          >
+            <svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true">
+              <path
+                d="M6 6l12 12M18 6L6 18"
+                stroke="currentColor"
+                stroke-width="2.4"
+                stroke-linecap="round"
+                fill="none"
+              />
+            </svg>
+          </button>
+        </div>
+
+        <button
+          v-if="canAddMoreImages"
+          type="button"
+          class="btn btn-dashed-tile thumb-add"
+          :disabled="saving"
+          aria-label="添加图片"
+          title="继续添加图片"
+          @click="openEditFilePicker"
+        >
+          <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
+            <path
+              d="M12 5v14M5 12h14"
+              stroke="currentColor"
+              stroke-width="1.8"
+              stroke-linecap="round"
+              fill="none"
+            />
+          </svg>
+        </button>
+      </div>
+
+      <input
+        ref="editFileInputRef"
+        type="file"
+        accept="image/*"
+        multiple
+        class="hidden-file-input"
+        @change="onPickImages"
+      />
+
       <div class="editor-bar">
-        <span class="editor-hint">
-          <kbd>{{ shortcutLabel }}</kbd>
-          <span class="hint-plus">+</span>
-          <kbd>Enter</kbd>
-          <span class="hint-text">保存</span>
-        </span>
+        <div class="editor-bar-left">
+          <button
+            type="button"
+            class="btn btn-icon"
+            :disabled="saving || draftImageItems.length >= MAX_IMAGES"
+            :title="
+              draftImageItems.length >= MAX_IMAGES
+                ? `最多 ${MAX_IMAGES} 张`
+                : '从本地选择图片'
+            "
+            aria-label="选择本地图片"
+            @click="openEditFilePicker"
+          >
+            <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+              <rect
+                x="3"
+                y="4"
+                width="18"
+                height="16"
+                rx="2.5"
+                stroke="currentColor"
+                stroke-width="1.6"
+                fill="none"
+              />
+              <circle cx="8.5" cy="9.5" r="1.5" fill="currentColor" />
+              <path
+                d="M4.5 17.5l4.5-5 4 4 2.5-3 4 5"
+                stroke="currentColor"
+                stroke-width="1.6"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                fill="none"
+              />
+            </svg>
+          </button>
+          <span
+            v-if="draftImageItems.length"
+            class="counter"
+            :class="{ 'counter-full': draftImageItems.length >= MAX_IMAGES }"
+          >
+            {{ draftImageItems.length }}<span class="counter-divider">/</span
+            >{{ MAX_IMAGES }}
+          </span>
+        </div>
         <div class="editor-bar-right">
+          <span class="editor-hint">
+            <kbd>{{ shortcutLabel }}</kbd>
+            <span class="hint-plus">+</span>
+            <kbd>Enter</kbd>
+            <span class="hint-text">保存</span>
+          </span>
           <button
             type="button"
             class="link-btn"
@@ -186,12 +292,20 @@
 </template>
 
 <script setup>
-import { computed, nextTick, onMounted, ref, watch } from 'vue'
+import {
+  computed,
+  nextTick,
+  onBeforeUnmount,
+  onMounted,
+  ref,
+  watch,
+} from 'vue'
 import {
   MarkdownRender,
   getMarkdown,
   parseMarkdownToStructure,
 } from 'vue-renderer-markdown'
+import { isImageFileSizeAllowed } from '../../constants/uploadLimits'
 import { useAssistantStore } from '../../stores/assistantStore'
 import NoteImageGallery from './NoteImageGallery.vue'
 
@@ -212,14 +326,19 @@ const emit = defineEmits([
   'copied',
   'copy-failed',
   'pin',
+  'image-too-large',
 ])
 
 const assistantStore = useAssistantStore()
 
+const MAX_IMAGES = 20
+
 const draftContent = ref('')
 const draftTitle = ref('')
+const draftImageItems = ref([])
 const saving = ref(false)
 const editorRef = ref(null)
+const editFileInputRef = ref(null)
 const contentRootRef = ref(null)
 const isMac = ref(false)
 
@@ -246,12 +365,35 @@ const timeText = computed(() => formatTime(props.note?.createdAt))
 const pinType = computed(() => props.note?.pinWeightType || 'DEFAULT')
 const isPinnedTop = computed(() => pinType.value === 'TOP')
 const isPinnedBottom = computed(() => pinType.value === 'BOTTOM')
+const originalOrderedImageIds = computed(() =>
+  (Array.isArray(props.note?.images) ? props.note.images : [])
+    .map((img) => img.id)
+    .filter((id) => id != null),
+)
+
+const imagesPayloadChanged = computed(() => {
+  const draftExisting = draftImageItems.value
+    .map((i) => i.existingId)
+    .filter((id) => id != null)
+  const orig = originalOrderedImageIds.value
+  if (draftExisting.length !== orig.length) return true
+  for (let i = 0; i < orig.length; i++) {
+    if (draftExisting[i] !== orig[i]) return true
+  }
+  return draftImageItems.value.some((i) => i.file)
+})
+
+const canAddMoreImages = computed(
+  () => !saving.value && draftImageItems.value.length < MAX_IMAGES,
+)
+
 const canSave = computed(
   () =>
     draftContent.value.trim().length > 0 &&
     draftTitle.value.trim().length > 0 &&
     (draftContent.value !== contentText.value ||
-      draftTitle.value !== titleText.value),
+      draftTitle.value !== titleText.value ||
+      imagesPayloadChanged.value),
 )
 
 const md = getMarkdown('note-card')
@@ -266,9 +408,28 @@ const markdownNodes = computed(() => {
   }
 })
 
+function revokeDraftNewUrls() {
+  draftImageItems.value.forEach((item) => {
+    if (item.previewUrl) URL.revokeObjectURL(item.previewUrl)
+  })
+}
+
+function cloneImagesForDraft() {
+  const list = Array.isArray(props.note?.images) ? props.note.images : []
+  return list.map((img, idx) => ({
+    key: `ex_${img.id ?? `n${idx}`}`,
+    existingId: img.id ?? null,
+    url: img.url || '',
+    file: null,
+    previewUrl: null,
+  }))
+}
+
 const enterEdit = async () => {
+  revokeDraftNewUrls()
   draftContent.value = contentText.value
   draftTitle.value = titleText.value
+  draftImageItems.value = cloneImagesForDraft()
   assistantStore.setEditingNoteId(props.note.id)
   await nextTick()
   autoGrow()
@@ -277,11 +438,66 @@ const enterEdit = async () => {
 
 const cancelEdit = () => {
   if (saving.value) return
+  revokeDraftNewUrls()
   draftContent.value = ''
   draftTitle.value = ''
+  draftImageItems.value = []
   if (assistantStore.editingNoteId === props.note.id) {
     assistantStore.setEditingNoteId(null)
   }
+}
+
+const removeDraftImage = (idx) => {
+  const item = draftImageItems.value[idx]
+  if (!item || saving.value) return
+  if (item.previewUrl) URL.revokeObjectURL(item.previewUrl)
+  draftImageItems.value.splice(idx, 1)
+}
+
+const appendDraftFiles = (files) => {
+  if (saving.value) return
+  const tooBig = files.filter((f) => !isImageFileSizeAllowed(f))
+  if (tooBig.length) emit('image-too-large')
+  const ok = files.filter((f) => isImageFileSizeAllowed(f))
+  const remaining = MAX_IMAGES - draftImageItems.value.length
+  if (remaining <= 0) return
+  const accepted = ok.slice(0, remaining)
+  accepted.forEach((file) => {
+    draftImageItems.value.push({
+      key: `new_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`,
+      existingId: null,
+      url: '',
+      file,
+      previewUrl: URL.createObjectURL(file),
+    })
+  })
+}
+
+const openEditFilePicker = () => {
+  if (saving.value) return
+  if (draftImageItems.value.length >= MAX_IMAGES) return
+  editFileInputRef.value?.click()
+}
+
+const onPickImages = (event) => {
+  const input = event.target
+  const picked = Array.from(input.files || []).filter((f) =>
+    /^image\//i.test(f.type),
+  )
+  if (picked.length) appendDraftFiles(picked)
+  input.value = ''
+}
+
+const onEditorPaste = (event) => {
+  if (saving.value) return
+  const items = Array.from(event.clipboardData?.items || [])
+  const files = items
+    .filter((item) => item.kind === 'file' && item.type.startsWith('image/'))
+    .map((item) => item.getAsFile())
+    .filter(Boolean)
+  if (!files.length) return
+  event.preventDefault()
+  appendDraftFiles(files)
 }
 
 const onTitleKeydown = (event) => {
@@ -327,15 +543,24 @@ const saveEdit = async () => {
   if (!canSave.value || saving.value) return
   saving.value = true
   try {
-    await Promise.resolve(
-      emit('edit-save', {
-        id: props.note.id,
-        title: draftTitle.value.trim(),
-        content: draftContent.value,
-      }),
-    )
+    const payload = {
+      id: props.note.id,
+      title: draftTitle.value.trim(),
+      content: draftContent.value,
+    }
+    if (imagesPayloadChanged.value) {
+      payload.retainedImageIds = draftImageItems.value
+        .filter((i) => i.existingId != null)
+        .map((i) => i.existingId)
+      payload.newImages = draftImageItems.value
+        .filter((i) => i.file)
+        .map((i) => i.file)
+    }
+    await Promise.resolve(emit('edit-save', payload))
+    revokeDraftNewUrls()
     draftContent.value = ''
     draftTitle.value = ''
+    draftImageItems.value = []
     if (assistantStore.editingNoteId === props.note.id) {
       assistantStore.setEditingNoteId(null)
     }
@@ -375,9 +600,15 @@ watch(
     if (newId !== props.note.id) {
       if (draftContent.value) draftContent.value = ''
       if (draftTitle.value) draftTitle.value = ''
+      revokeDraftNewUrls()
+      draftImageItems.value = []
     }
   },
 )
+
+onBeforeUnmount(() => {
+  revokeDraftNewUrls()
+})
 
 onMounted(() => {
   const platform =
@@ -837,6 +1068,103 @@ function formatTime(dateValue) {
   cursor: not-allowed;
 }
 
+.thumb-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+  width: 100%;
+}
+
+.thumb {
+  position: relative;
+  width: 64px;
+  height: 64px;
+  border-radius: 8px;
+  overflow: visible;
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  flex-shrink: 0;
+  animation: thumb-pop var(--motion-fast) ease-out;
+}
+
+.thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 7px;
+  display: block;
+}
+
+.thumb-remove {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: rgba(24, 24, 27, 0.85);
+  color: #fff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.18);
+  transition: background var(--motion-fast), transform var(--motion-fast);
+}
+
+.thumb-remove:hover:not(:disabled) {
+  background: #18181b;
+  transform: scale(1.08);
+}
+
+.thumb-remove:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.thumb-add {
+  width: 64px;
+  height: 64px;
+  border-radius: 8px;
+  flex-shrink: 0;
+  animation: thumb-pop var(--motion-fast) ease-out;
+}
+
+.hidden-file-input {
+  display: none;
+}
+
+.counter {
+  font-variant-numeric: tabular-nums;
+  color: var(--color-secondary-text);
+  font-size: 12px;
+}
+
+.counter-divider {
+  color: #a1a1aa;
+  margin: 0 1px;
+}
+
+.counter-full {
+  color: #d97706;
+  font-weight: 500;
+}
+
+@keyframes thumb-pop {
+  from {
+    opacity: 0;
+    transform: scale(0.92);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
 .editor-bar {
   display: flex;
   align-items: center;
@@ -845,6 +1173,12 @@ function formatTime(dateValue) {
   margin-top: 12px;
   padding-top: 10px;
   border-top: 1px dashed var(--color-border);
+}
+
+.editor-bar-left {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .editor-hint {

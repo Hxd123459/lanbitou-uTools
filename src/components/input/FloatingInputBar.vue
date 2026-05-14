@@ -262,6 +262,7 @@
 
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { isImageFileSizeAllowed } from '../../constants/uploadLimits'
 
 const props = defineProps({
   modelValue: {
@@ -294,6 +295,7 @@ const emit = defineEmits([
   'update:modelValue',
   'submit',
   'limit-exceeded',
+  'image-too-large',
   'search',
   'search-cancel',
 ])
@@ -380,17 +382,20 @@ const onFilePicked = (event) => {
 }
 
 const addImages = (files) => {
+  const tooBig = files.filter((f) => !isImageFileSizeAllowed(f))
+  if (tooBig.length) emit('image-too-large')
+  const ok = files.filter((f) => isImageFileSizeAllowed(f))
   const remaining = MAX_IMAGES - images.value.length
   if (remaining <= 0) {
     emit('limit-exceeded', MAX_IMAGES)
     return
   }
-  const accepted = files.slice(0, remaining)
+  const accepted = ok.slice(0, remaining)
   accepted.forEach((file) => {
     const id = `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
     images.value.push({ id, file, url: URL.createObjectURL(file) })
   })
-  if (files.length > remaining) emit('limit-exceeded', MAX_IMAGES)
+  if (ok.length > remaining) emit('limit-exceeded', MAX_IMAGES)
 }
 
 const removeImage = (id) => {

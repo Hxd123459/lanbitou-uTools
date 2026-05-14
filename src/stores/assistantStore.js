@@ -114,15 +114,23 @@ export const useAssistantStore = defineStore('assistant', () => {
     }
   }
 
-  const updateNote = async (id, title, content) => {
+  const updateNote = async (id, title, content, imageOptions = {}) => {
     const target = notes.value.find((item) => item.id === id)
     if (!target) return null
-    const result = await updateBlock(id, title, content)
+    const { retainedImageIds, newImages, onProgress } = imageOptions
+    const result = await updateBlock(id, title, content, {
+      retainedImageIds,
+      newImages,
+      onProgress,
+    })
     const data = result && typeof result === 'object' ? result : null
     target.text = data?.content || content
     target.markdownContent = data?.content || content
     target.title =
       data?.title !== undefined && data?.title !== null ? data.title : title
+    if (Array.isArray(data?.blocks)) {
+      target.images = mapBlockResources(data.blocks)
+    }
     return target
   }
 
