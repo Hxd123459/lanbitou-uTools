@@ -4,11 +4,13 @@
  * 用法：在元素上叠加 .btn + 一个变体（也可附加位置/尺寸的局部类）
  *   <button class="btn btn-primary">保存</button>
  *   <button class="btn btn-icon" aria-label="...">...</button>
+ *   <button class="btn btn-icon-text">图标 + 短文案</button>
  *   <button class="btn btn-dashed-tile">+</button>
  *
  * 变体：
  *   .btn-primary       —— 主操作（黑底白字 + 阴影）
- *   .btn-icon          —— 图标按钮（30x30 + 边框，hover 温和加深）
+ *   .btn-icon          —— 仅图标（30×30 + 边框，hover 温和加深）
+ *   .btn-icon-text      —— 图标 + 短文案（与 btn-icon 同色与 hover，宽度随内容）
  *   .btn-dashed-tile   —— 虚线占位（hover 仅加深背景与加粗虚线）
  * ============================================================ */
 
@@ -80,6 +82,36 @@
 }
 
 .btn-icon.is-active {
+  border-color: var(--btn-icon-border-hover);
+  background: var(--btn-icon-bg-hover);
+  color: var(--btn-icon-color-hover);
+}
+
+/* ---------- 图标 + 短文案（工具栏、模式切换等，与 btn-icon 同一套 token） ---------- */
+.btn-icon-text {
+  height: 30px;
+  min-height: 30px;
+  padding: 0 10px;
+  gap: 6px;
+  border: 1px solid var(--color-border);
+  background: var(--color-bg);
+  color: var(--color-secondary-text);
+}
+
+.btn-icon-text:hover:not(:disabled) {
+  border-color: var(--btn-icon-border-hover);
+  background: var(--btn-icon-bg-hover);
+  color: var(--btn-icon-color-hover);
+}
+
+.btn-icon-text:focus-visible {
+  border-color: var(--btn-icon-border-hover);
+  background: var(--btn-icon-bg-hover);
+  color: var(--btn-icon-color-hover);
+  box-shadow: var(--focus-ring);
+}
+
+.btn-icon-text.is-active {
   border-color: var(--btn-icon-border-hover);
   background: var(--btn-icon-bg-hover);
   color: var(--btn-icon-color-hover);
