@@ -2,7 +2,7 @@
   <div class="input-bar" :class="{ 'is-submitting': submitting }">
     <div class="input-shell">
       <div class="input-shell-stack">
-        <Transition name="ux-reveal" mode="out-in">
+        <Transition name="ux-reveal" mode="out-in" @after-enter="focusActiveInput">
           <textarea
             v-if="!isSearchMode"
             key="write"
@@ -12,6 +12,7 @@
             :disabled="submitting"
             :placeholder="placeholder"
             rows="1"
+            :style="{ height: inputHeight + 'px' }"
             @input="onInput"
             @keydown="onKeydown"
             @paste="onPaste"
@@ -27,6 +28,7 @@
               :placeholder="searchPlaceholder"
               :maxlength="SEARCH_MAX_LEN"
               :aria-busy="searchLoading"
+              :style="{ height: inputHeight + 'px' }"
               autocomplete="off"
               spellcheck="false"
               @keydown="onSearchKeydown"
@@ -119,8 +121,8 @@
             class="btn btn-icon-text"
             :class="{ 'is-active': isSearchMode }"
             :disabled="submitting"
-            :title="isSearchMode ? '切换为记录' : '切换为搜索'"
-            :aria-label="isSearchMode ? '当前：搜索，点击切换为写' : '当前：记录，点击切换为搜'"
+            :title="isSearchMode ? '切换为记录（Tab）' : '切换为搜索（Tab）'"
+            :aria-label="isSearchMode ? '当前：搜索，点击或按 Tab 切换为写' : '当前：记录，点击或按 Tab 切换为搜'"
             @click="toggleSearchMode"
           >
             <Transition name="ux-swap-label" mode="out-in">
@@ -293,6 +295,7 @@ const emit = defineEmits([
   'search-cancel',
 ])
 
+const MIN_HEIGHT = 112
 const MAX_HEIGHT = 280
 const MAX_IMAGES = 20
 const SEARCH_MAX_LEN = 50
@@ -307,6 +310,8 @@ const isSearchMode = ref(false)
 const searchKeyword = ref('')
 /** 进入「搜」前快照正文，切回「写」时恢复 */
 const writeDraftSnapshot = ref('')
+/** 写/搜共享高度，让 Tab 切换前后视觉无跳动 */
+const inputHeight = ref(MIN_HEIGHT)
 
 let searchDebounceTimer = null
 
@@ -328,8 +333,9 @@ const adjustHeight = () => {
   const el = textareaRef.value
   if (!el) return
   el.style.height = 'auto'
-  const next = Math.min(el.scrollHeight, MAX_HEIGHT)
+  const next = Math.min(Math.max(el.scrollHeight, MIN_HEIGHT), MAX_HEIGHT)
   el.style.height = `${next}px`
+  inputHeight.value = next
 }
 
 const onInput = (event) => {
@@ -339,6 +345,11 @@ const onInput = (event) => {
 
 const onKeydown = (event) => {
   if (event.isComposing) return
+  if (event.key === 'Tab' && !event.shiftKey) {
+    event.preventDefault()
+    toggleSearchMode()
+    return
+  }
   if (event.key !== 'Enter') return
   const modifierPressed = isMac.value ? event.metaKey : event.ctrlKey
   if (!modifierPressed) return
@@ -443,7 +454,6 @@ const enterSearchMode = () => {
   if (props.submitting) return
   writeDraftSnapshot.value = props.modelValue
   isSearchMode.value = true
-  nextTick(() => searchInputRef.value?.focus())
 }
 
 const exitSearchMode = () => {
@@ -453,10 +463,16 @@ const exitSearchMode = () => {
   searchKeyword.value = ''
   emit('search-cancel')
   emit('update:modelValue', writeDraftSnapshot.value)
-  nextTick(() => {
+}
+
+/** 由 <Transition @after-enter> 回调，保证新输入框已挂载后再聚焦 */
+const focusActiveInput = () => {
+  if (isSearchMode.value) {
+    searchInputRef.value?.focus()
+  } else {
     textareaRef.value?.focus()
     adjustHeight()
-  })
+  }
 }
 
 const toggleSearchMode = () => {
@@ -499,6 +515,11 @@ const onSearchPaste = (event) => {
 
 const onSearchKeydown = (event) => {
   if (event.isComposing) return
+  if (event.key === 'Tab' && !event.shiftKey) {
+    event.preventDefault()
+    toggleSearchMode()
+    return
+  }
   if (event.key === 'Enter') {
     event.preventDefault()
     dispatchSearch(true)
@@ -570,9 +591,9 @@ defineExpose({ reset, addImages, exitSearchMode })
 
 .main-input {
   width: 100%;
-  min-height: 56px;
+  min-height: 112px;
   max-height: 280px;
-  height: 56px;
+  height: 112px;
   border: 0;
   outline: 0;
   resize: none;
@@ -584,11 +605,6 @@ defineExpose({ reset, addImages, exitSearchMode })
   line-height: 1.55;
   font-family: inherit;
   scrollbar-width: none;
-  transition: min-height var(--motion-fast);
-}
-
-.input-shell:focus-within .main-input {
-  min-height: 112px;
 }
 
 .main-input::-webkit-scrollbar {
@@ -622,7 +638,7 @@ defineExpose({ reset, addImages, exitSearchMode })
 .search-field-wrap .search-clear {
   position: absolute;
   right: 10px;
-  top: 19px;
+  top: 18px;
   width: 20px;
   height: 20px;
   padding: 0;
@@ -736,6 +752,34 @@ defineExpose({ reset, addImages, exitSearchMode })
   align-items: center;
   gap: 6px;
   min-height: 30px;
+}
+
+/* 输入区下方工具按钮（写/搜、选图）默认无边框无底色，悬浮/聚焦才显示 */
+.footer-left .btn-icon,
+.footer-left .btn-icon-text {
+  border-color: transparent;
+  background: transparent;
+}
+
+.footer-left .btn-icon-text.is-active {
+  border-color: transparent;
+  background: transparent;
+  color: var(--color-secondary-text);
+}
+
+.footer-left .btn-icon:hover:not(:disabled),
+.footer-left .btn-icon-text:hover:not(:disabled) {
+  border-color: transparent;
+  background: var(--btn-icon-bg-hover);
+  color: var(--btn-icon-color-hover);
+}
+
+.footer-left .btn-icon:focus-visible,
+.footer-left .btn-icon-text:focus-visible {
+  border-color: transparent;
+  background: var(--btn-icon-bg-hover);
+  color: var(--btn-icon-color-hover);
+  box-shadow: var(--focus-ring);
 }
 
 .mode-toggle-inner {

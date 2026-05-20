@@ -397,11 +397,32 @@ const canSave = computed(
 )
 
 const md = getMarkdown('note-card')
+
+/**
+ * markdown-it 的 fence 规则会把围栏内容连同最后一个 `\n` 写入 token，
+ * 渲染端在 `pre { white-space: pre }` 下会多渲一空行。
+ * 这里递归剪掉所有 code_block 节点 `code` 末尾的换行（不影响中间空行）。
+ */
+function trimCodeBlockTrailingNewlines(nodes) {
+  if (!Array.isArray(nodes)) return nodes
+  for (const node of nodes) {
+    if (!node || typeof node !== 'object') continue
+    if (node.type === 'code_block' && typeof node.code === 'string') {
+      node.code = node.code.replace(/(?:\r?\n)+$/, '')
+    }
+    if (Array.isArray(node.children)) trimCodeBlockTrailingNewlines(node.children)
+    if (Array.isArray(node.items)) trimCodeBlockTrailingNewlines(node.items)
+    if (Array.isArray(node.rows)) trimCodeBlockTrailingNewlines(node.rows)
+    if (node.header) trimCodeBlockTrailingNewlines([node.header])
+  }
+  return nodes
+}
+
 const markdownNodes = computed(() => {
   const text = contentText.value
   if (!text) return []
   try {
-    return parseMarkdownToStructure(text, md)
+    return trimCodeBlockTrailingNewlines(parseMarkdownToStructure(text, md))
   } catch (error) {
     console.error('[NoteCard] parse markdown failed:', error)
     return []
@@ -1036,6 +1057,16 @@ function formatTime(dateValue) {
 .note-card :deep(pre.shiki *),
 .note-card :deep(pre[class*="language-"] *) {
   background: transparent !important;
+}
+
+/* shiki 在部分版本里仍可能多吐一个空 .line，兜底隐藏 */
+.note-card :deep(pre.shiki code > .line:last-child:empty),
+.note-card :deep(pre[class*="language-"] code > .line:last-child:empty) {
+  display: none;
+}
+.note-card :deep(pre.shiki code),
+.note-card :deep(pre[class*="language-"] code) {
+  display: block;
 }
 
 .note-card :deep(.monaco-editor) {
