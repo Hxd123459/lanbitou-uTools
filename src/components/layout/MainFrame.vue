@@ -35,35 +35,12 @@ defineProps({
 }
 
 .main-area {
-  position: relative;
   flex: 1;
   min-width: 0;
   display: flex;
   justify-content: center;
   overflow: hidden;
   background: var(--color-bg);
-}
-
-/* 与侧栏衔接的柔和光晕，消除「硬切」感 */
-.main-area::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  bottom: 0;
-  width: 28px;
-  background: linear-gradient(
-    90deg,
-    rgba(24, 24, 27, 0.03) 0%,
-    rgba(24, 24, 27, 0) 100%
-  );
-  pointer-events: none;
-  z-index: 0;
-}
-
-.main-area > .content-column {
-  position: relative;
-  z-index: 1;
 }
 
 .content-column {

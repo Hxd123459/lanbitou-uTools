@@ -104,55 +104,55 @@ const envLabel = (import.meta.env.VITE_APP_ENV || 'dev').toUpperCase()
 }
 
 .brand-area--sidebar {
+  --sidebar-brand-block: 44px;
   flex-direction: row;
   align-items: center;
   gap: 10px;
   width: 100%;
-  flex-wrap: nowrap;
   min-width: 0;
 }
 
 .brand-area--sidebar .logo-wrap {
-  width: 40px;
-  height: 40px;
+  width: var(--sidebar-brand-block);
+  height: var(--sidebar-brand-block);
   border-radius: 10px;
   flex-shrink: 0;
 }
 
 .brand-area--sidebar .brand-text {
-  flex-direction: row;
-  align-items: center;
-  gap: 6px;
   flex: 1;
   min-width: 0;
-  flex-wrap: nowrap;
+  height: var(--sidebar-brand-block);
+  justify-content: center;
+  gap: 1px;
 }
 
 .brand-area--sidebar .brand-title-row {
   flex-shrink: 0;
+  line-height: 1;
 }
 
 .brand-area--sidebar .brand-title {
-  font-size: 18px;
+  font-size: 17px;
   letter-spacing: 1px;
+  line-height: 1.1;
 }
 
 .brand-area--sidebar .brand-slogan {
   margin-top: 0;
-  padding-left: 6px;
-  border-left: 1px solid rgba(228, 228, 231, 0.9);
-  font-size: 11px;
-  letter-spacing: 0.5px;
+  font-size: 10px;
+  letter-spacing: 0.8px;
+  line-height: 1.15;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  flex: 1;
-  min-width: 0;
 }
 
 .brand-area--sidebar .env-tag {
   font-size: 9px;
   flex-shrink: 0;
+  padding: 0 5px;
+  line-height: 1.3;
 }
 
 @media (max-width: 720px) {
@@ -169,9 +169,8 @@ const envLabel = (import.meta.env.VITE_APP_ENV || 'dev').toUpperCase()
     display: none;
   }
 
-  .brand-area--sidebar .logo-wrap {
-    width: 44px;
-    height: 44px;
+  .brand-area--sidebar {
+    --sidebar-brand-block: 40px;
   }
 
   .brand-area:not(.brand-area--sidebar) .brand-slogan {

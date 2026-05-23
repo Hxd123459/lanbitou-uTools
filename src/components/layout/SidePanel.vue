@@ -96,7 +96,6 @@ defineEmits(['tab-change'])
 
 <style scoped>
 .app-sidebar {
-  position: relative;
   flex: 0 0 var(--sidebar-width);
   width: var(--sidebar-width);
   height: 100vh;
@@ -105,45 +104,13 @@ defineEmits(['tab-change'])
   padding: 18px 12px 24px 16px;
   overflow: hidden;
   background: var(--shell-sidebar-bg);
-  backdrop-filter: saturate(140%) blur(10px);
-  -webkit-backdrop-filter: saturate(140%) blur(10px);
-  box-shadow: var(--shell-sidebar-shadow);
-}
-
-/* 渐变分隔线，替代硬边框 */
-.app-sidebar::after {
-  content: '';
-  position: absolute;
-  top: 0;
-  right: 0;
-  bottom: 0;
-  width: 1px;
-  background: var(--shell-sidebar-edge);
-  pointer-events: none;
 }
 
 .sidebar-brand {
   flex: 0 0 auto;
   padding: 2px 4px 18px;
   margin-bottom: 14px;
-  position: relative;
-}
-
-/* 品牌区底部分隔：淡出渐变，非实线 */
-.sidebar-brand::after {
-  content: '';
-  position: absolute;
-  left: 4px;
-  right: 4px;
-  bottom: 0;
-  height: 1px;
-  background: linear-gradient(
-    90deg,
-    rgba(228, 228, 231, 0) 0%,
-    rgba(228, 228, 231, 0.55) 30%,
-    rgba(228, 228, 231, 0.55) 70%,
-    rgba(228, 228, 231, 0) 100%
-  );
+  border-bottom: 1px solid var(--color-border);
 }
 
 .sidebar-nav {
