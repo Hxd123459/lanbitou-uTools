@@ -35,6 +35,29 @@
   --font-base: "Inter", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei",
     "Helvetica Neue", Arial, sans-serif;
   --motion-fast: 180ms ease;
+
+  /* === App shell layout === */
+  --sidebar-width: 232px;
+  --shell-sidebar-bg: rgba(255, 255, 255, 0.72);
+  --shell-sidebar-edge: linear-gradient(
+    180deg,
+    rgba(228, 228, 231, 0) 0%,
+    rgba(228, 228, 231, 0.45) 18%,
+    rgba(228, 228, 231, 0.32) 50%,
+    rgba(228, 228, 231, 0.45) 82%,
+    rgba(228, 228, 231, 0) 100%
+  );
+  --shell-sidebar-shadow: 8px 0 32px -20px rgba(24, 24, 27, 0.12);
+  --frame-gutter: 14px;
+  --frame-width: min(988px, calc(100vw - var(--sidebar-width) - 32px));
+  --frame-inner-width: calc(var(--frame-width) - var(--frame-gutter));
+}
+
+@media (max-width: 720px) {
+  :root {
+    --sidebar-width: 72px;
+    --frame-width: min(988px, calc(100vw - var(--sidebar-width) - 16px));
+  }
 }
 
 *,

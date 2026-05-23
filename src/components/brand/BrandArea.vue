@@ -1,5 +1,5 @@
 <template>
-  <div class="brand-area">
+  <div class="brand-area" :class="{ 'brand-area--sidebar': variant === 'sidebar' }">
     <div class="logo-wrap" aria-hidden="true">
       <img class="logo-img" src="/logo.png" alt="烂笔头" />
     </div>
@@ -15,6 +15,14 @@
 </template>
 
 <script setup>
+defineProps({
+  variant: {
+    type: String,
+    default: 'default',
+    validator: (v) => ['default', 'sidebar'].includes(v),
+  },
+})
+
 const envLabel = (import.meta.env.VITE_APP_ENV || 'dev').toUpperCase()
 </script>
 
@@ -95,6 +103,58 @@ const envLabel = (import.meta.env.VITE_APP_ENV || 'dev').toUpperCase()
   text-overflow: ellipsis;
 }
 
+.brand-area--sidebar {
+  flex-direction: row;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  flex-wrap: nowrap;
+  min-width: 0;
+}
+
+.brand-area--sidebar .logo-wrap {
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  flex-shrink: 0;
+}
+
+.brand-area--sidebar .brand-text {
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+  flex: 1;
+  min-width: 0;
+  flex-wrap: nowrap;
+}
+
+.brand-area--sidebar .brand-title-row {
+  flex-shrink: 0;
+}
+
+.brand-area--sidebar .brand-title {
+  font-size: 18px;
+  letter-spacing: 1px;
+}
+
+.brand-area--sidebar .brand-slogan {
+  margin-top: 0;
+  padding-left: 6px;
+  border-left: 1px solid rgba(228, 228, 231, 0.9);
+  font-size: 11px;
+  letter-spacing: 0.5px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex: 1;
+  min-width: 0;
+}
+
+.brand-area--sidebar .env-tag {
+  font-size: 9px;
+  flex-shrink: 0;
+}
+
 @media (max-width: 720px) {
   .logo-wrap {
     width: 48px;
@@ -105,11 +165,20 @@ const envLabel = (import.meta.env.VITE_APP_ENV || 'dev').toUpperCase()
     font-size: 24px;
   }
 
-  .brand-slogan {
+  .brand-area--sidebar .brand-text {
     display: none;
   }
 
-  .env-tag {
+  .brand-area--sidebar .logo-wrap {
+    width: 44px;
+    height: 44px;
+  }
+
+  .brand-area:not(.brand-area--sidebar) .brand-slogan {
+    display: none;
+  }
+
+  .brand-area:not(.brand-area--sidebar) .env-tag {
     display: none;
   }
 }

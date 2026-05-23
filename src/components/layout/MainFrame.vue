@@ -1,97 +1,105 @@
+<script setup>
+defineProps({
+  showInputArea: {
+    type: Boolean,
+    default: true,
+  },
+})
+</script>
+
 <template>
-  <div class="main-frame">
-    <header class="top-bar">
-      <div class="top-bar-inner">
-        <div class="top-bar-brand">
-          <BrandArea />
-        </div>
-        <div class="top-bar-input">
+  <div class="app-shell">
+    <slot name="sidebar" />
+
+    <div class="main-area">
+      <div class="content-column">
+        <div v-show="showInputArea && $slots.input" class="content-input">
           <slot name="input" />
         </div>
-      </div>
-    </header>
 
-    <main class="page-content">
-      <div class="content-inner">
-        <slot name="content" />
+        <main class="page-content">
+          <slot name="content" />
+        </main>
       </div>
-    </main>
+    </div>
   </div>
 </template>
 
-<script setup>
-import BrandArea from '../brand/BrandArea.vue'
-</script>
-
 <style scoped>
-.main-frame {
-  --frame-width: min(760px, 92vw);
-  --frame-gutter: 14px;
-  --frame-inner-width: calc(var(--frame-width) - var(--frame-gutter));
+.app-shell {
+  display: flex;
   height: 100vh;
   background: var(--color-bg);
   font-family: var(--font-base);
-  display: flex;
-  flex-direction: column;
   overflow: hidden;
 }
 
-.top-bar {
-  flex: 0 0 auto;
-  padding: 14px 24px 12px;
-  background: rgba(250, 250, 250, 0.92);
-  backdrop-filter: saturate(160%) blur(12px);
-  -webkit-backdrop-filter: saturate(160%) blur(12px);
-  border-bottom: 1px solid rgba(228, 228, 231, 0.6);
-  z-index: 5;
-}
-
-.top-bar-inner {
+.main-area {
   position: relative;
-  width: 100%;
+  flex: 1;
+  min-width: 0;
   display: flex;
   justify-content: center;
-  align-items: flex-start;
+  overflow: hidden;
+  background: var(--color-bg);
 }
 
-.top-bar-brand {
+/* 与侧栏衔接的柔和光晕，消除「硬切」感 */
+.main-area::before {
+  content: '';
   position: absolute;
-  top: 4px;
-  left: 24px;
-  max-width: 28%;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  width: 28px;
+  background: linear-gradient(
+    90deg,
+    rgba(24, 24, 27, 0.03) 0%,
+    rgba(24, 24, 27, 0) 100%
+  );
+  pointer-events: none;
+  z-index: 0;
 }
 
-.top-bar-input {
+.main-area > .content-column {
+  position: relative;
+  z-index: 1;
+}
+
+.content-column {
   width: var(--frame-width);
-  padding-right: var(--frame-gutter);
+  max-width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  padding: 0 var(--frame-gutter);
   box-sizing: border-box;
-  min-width: 0;
+}
+
+.content-input {
+  flex: 0 0 auto;
+  width: 100%;
+  max-width: var(--frame-inner-width);
+  padding: 18px 0 12px;
+  box-sizing: border-box;
 }
 
 .page-content {
   flex: 1;
   min-height: 0;
   display: flex;
-  justify-content: center;
+  flex-direction: column;
   overflow: hidden;
 }
 
-.content-inner {
-  width: var(--frame-width);
-  height: 100%;
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-}
-
 @media (max-width: 720px) {
-  .top-bar {
-    padding: 12px 16px 10px;
+  .content-column {
+    padding: 0 12px;
   }
 
-  .top-bar-brand {
-    left: 16px;
-    max-width: 32%;
+  .content-input {
+    padding: 14px 0 10px;
   }
 }
 </style>

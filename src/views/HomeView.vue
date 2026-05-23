@@ -1,5 +1,13 @@
 <template>
-  <MainFrame>
+  <MainFrame :show-input-area="activeTab === 'home'">
+    <template #sidebar>
+      <SidePanel
+        :active-tab="activeTab"
+        :trash-count="trashedNotes.length"
+        @tab-change="onTabChange"
+      />
+    </template>
+
     <template #input>
       <FloatingInputBar
         ref="inputBarRef"
@@ -16,62 +24,117 @@
     </template>
 
     <template #content>
-      <section v-show="!searchState.active" class="note-list">
-        <p
-          v-if="!assistantStore.visibleNotes.length && !assistantStore.loadingNotes"
-          class="empty-state"
-        >
-          还没有笔记，先记录一条吧。
-        </p>
+      <!-- 主页：v-show 保活 DOM，避免切回时重挂载阻塞侧栏选中态 -->
+      <div v-show="activeTab === 'home'" class="tab-panel tab-panel--home">
+        <section v-show="!searchState.active" class="note-list">
+          <p
+            v-if="!assistantStore.visibleNotes.length && !assistantStore.loadingNotes"
+            class="empty-state"
+          >
+            还没有笔记，先记录一条吧。
+          </p>
 
-        <NoteCard
-          v-for="note in assistantStore.visibleNotes"
-          :key="note.id"
-          :note="note"
-          @edit-save="handleEditSave"
-          @delete="handleDelete"
-          @copied="handleCopied"
-          @copy-failed="handleCopyFailed"
-          @pin="handlePin"
-          @image-too-large="handleImageTooLarge"
-        />
+          <NoteCard
+            v-for="note in assistantStore.visibleNotes"
+            :key="note.id"
+            :note="note"
+            @edit-save="handleEditSave"
+            @delete="handleDelete"
+            @copied="handleCopied"
+            @copy-failed="handleCopyFailed"
+            @pin="handlePin"
+            @image-too-large="handleImageTooLarge"
+          />
+        </section>
+
+        <section v-if="searchState.active" class="note-list">
+          <header class="search-summary">
+            <span class="search-summary-label">
+              搜索结果
+              <span class="search-summary-keyword">「{{ searchState.keyword }}」</span>
+            </span>
+            <span class="search-summary-count">
+              <template v-if="searchState.loading">搜索中…</template>
+              <template v-else>共 {{ searchState.total }} 条</template>
+            </span>
+            <button type="button" class="search-summary-clear" @click="exitSearch">
+              清空
+            </button>
+          </header>
+
+          <p
+            v-if="!searchState.loading && !searchState.list.length"
+            class="empty-state"
+          >
+            没有匹配 「{{ searchState.keyword }}」 的笔记。
+          </p>
+
+          <NoteCard
+            v-for="note in searchState.list"
+            :key="`search-${note.id}`"
+            :note="note"
+            :highlight="searchState.keyword"
+            :plain="true"
+            @edit-save="handleEditSave"
+            @delete="handleDelete"
+            @copied="handleCopied"
+            @copy-failed="handleCopyFailed"
+            @pin="handlePin"
+            @image-too-large="handleImageTooLarge"
+          />
+        </section>
+      </div>
+
+      <!-- 沉淀 -->
+      <section v-show="activeTab === 'sediment'" class="note-list placeholder-panel">
+        <div class="placeholder-card">
+          <svg viewBox="0 0 24 24" width="32" height="32" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M12 2 2 7l10 5 10-5-10-5z" />
+            <path d="M2 17l10 5 10-5M2 12l10 5 10-5" />
+          </svg>
+          <h2 class="placeholder-title">沉淀</h2>
+          <p class="placeholder-desc">整理后的笔记会出现在这里，功能即将上线。</p>
+        </div>
       </section>
 
-      <section v-if="searchState.active" class="note-list">
-        <header class="search-summary">
-          <span class="search-summary-label">
-            搜索结果
-            <span class="search-summary-keyword">「{{ searchState.keyword }}」</span>
-          </span>
-          <span class="search-summary-count">
-            <template v-if="searchState.loading">搜索中…</template>
-            <template v-else>共 {{ searchState.total }} 条</template>
-          </span>
-          <button type="button" class="search-summary-clear" @click="exitSearch">
-            清空
-          </button>
-        </header>
+      <!-- 回响 -->
+      <section v-show="activeTab === 'echo'" class="note-list placeholder-panel">
+        <div class="placeholder-card">
+          <svg viewBox="0 0 24 24" width="32" height="32" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M4 12a8 8 0 0 1 16 0" />
+            <path d="M7 12a5 5 0 0 1 10 0" />
+            <circle cx="12" cy="12" r="1.5" fill="currentColor" stroke="none" />
+          </svg>
+          <h2 class="placeholder-title">回响</h2>
+          <p class="placeholder-desc">回顾与联想会汇聚于此，功能即将上线。</p>
+        </div>
+      </section>
 
-        <p
-          v-if="!searchState.loading && !searchState.list.length"
-          class="empty-state"
-        >
-          没有匹配 「{{ searchState.keyword }}」 的笔记。
-        </p>
+      <!-- 回收站 -->
+      <section v-show="activeTab === 'trash'" class="note-list trash-panel">
+        <p v-if="!trashedNotes.length" class="empty-state">回收站为空</p>
 
-        <NoteCard
-          v-for="note in searchState.list"
-          :key="`search-${note.id}`"
-          :note="note"
-          :highlight="searchState.keyword"
-          :plain="true"
-          @edit-save="handleEditSave"
-          @delete="handleDelete"
-          @copied="handleCopied"
-          @copy-failed="handleCopyFailed"
-          @pin="handlePin"
-          @image-too-large="handleImageTooLarge"
-        />
+        <div v-else class="trash-list">
+          <article
+            v-for="note in trashedNotes"
+            :key="note.id"
+            class="trash-card"
+          >
+            <div class="trash-card-body">
+              <span v-if="(note.title || '').trim()" class="trash-card-tag">{{ note.title }}</span>
+              <p class="trash-card-preview">
+                {{ (note.text || note.markdownContent || '').slice(0, 120) }}
+              </p>
+            </div>
+            <button
+              type="button"
+              class="btn btn-primary trash-undo-btn"
+              @click="handleUndoDelete(note.id)"
+            >
+              撤销
+            </button>
+          </article>
+        </div>
       </section>
     </template>
   </MainFrame>
@@ -86,10 +149,11 @@
 </template>
 
 <script setup>
-import { onBeforeUnmount, onMounted, reactive, ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 import CopyToast from '../components/feedback/CopyToast.vue'
 import FloatingInputBar from '../components/input/FloatingInputBar.vue'
 import MainFrame from '../components/layout/MainFrame.vue'
+import SidePanel from '../components/layout/SidePanel.vue'
 import NoteCard from '../components/note/NoteCard.vue'
 import { useCopyNote } from '../composables/useCopyNote'
 import { ApiError } from '../api/http'
@@ -101,6 +165,20 @@ const noteSubmitting = ref(false)
 const uploadProgress = ref(0)
 const inputBarRef = ref(null)
 const assistantStore = useAssistantStore()
+
+const activeTab = ref('home')
+
+const trashedNotes = computed(() =>
+  assistantStore.notes.filter((n) => n.pendingDelete),
+)
+
+const onTabChange = (tab) => {
+  if (activeTab.value === tab) return
+  activeTab.value = tab
+  if (tab !== 'home' && searchState.active) {
+    nextTick(() => exitSearch())
+  }
+}
 
 const searchState = reactive({
   active: false,
@@ -228,15 +306,17 @@ const handleDelete = ({ id }) => {
   openToast('笔记已删除', 'success', {
     duration: 3000,
     actionLabel: '撤销',
-    onAction: () => {
-      const t = deleteTimers.get(id)
-      if (t) {
-        clearTimeout(t)
-        deleteTimers.delete(id)
-      }
-      assistantStore.setNotePendingDelete(id, false)
-    },
+    onAction: () => handleUndoDelete(id),
   })
+}
+
+const handleUndoDelete = (id) => {
+  const t = deleteTimers.get(id)
+  if (t) {
+    clearTimeout(t)
+    deleteTimers.delete(id)
+  }
+  assistantStore.setNotePendingDelete(id, false)
 }
 
 const handlePin = async ({ id, pinWeightValue }) => {
@@ -286,17 +366,28 @@ onBeforeUnmount(() => {
 </script>
 
 <style scoped>
+.tab-panel {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+}
+
+.tab-panel--home {
+  overflow: hidden;
+}
+
 .note-list {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
   overflow-x: hidden;
-  padding: 18px 0 28px 0;
+  padding: 0 0 28px;
   display: flex;
   flex-direction: column;
   align-items: flex-start;
   gap: 10px;
-
   scrollbar-width: thin;
   scrollbar-color: rgba(24, 24, 27, 0.18) transparent;
 }
@@ -375,5 +466,97 @@ onBeforeUnmount(() => {
 .search-summary-clear:hover {
   background: rgba(24, 24, 27, 0.08);
   color: var(--color-primary);
+}
+
+.placeholder-panel {
+  align-items: center;
+  justify-content: center;
+  padding-top: 12vh;
+}
+
+.placeholder-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 32px 24px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-card);
+  color: var(--color-secondary-text);
+  text-align: center;
+}
+
+.placeholder-title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--color-primary);
+}
+
+.placeholder-desc {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  max-width: 260px;
+}
+
+.trash-panel {
+  padding-top: 8px;
+}
+
+.trash-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+}
+
+.trash-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px 16px;
+  border: 1px solid rgba(220, 38, 38, 0.12);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-card);
+}
+
+.trash-card-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.trash-card-tag {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: rgba(24, 24, 27, 0.08);
+  color: var(--color-secondary-text);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.trash-card-preview {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--color-secondary-text);
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+}
+
+.trash-undo-btn {
+  flex: 0 0 auto;
+  align-self: center;
 }
 </style>
