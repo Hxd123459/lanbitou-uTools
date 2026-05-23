@@ -2,7 +2,7 @@
   --color-primary: #18181b;
   --color-secondary-text: #3f3f46;
   --color-accent: #2563eb;
-  --color-bg: #ffffff;
+  --color-bg: #fbfaf9;
   --color-surface: #ffffff;
   --color-text: #09090b;
   --color-border: #e4e4e7;
@@ -32,13 +32,14 @@
   --btn-icon-border-hover: rgba(24, 24, 27, 0.4);
   --btn-icon-color-hover: var(--color-primary);
 
-  --font-base: "Inter", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei",
+  --font-base:
+    "Inter", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei",
     "Helvetica Neue", Arial, sans-serif;
   --motion-fast: 180ms ease;
 
   /* === App shell layout === */
   --sidebar-width: 232px;
-  --shell-sidebar-bg: rgba(255, 255, 255, 0.72);
+  --shell-sidebar-bg: #fbfaf9;
   --frame-gutter: 14px;
   --frame-width: min(988px, calc(100vw - var(--sidebar-width) - 32px));
   --frame-inner-width: calc(var(--frame-width) - var(--frame-gutter));

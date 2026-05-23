@@ -775,21 +775,18 @@ function formatTime(dateValue) {
 .note-card {
   position: relative;
   padding: 14px 16px;
-  border: 1px solid var(--color-border);
+  border: 0;
   border-radius: var(--radius-md);
-  background: var(--color-surface);
+  background: #ffffff;
   box-shadow: var(--shadow-card);
-  transition: border-color var(--motion-fast),
-    box-shadow var(--motion-fast);
+  transition: box-shadow var(--motion-fast);
 }
 
 .note-card:hover {
-  border-color: #d4d4d8;
   box-shadow: 0 4px 14px rgba(24, 24, 27, 0.08);
 }
 
 .note-card.is-editing {
-  border-color: var(--color-accent);
   box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.08);
 }
 
@@ -842,11 +839,10 @@ function formatTime(dateValue) {
 }
 
 .note-card.is-pinned-top {
-  border-color: rgba(37, 99, 235, 0.32);
   background: linear-gradient(
     180deg,
     rgba(37, 99, 235, 0.04) 0%,
-    var(--color-surface) 60%
+    #ffffff 60%
   );
 }
 
@@ -862,8 +858,6 @@ function formatTime(dateValue) {
 }
 
 .note-card.is-pinned-bottom {
-  border-style: dashed;
-  border-color: rgba(24, 24, 27, 0.18);
   background: rgba(24, 24, 27, 0.015);
 }
 
