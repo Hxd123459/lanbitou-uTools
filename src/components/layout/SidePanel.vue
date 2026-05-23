@@ -1,7 +1,28 @@
 <template>
   <aside class="app-sidebar" aria-label="主导航">
+   
+
     <div class="sidebar-brand">
       <BrandArea variant="sidebar" />
+    </div>
+
+    <div class="sidebar-search">
+      <label class="sidebar-search-field">
+        <span class="sidebar-search-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="11" cy="11" r="7" />
+            <path d="m20 20-3.5-3.5" />
+          </svg>
+        </span>
+        <input
+          type="search"
+          class="sidebar-search-input"
+          placeholder="搜索笔记…"
+          autocomplete="off"
+          spellcheck="false"
+          aria-label="搜索笔记"
+        />
+      </label>
     </div>
 
     <nav class="sidebar-nav" aria-label="菜单">
@@ -101,16 +122,70 @@ defineEmits(['tab-change'])
   height: 100vh;
   display: flex;
   flex-direction: column;
-  padding: 18px 12px 24px 16px;
+  padding: 20px 12px 24px 16px;
   overflow: hidden;
   background: var(--shell-sidebar-bg);
 }
 
+.sidebar-search {
+  flex: 0 0 auto;
+  padding: 0 2px 20px;
+}
+
+.sidebar-search-field {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: var(--radius-md);
+  background: rgba(255, 255, 255, 0.85);
+  box-shadow: 0 1px 3px rgba(24, 24, 27, 0.06),
+    0 0 0 1px rgba(37, 99, 235, 0.08);
+  cursor: text;
+  transition: box-shadow var(--motion-fast), background var(--motion-fast);
+}
+
+.sidebar-search-field:focus-within {
+  background: #ffffff;
+  box-shadow: 0 1px 3px rgba(24, 24, 27, 0.08),
+    0 0 0 2px rgba(37, 99, 235, 0.14);
+}
+
+.sidebar-search-icon {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-secondary-text);
+}
+
+.sidebar-search-input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  padding: 0;
+  color: var(--color-primary);
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 500;
+  outline: none;
+}
+
+.sidebar-search-input::placeholder {
+  color: #a1a1aa;
+  font-weight: 400;
+}
+
+.sidebar-search-input::-webkit-search-cancel-button {
+  -webkit-appearance: none;
+  appearance: none;
+}
+
 .sidebar-brand {
   flex: 0 0 auto;
-  padding: 2px 4px 18px;
-  margin-bottom: 14px;
-  border-bottom: 1px solid var(--color-border);
+  padding: 0 4px 20px;
 }
 
 .sidebar-nav {
@@ -198,6 +273,19 @@ defineEmits(['tab-change'])
     padding: 16px 8px 20px;
   }
 
+  .sidebar-search {
+    padding: 0 0 14px;
+  }
+
+  .sidebar-search-field {
+    justify-content: center;
+    padding: 10px;
+  }
+
+  .sidebar-search-input {
+    display: none;
+  }
+
   .sidebar-brand {
     padding: 0 4px 14px;
   }
@@ -214,7 +302,8 @@ defineEmits(['tab-change'])
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .nav-item {
+  .nav-item,
+  .sidebar-search-field {
     transition: none;
   }
 }

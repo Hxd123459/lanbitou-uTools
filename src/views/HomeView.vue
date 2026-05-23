@@ -86,16 +86,7 @@
       </div>
 
       <!-- 沉淀 -->
-      <section v-show="activeTab === 'sediment'" class="note-list placeholder-panel">
-        <div class="placeholder-card">
-          <svg viewBox="0 0 24 24" width="32" height="32" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <path d="M12 2 2 7l10 5 10-5-10-5z" />
-            <path d="M2 17l10 5 10-5M2 12l10 5 10-5" />
-          </svg>
-          <h2 class="placeholder-title">沉淀</h2>
-          <p class="placeholder-desc">整理后的笔记会出现在这里，功能即将上线。</p>
-        </div>
-      </section>
+      <SedimentPanel v-show="activeTab === 'sediment'" />
 
       <!-- 回响 -->
       <section v-show="activeTab === 'echo'" class="note-list placeholder-panel">
@@ -153,6 +144,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref } from 'v
 import CopyToast from '../components/feedback/CopyToast.vue'
 import FloatingInputBar from '../components/input/FloatingInputBar.vue'
 import MainFrame from '../components/layout/MainFrame.vue'
+import SedimentPanel from '../components/sediment/SedimentPanel.vue'
 import SidePanel from '../components/layout/SidePanel.vue'
 import NoteCard from '../components/note/NoteCard.vue'
 import { useCopyNote } from '../composables/useCopyNote'
