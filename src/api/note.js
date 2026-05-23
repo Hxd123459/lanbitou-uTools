@@ -31,6 +31,7 @@ function mapBlockToNote(item) {
     id: item.id,
     title: item.title || '',
     fineTitle: item.fineTitle || '',
+    summary: item.summary || '',
     text: item.rawContent || '',
     markdownContent: item.markdownContent || '',
     createdAt: item.createTime,
@@ -142,4 +143,17 @@ export async function searchNotes({ keyword, page = 1, size = 20 } = {}) {
     size: data?.size ?? safeSize,
     list: Array.isArray(data?.list) ? data.list.map(mapBlockToNote) : [],
   }
+}
+
+export async function fetchRecycleList() {
+  const data = await get('/api/note/recycle/list')
+  return Array.isArray(data) ? data.map(mapBlockToNote) : []
+}
+
+export async function restoreRecycleNote(id) {
+  return get('/api/note/recycle/restore', { id })
+}
+
+export async function deleteRecycleForever(id) {
+  return get('/api/note/recycle/deleteForever', { id })
 }

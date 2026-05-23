@@ -3,7 +3,7 @@
     <template #sidebar>
       <SidePanel
         :active-tab="activeTab"
-        :trash-count="trashedNotes.length"
+        :trash-count="recycleCount"
         @tab-change="onTabChange"
       />
     </template>
@@ -102,31 +102,13 @@
       </section>
 
       <!-- 回收站 -->
-      <section v-show="activeTab === 'trash'" class="note-list trash-panel">
-        <p v-if="!trashedNotes.length" class="empty-state">回收站为空</p>
-
-        <div v-else class="trash-list">
-          <article
-            v-for="note in trashedNotes"
-            :key="note.id"
-            class="trash-card"
-          >
-            <div class="trash-card-body">
-              <span v-if="(note.title || '').trim()" class="trash-card-tag">{{ note.title }}</span>
-              <p class="trash-card-preview">
-                {{ (note.text || note.markdownContent || '').slice(0, 120) }}
-              </p>
-            </div>
-            <button
-              type="button"
-              class="btn btn-primary trash-undo-btn"
-              @click="handleUndoDelete(note.id)"
-            >
-              撤销
-            </button>
-          </article>
-        </div>
-      </section>
+      <TrashPanel
+        v-show="activeTab === 'trash'"
+        :active="activeTab === 'trash'"
+        @count-change="recycleCount = $event"
+        @restored="handleRecycleRestored"
+        @error="notifyError"
+      />
     </template>
   </MainFrame>
 
@@ -140,16 +122,17 @@
 </template>
 
 <script setup>
-import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
+import { nextTick, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 import CopyToast from '../components/feedback/CopyToast.vue'
 import FloatingInputBar from '../components/input/FloatingInputBar.vue'
 import MainFrame from '../components/layout/MainFrame.vue'
 import SedimentPanel from '../components/sediment/SedimentPanel.vue'
+import TrashPanel from '../components/trash/TrashPanel.vue'
 import SidePanel from '../components/layout/SidePanel.vue'
 import NoteCard from '../components/note/NoteCard.vue'
 import { useCopyNote } from '../composables/useCopyNote'
 import { ApiError } from '../api/http'
-import { deleteBlock, searchNotes } from '../api/note'
+import { deleteBlock, fetchRecycleList, searchNotes } from '../api/note'
 import { useAssistantStore } from '../stores/assistantStore'
 
 const inputValue = ref('')
@@ -159,10 +142,25 @@ const inputBarRef = ref(null)
 const assistantStore = useAssistantStore()
 
 const activeTab = ref('home')
+const recycleCount = ref(0)
 
-const trashedNotes = computed(() =>
-  assistantStore.notes.filter((n) => n.pendingDelete),
-)
+const refreshRecycleCount = async () => {
+  try {
+    const list = await fetchRecycleList()
+    recycleCount.value = list.length
+  } catch {
+    recycleCount.value = 0
+  }
+}
+
+const handleRecycleRestored = async () => {
+  try {
+    await assistantStore.loadInitialNotes()
+    openToast('已恢复笔记', 'success', { duration: 1600 })
+  } catch (error) {
+    notifyError(error)
+  }
+}
 
 const onTabChange = (tab) => {
   if (activeTab.value === tab) return
@@ -287,6 +285,7 @@ const handleDelete = ({ id }) => {
     try {
       await deleteBlock(id)
       assistantStore.removeNoteLocal(id)
+      await refreshRecycleCount()
     } catch (error) {
       assistantStore.setNotePendingDelete(id, false)
       notifyError(error)
@@ -346,6 +345,7 @@ const notifyError = (error) => {
 onMounted(async () => {
   try {
     await assistantStore.loadInitialNotes()
+    await refreshRecycleCount()
   } catch (error) {
     notifyError(error)
   }
@@ -492,63 +492,5 @@ onBeforeUnmount(() => {
   font-size: 13px;
   line-height: 1.5;
   max-width: 260px;
-}
-
-.trash-panel {
-  padding-top: 8px;
-}
-
-.trash-list {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  width: 100%;
-}
-
-.trash-card {
-  display: flex;
-  align-items: flex-start;
-  gap: 12px;
-  padding: 14px 16px;
-  border: 1px solid rgba(220, 38, 38, 0.12);
-  border-radius: var(--radius-md);
-  background: var(--color-surface);
-  box-shadow: var(--shadow-card);
-}
-
-.trash-card-body {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.trash-card-tag {
-  display: inline-flex;
-  align-items: center;
-  width: fit-content;
-  padding: 2px 8px;
-  border-radius: 999px;
-  background: rgba(24, 24, 27, 0.08);
-  color: var(--color-secondary-text);
-  font-size: 12px;
-  font-weight: 600;
-}
-
-.trash-card-preview {
-  margin: 0;
-  font-size: 13px;
-  line-height: 1.55;
-  color: var(--color-secondary-text);
-  overflow: hidden;
-  display: -webkit-box;
-  -webkit-line-clamp: 3;
-  -webkit-box-orient: vertical;
-}
-
-.trash-undo-btn {
-  flex: 0 0 auto;
-  align-self: center;
 }
 </style>
