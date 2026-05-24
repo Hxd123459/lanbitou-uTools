@@ -57,9 +57,16 @@
               <template v-if="searchState.loading">搜索中…</template>
               <template v-else>共 {{ searchState.total }} 条</template>
             </span>
-            <button type="button" class="search-summary-clear" @click="exitSearch">
+            <motion.button
+              type="button"
+              class="search-summary-clear"
+              :while-hover="presets.button.hover"
+              :while-tap="presets.button.tap"
+              :transition="presets.button.transition"
+              @click="exitSearch"
+            >
               清空
-            </button>
+            </motion.button>
           </header>
 
           <p
@@ -123,7 +130,9 @@
 
 <script setup>
 import { nextTick, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
+import { motion } from 'motion-v'
 import CopyToast from '../components/feedback/CopyToast.vue'
+import { useMotionPresets } from '../composables/useMotionPresets'
 import FloatingInputBar from '../components/input/FloatingInputBar.vue'
 import MainFrame from '../components/layout/MainFrame.vue'
 import SedimentPanel from '../components/sediment/SedimentPanel.vue'
@@ -134,6 +143,8 @@ import { useCopyNote } from '../composables/useCopyNote'
 import { ApiError } from '../api/http'
 import { deleteBlock, fetchRecycleList, searchNotes } from '../api/note'
 import { useAssistantStore } from '../stores/assistantStore'
+
+const { presets } = useMotionPresets()
 
 const inputValue = ref('')
 const noteSubmitting = ref(false)
@@ -452,7 +463,6 @@ onBeforeUnmount(() => {
   cursor: pointer;
   padding: 4px 8px;
   border-radius: 6px;
-  transition: background var(--motion-fast), color var(--motion-fast);
 }
 
 .search-summary-clear:hover {

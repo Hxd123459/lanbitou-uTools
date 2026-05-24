@@ -154,6 +154,8 @@ export async function restoreRecycleNote(id) {
   return get('/api/note/recycle/restore', { id })
 }
 
-export async function deleteRecycleForever(id) {
-  return get('/api/note/recycle/deleteForever', { id })
+export async function deleteRecycleForever(ids) {
+  const idList = (Array.isArray(ids) ? ids : [ids]).filter((id) => id != null)
+  if (!idList.length) return null
+  return get('/api/note/recycle/deleteForever', { ids: idList.join(',') })
 }

@@ -36,12 +36,15 @@
         <span class="note-time">{{ timeText }}</span>
       </div>
       <div v-if="!note?.isPending" class="meta-actions">
-        <button
+        <motion.button
           v-if="!isEditing"
           class="icon-btn"
           :class="{ 'is-active': isPinnedTop }"
           type="button"
           :title="isPinnedTop ? '取消置顶' : '置顶'"
+          :while-hover="presets.button.hover"
+          :while-tap="presets.button.tap"
+          :transition="presets.button.transition"
           @click="onTogglePin('TOP')"
         >
           <svg viewBox="0 0 24 24" width="14" height="14" fill="none"
@@ -51,13 +54,16 @@
             <path d="M5 9l7-7 7 7" />
             <path d="M9 9h6v6H9z" />
           </svg>
-        </button>
-        <button
+        </motion.button>
+        <motion.button
           v-if="!isEditing"
           class="icon-btn"
           :class="{ 'is-active': isPinnedBottom }"
           type="button"
           :title="isPinnedBottom ? '取消置底' : '置底'"
+          :while-hover="presets.button.hover"
+          :while-tap="presets.button.tap"
+          :transition="presets.button.transition"
           @click="onTogglePin('BOTTOM')"
         >
           <svg viewBox="0 0 24 24" width="14" height="14" fill="none"
@@ -67,12 +73,15 @@
             <path d="M5 15l7 7 7-7" />
             <path d="M9 9h6v6H9z" />
           </svg>
-        </button>
-        <button
+        </motion.button>
+        <motion.button
           v-if="!isEditing"
           class="icon-btn"
           type="button"
           title="复制纯文本"
+          :while-hover="presets.button.hover"
+          :while-tap="presets.button.tap"
+          :transition="presets.button.transition"
           @click="onCopy"
         >
           <svg viewBox="0 0 24 24" width="14" height="14" fill="none"
@@ -81,12 +90,15 @@
             <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
             <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
           </svg>
-        </button>
-        <button
+        </motion.button>
+        <motion.button
           v-if="!isEditing"
           class="icon-btn"
           type="button"
           title="编辑"
+          :while-hover="presets.button.hover"
+          :while-tap="presets.button.tap"
+          :transition="presets.button.transition"
           @click="enterEdit"
         >
           <svg viewBox="0 0 24 24" width="14" height="14" fill="none"
@@ -95,12 +107,15 @@
             <path d="M12 20h9" />
             <path d="M16.5 3.5a2.121 2.121 0 1 1 3 3L7 19l-4 1 1-4 12.5-12.5z" />
           </svg>
-        </button>
-        <button
+        </motion.button>
+        <motion.button
           v-if="!isEditing"
           class="icon-btn icon-btn-danger"
           type="button"
           title="删除"
+          :while-hover="presets.button.hover"
+          :while-tap="presets.button.tap"
+          :transition="presets.button.transition"
           @click="onDelete"
         >
           <svg viewBox="0 0 24 24" width="14" height="14" fill="none"
@@ -112,7 +127,7 @@
             <path d="M10 11v6" />
             <path d="M14 11v6" />
           </svg>
-        </button>
+        </motion.button>
       </div>
     </div>
 
@@ -135,21 +150,27 @@
       />
 
       <div v-if="draftImageItems.length || canAddMoreImages" class="thumb-strip">
-        <div
+        <motion.div
           v-for="(item, idx) in draftImageItems"
           :key="item.key"
           class="thumb"
+          :initial="presets.thumbPop.initial"
+          :animate="presets.thumbPop.animate"
+          :transition="presets.thumbPop.transition"
         >
           <img
             :src="item.previewUrl || item.url"
             alt="预览"
             draggable="false"
           />
-          <button
+          <motion.button
             type="button"
             class="thumb-remove"
             :disabled="saving"
             aria-label="移除图片"
+            :while-hover="presets.button.hover"
+            :while-tap="presets.button.tap"
+            :transition="presets.button.transition"
             @click="removeDraftImage(idx)"
           >
             <svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true">
@@ -161,28 +182,33 @@
                 fill="none"
               />
             </svg>
-          </button>
-        </div>
+          </motion.button>
+        </motion.div>
 
-        <button
+        <motion.div
           v-if="canAddMoreImages"
-          type="button"
-          class="btn btn-dashed-tile thumb-add"
-          :disabled="saving"
-          aria-label="添加图片"
-          title="继续添加图片"
-          @click="openEditFilePicker"
+          :initial="presets.thumbPop.initial"
+          :animate="presets.thumbPop.animate"
+          :transition="presets.thumbPop.transition"
         >
-          <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
-            <path
-              d="M12 5v14M5 12h14"
-              stroke="currentColor"
-              stroke-width="1.8"
-              stroke-linecap="round"
-              fill="none"
-            />
-          </svg>
-        </button>
+          <AppButton
+            class="btn btn-dashed-tile thumb-add"
+            :disabled="saving"
+            aria-label="添加图片"
+            title="继续添加图片"
+            @click="openEditFilePicker"
+          >
+            <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
+              <path
+                d="M12 5v14M5 12h14"
+                stroke="currentColor"
+                stroke-width="1.8"
+                stroke-linecap="round"
+                fill="none"
+              />
+            </svg>
+          </AppButton>
+        </motion.div>
       </div>
 
       <input
@@ -196,8 +222,7 @@
 
       <div class="editor-bar">
         <div class="editor-bar-left">
-          <button
-            type="button"
+          <AppButton
             class="btn btn-icon"
             :disabled="saving || draftImageItems.length >= MAX_IMAGES"
             :title="
@@ -229,7 +254,7 @@
                 fill="none"
               />
             </svg>
-          </button>
+          </AppButton>
           <span
             v-if="draftImageItems.length"
             class="counter"
@@ -254,14 +279,13 @@
           >
             取消
           </button>
-          <button
-            type="button"
+          <AppButton
             class="btn btn-primary"
             :disabled="saving || !canSave"
             @click="saveEdit"
           >
             {{ saving ? '保存中…' : '保存' }}
-          </button>
+          </AppButton>
         </div>
       </div>
     </template>
@@ -300,14 +324,19 @@ import {
   ref,
   watch,
 } from 'vue'
+import { motion } from 'motion-v'
 import {
   MarkdownRender,
   getMarkdown,
   parseMarkdownToStructure,
 } from 'vue-renderer-markdown'
 import { isImageFileSizeAllowed } from '../../constants/uploadLimits'
+import { useMotionPresets } from '../../composables/useMotionPresets'
 import { useAssistantStore } from '../../stores/assistantStore'
+import AppButton from '../motion/AppButton.vue'
 import NoteImageGallery from './NoteImageGallery.vue'
+
+const { presets } = useMotionPresets()
 
 const props = defineProps({
   note: {
@@ -779,7 +808,6 @@ function formatTime(dateValue) {
   border-radius: var(--radius-md);
   background: #ffffff;
   box-shadow: var(--shadow-card);
-  transition: box-shadow var(--motion-fast);
 }
 
 .note-card:hover {
@@ -909,8 +937,6 @@ function formatTime(dateValue) {
   color: var(--color-text);
   outline: 0;
   text-align: center;
-  transition: border-color var(--motion-fast), background var(--motion-fast),
-    border-width var(--motion-fast);
 }
 
 .tag-input::placeholder {
@@ -959,7 +985,6 @@ function formatTime(dateValue) {
   gap: 4px;
   opacity: 0;
   transform: translateY(-1px);
-  transition: opacity var(--motion-fast), transform var(--motion-fast);
 }
 
 .note-card:hover .meta-actions,
@@ -981,8 +1006,6 @@ function formatTime(dateValue) {
   background: transparent;
   color: var(--color-secondary-text);
   cursor: pointer;
-  transition: background var(--motion-fast), color var(--motion-fast),
-    border-color var(--motion-fast);
 }
 
 .icon-btn:hover {
@@ -1110,7 +1133,6 @@ function formatTime(dateValue) {
   background: var(--color-bg);
   border: 1px solid var(--color-border);
   flex-shrink: 0;
-  animation: thumb-pop var(--motion-fast) ease-out;
 }
 
 .thumb img {
@@ -1137,12 +1159,10 @@ function formatTime(dateValue) {
   justify-content: center;
   cursor: pointer;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.18);
-  transition: background var(--motion-fast), transform var(--motion-fast);
 }
 
 .thumb-remove:hover:not(:disabled) {
   background: #18181b;
-  transform: scale(1.08);
 }
 
 .thumb-remove:disabled {
@@ -1156,7 +1176,6 @@ function formatTime(dateValue) {
   height: 64px;
   border-radius: 8px;
   flex-shrink: 0;
-  animation: thumb-pop var(--motion-fast) ease-out;
 }
 
 .hidden-file-input {
@@ -1177,17 +1196,6 @@ function formatTime(dateValue) {
 .counter-full {
   color: #d97706;
   font-weight: 500;
-}
-
-@keyframes thumb-pop {
-  from {
-    opacity: 0;
-    transform: scale(0.92);
-  }
-  to {
-    opacity: 1;
-    transform: scale(1);
-  }
 }
 
 .editor-bar {
@@ -1249,7 +1257,6 @@ function formatTime(dateValue) {
   color: var(--color-secondary-text);
   font-size: 13px;
   cursor: pointer;
-  transition: color var(--motion-fast);
 }
 
 .link-btn:hover:not(:disabled) {

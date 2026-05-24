@@ -1,21 +1,36 @@
 <template>
-  <Transition name="toast">
-    <div v-if="visible" class="copy-toast" :class="type">
+  <AnimatePresence>
+    <motion.div
+      v-if="visible"
+      key="copy-toast"
+      class="copy-toast"
+      :class="type"
+      :initial="presets.toast.initial"
+      :animate="presets.toast.animate"
+      :exit="presets.toast.exit"
+      :transition="presets.toast.transition"
+    >
       <span class="toast-text">{{ text }}</span>
-      <button
+      <motion.button
         v-if="actionLabel"
-        class="toast-action"
         type="button"
+        class="toast-action"
+        :while-hover="presets.button.hover"
+        :while-tap="presets.button.tap"
+        :transition="presets.button.transition"
         @click="onActionClick"
       >
         {{ actionLabel }}
-      </button>
-    </div>
-  </Transition>
+      </motion.button>
+    </motion.div>
+  </AnimatePresence>
 </template>
 
 <script setup>
-const props = defineProps({
+import { AnimatePresence, motion } from 'motion-v'
+import { useMotionPresets } from '../../composables/useMotionPresets'
+
+defineProps({
   visible: {
     type: Boolean,
     default: false,
@@ -35,6 +50,7 @@ const props = defineProps({
 })
 
 const emit = defineEmits(['action'])
+const { presets } = useMotionPresets()
 
 const onActionClick = () => {
   emit('action')
@@ -84,21 +100,9 @@ const onActionClick = () => {
   font-size: 12px;
   font-weight: 500;
   cursor: pointer;
-  transition: background var(--motion-fast);
 }
 
 .toast-action:hover {
   background: rgba(255, 255, 255, 0.28);
-}
-
-.toast-enter-active,
-.toast-leave-active {
-  transition: opacity var(--motion-fast), transform var(--motion-fast);
-}
-
-.toast-enter-from,
-.toast-leave-to {
-  opacity: 0;
-  transform: translateY(8px);
 }
 </style>

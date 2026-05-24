@@ -8,14 +8,17 @@
             :key="`${crumb.label}-${index}`"
             class="breadcrumb-item"
           >
-            <button
+            <motion.button
               v-if="index < breadcrumbs.length - 1"
               type="button"
               class="breadcrumb-link"
+              :while-hover="presets.button.hover"
+              :while-tap="presets.button.tap"
+              :transition="presets.button.transition"
               @click="navigateToCrumb(index)"
             >
               {{ crumb.label }}
-            </button>
+            </motion.button>
             <span v-else class="breadcrumb-current" aria-current="page">
               {{ crumb.label }}
             </span>
@@ -30,8 +33,7 @@
         </ol>
       </nav>
 
-      <button
-        type="button"
+      <AppButton
         class="btn btn-icon-text sediment-create-file"
         title="新建文件"
       >
@@ -52,7 +54,7 @@
           <line x1="9" y1="15" x2="15" y2="15" />
         </svg>
         <span>新建文件</span>
-      </button>
+      </AppButton>
     </header>
 
     <div class="folder-grid-wrap">
@@ -62,10 +64,13 @@
           :key="folder.id"
           class="folder-grid-item"
         >
-          <button
+          <motion.button
             type="button"
             class="folder-card"
             :title="folder.name"
+            :while-hover="presets.button.hover"
+            :while-tap="presets.button.tap"
+            :transition="presets.button.transition"
             @click="enterFolder(folder)"
           >
             <span class="folder-icon-wrap" aria-hidden="true">
@@ -85,7 +90,7 @@
               </svg>
             </span>
             <span class="folder-name">{{ folder.name }}</span>
-          </button>
+          </motion.button>
         </li>
 
         <li class="folder-grid-item">
@@ -125,11 +130,14 @@
             />
           </div>
 
-          <button
+          <motion.button
             v-else
             type="button"
             class="folder-create"
             title="新建文件夹"
+            :while-hover="presets.button.hover"
+            :while-tap="presets.button.tap"
+            :transition="presets.button.transition"
             @click="startCreateFolder"
           >
             <span class="folder-create-icon" aria-hidden="true">
@@ -151,7 +159,7 @@
               </svg>
             </span>
             <span class="folder-create-label">新建文件夹</span>
-          </button>
+          </motion.button>
         </li>
       </ul>
     </div>
@@ -160,6 +168,11 @@
 
 <script setup>
 import { computed, nextTick, ref } from 'vue'
+import { motion } from 'motion-v'
+import { useMotionPresets } from '../../composables/useMotionPresets'
+import AppButton from '../motion/AppButton.vue'
+
+const { presets } = useMotionPresets()
 
 const MOCK_TREE = [
   {
@@ -319,7 +332,6 @@ const onFolderInputBlur = () => {
   font-size: 13px;
   font-weight: 500;
   cursor: pointer;
-  transition: background var(--motion-fast), color var(--motion-fast);
 }
 
 .breadcrumb-link:hover {
@@ -383,7 +395,6 @@ const onFolderInputBlur = () => {
   padding: 0;
   cursor: pointer;
   text-align: center;
-  transition: transform var(--motion-fast);
 }
 
 .folder-card:hover .folder-icon-wrap {
@@ -410,7 +421,6 @@ const onFolderInputBlur = () => {
   background: #ffffff;
   color: #ca8a04;
   box-shadow: var(--shadow-card);
-  transition: box-shadow var(--motion-fast), border-color var(--motion-fast);
 }
 
 .folder-icon-wrap--draft {
@@ -448,8 +458,6 @@ const onFolderInputBlur = () => {
   border: 1.5px dashed var(--btn-dashed-border);
   background: rgba(255, 255, 255, 0.55);
   color: var(--color-secondary-text);
-  transition: background var(--motion-fast), border-color var(--motion-fast),
-    color var(--motion-fast);
 }
 
 .folder-create:hover .folder-create-icon {
@@ -491,7 +499,6 @@ const onFolderInputBlur = () => {
   font-size: 12px;
   text-align: center;
   outline: none;
-  transition: border-color var(--motion-fast), box-shadow var(--motion-fast);
 }
 
 .folder-name-input:focus {
@@ -521,16 +528,6 @@ const onFolderInputBlur = () => {
 
   .folder-grid {
     gap: 14px 16px;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .folder-card,
-  .folder-icon-wrap,
-  .folder-create-icon,
-  .breadcrumb-link,
-  .folder-name-input {
-    transition: none;
   }
 }
 </style>

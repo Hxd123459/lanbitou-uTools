@@ -35,92 +35,113 @@
   </div>
 
   <Teleport to="body">
-    <div
-      v-if="active !== -1"
-      class="lightbox"
-      role="dialog"
-      aria-modal="true"
-      @click.self="close"
-    >
-      <button
-        class="lb-btn lb-close"
-        type="button"
-        aria-label="关闭"
-        @click="close"
+    <AnimatePresence>
+      <motion.div
+        v-if="active !== -1"
+        key="lightbox"
+        class="lightbox"
+        role="dialog"
+        aria-modal="true"
+        :initial="presets.fade.initial"
+        :animate="presets.fade.animate"
+        :exit="presets.fade.exit"
+        :transition="presets.fade.transition"
+        @click.self="close"
       >
-        <svg
-          viewBox="0 0 24 24"
-          width="20"
-          height="20"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="2"
-          stroke-linecap="round"
+        <motion.button
+          class="lb-btn lb-close"
+          type="button"
+          aria-label="关闭"
+          :while-hover="presets.button.hover"
+          :while-tap="presets.button.tap"
+          :transition="presets.button.transition"
+          @click="close"
         >
-          <path d="M6 6l12 12M18 6L6 18" />
-        </svg>
-      </button>
+          <svg
+            viewBox="0 0 24 24"
+            width="20"
+            height="20"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+          >
+            <path d="M6 6l12 12M18 6L6 18" />
+          </svg>
+        </motion.button>
 
-      <button
-        v-if="images.length > 1"
-        class="lb-btn lb-prev"
-        type="button"
-        aria-label="上一张"
-        @click="prev"
-      >
-        <svg
-          viewBox="0 0 24 24"
-          width="20"
-          height="20"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="2"
-          stroke-linecap="round"
-          stroke-linejoin="round"
+        <motion.button
+          v-if="images.length > 1"
+          class="lb-btn lb-prev"
+          type="button"
+          aria-label="上一张"
+          :while-hover="presets.button.hover"
+          :while-tap="presets.button.tap"
+          :transition="presets.button.transition"
+          @click="prev"
         >
-          <path d="M15 18l-6-6 6-6" />
-        </svg>
-      </button>
+          <svg
+            viewBox="0 0 24 24"
+            width="20"
+            height="20"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <path d="M15 18l-6-6 6-6" />
+          </svg>
+        </motion.button>
 
-      <img
-        v-if="current"
-        :key="current.id ?? active"
-        :src="current.url"
-        :alt="`图片 ${active + 1}`"
-        class="lb-img"
-        draggable="false"
-      />
+        <motion.img
+          v-if="current"
+          :key="current.id ?? active"
+          :src="current.url"
+          :alt="`图片 ${active + 1}`"
+          class="lb-img"
+          draggable="false"
+          :initial="presets.thumbPop.initial"
+          :animate="presets.thumbPop.animate"
+          :transition="presets.thumbPop.transition"
+        />
 
-      <button
-        v-if="images.length > 1"
-        class="lb-btn lb-next"
-        type="button"
-        aria-label="下一张"
-        @click="next"
-      >
-        <svg
-          viewBox="0 0 24 24"
-          width="20"
-          height="20"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="2"
-          stroke-linecap="round"
-          stroke-linejoin="round"
+        <motion.button
+          v-if="images.length > 1"
+          class="lb-btn lb-next"
+          type="button"
+          aria-label="下一张"
+          :while-hover="presets.button.hover"
+          :while-tap="presets.button.tap"
+          :transition="presets.button.transition"
+          @click="next"
         >
-          <path d="M9 6l6 6-6 6" />
-        </svg>
-      </button>
+          <svg
+            viewBox="0 0 24 24"
+            width="20"
+            height="20"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <path d="M9 6l6 6-6 6" />
+          </svg>
+        </motion.button>
 
-      <div v-if="images.length > 1" class="lb-counter">
-        {{ active + 1 }} / {{ images.length }}
-      </div>
-    </div>
+        <div v-if="images.length > 1" class="lb-counter">
+          {{ active + 1 }} / {{ images.length }}
+        </div>
+      </motion.div>
+    </AnimatePresence>
   </Teleport>
 </template>
 
 <script setup>
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
+import { AnimatePresence, motion } from 'motion-v'
+import { useMotionPresets } from '../../composables/useMotionPresets'
 
 const props = defineProps({
   images: {
@@ -128,6 +149,8 @@ const props = defineProps({
     default: () => [],
   },
 })
+
+const { presets } = useMotionPresets()
 
 const active = ref(-1)
 
@@ -208,7 +231,6 @@ onBeforeUnmount(() => {
   background: var(--color-bg);
   cursor: zoom-in;
   flex: 0 0 auto;
-  transition: border-color var(--motion-fast), box-shadow var(--motion-fast);
 }
 
 .tile img {
@@ -216,7 +238,6 @@ onBeforeUnmount(() => {
   height: 100%;
   object-fit: cover;
   display: block;
-  transition: transform var(--motion-fast);
 }
 
 .tile:hover {
@@ -248,7 +269,6 @@ onBeforeUnmount(() => {
   color: #fff;
   opacity: 0;
   pointer-events: none;
-  transition: opacity var(--motion-fast);
 }
 
 .tile:hover .tile-overlay,
@@ -268,7 +288,6 @@ onBeforeUnmount(() => {
   align-items: center;
   justify-content: center;
   padding: 24px;
-  animation: lb-fade var(--motion-fast) ease-out;
 }
 
 .lb-img {
@@ -278,7 +297,6 @@ onBeforeUnmount(() => {
   box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5);
   display: block;
   user-select: none;
-  animation: lb-pop 220ms ease-out;
 }
 
 .lb-btn {
@@ -296,7 +314,6 @@ onBeforeUnmount(() => {
   cursor: pointer;
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
-  transition: background var(--motion-fast), transform var(--motion-fast);
 }
 
 .lb-btn:hover {
@@ -319,18 +336,10 @@ onBeforeUnmount(() => {
   transform: translateY(-50%);
 }
 
-.lb-prev:hover {
-  transform: translateY(-50%) translateX(-2px);
-}
-
 .lb-next {
   right: 16px;
   top: 50%;
   transform: translateY(-50%);
-}
-
-.lb-next:hover {
-  transform: translateY(-50%) translateX(2px);
 }
 
 .lb-counter {
@@ -349,26 +358,6 @@ onBeforeUnmount(() => {
   -webkit-backdrop-filter: blur(8px);
 }
 
-@keyframes lb-fade {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
-}
-
-@keyframes lb-pop {
-  from {
-    opacity: 0;
-    transform: scale(0.96);
-  }
-  to {
-    opacity: 1;
-    transform: scale(1);
-  }
-}
-
 @media (max-width: 480px) {
   .tile {
     width: 84px;
@@ -379,18 +368,6 @@ onBeforeUnmount(() => {
   }
   .lb-next {
     right: 6px;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .lightbox,
-  .lb-img,
-  .tile,
-  .tile img,
-  .lb-btn,
-  .tile-overlay {
-    animation: none;
-    transition: none;
   }
 }
 </style>

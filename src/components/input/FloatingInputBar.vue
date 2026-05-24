@@ -2,23 +2,39 @@
   <div class="input-bar" :class="{ 'is-submitting': submitting }">
     <div class="input-shell">
       <div class="input-shell-stack">
-        <Transition name="ux-reveal" mode="out-in" @after-enter="focusActiveInput">
-          <textarea
+        <AnimatePresence mode="wait">
+          <motion.div
             v-if="!isSearchMode"
             key="write"
-            ref="textareaRef"
-            :value="modelValue"
-            class="main-input"
-            :disabled="submitting"
-            :placeholder="placeholder"
-            rows="1"
-            :style="{ height: inputHeight + 'px' }"
-            @input="onInput"
-            @keydown="onKeydown"
-            @paste="onPaste"
-          />
+            class="input-mode-panel"
+            :initial="presets.reveal.initial"
+            :animate="presets.reveal.animate"
+            :exit="presets.reveal.exit"
+            :transition="presets.reveal.transition"
+          >
+            <textarea
+              ref="textareaRef"
+              :value="modelValue"
+              class="main-input"
+              :disabled="submitting"
+              :placeholder="placeholder"
+              rows="1"
+              :style="{ height: inputHeight + 'px' }"
+              @input="onInput"
+              @keydown="onKeydown"
+              @paste="onPaste"
+            />
+          </motion.div>
 
-          <div v-else key="search" class="search-field-wrap">
+          <motion.div
+            v-else
+            key="search"
+            class="search-field-wrap input-mode-panel"
+            :initial="presets.reveal.initial"
+            :animate="presets.reveal.animate"
+            :exit="presets.reveal.exit"
+            :transition="presets.reveal.transition"
+          >
             <textarea
               ref="searchInputRef"
               v-model="searchKeyword"
@@ -35,12 +51,15 @@
               @input="onSearchInput"
               @paste="onSearchPaste"
             />
-            <button
+            <motion.button
               v-if="searchKeyword"
               type="button"
               class="search-clear"
               aria-label="清空关键词"
               title="清空"
+              :while-hover="presets.button.hover"
+              :while-tap="presets.button.tap"
+              :transition="presets.button.transition"
               @click="clearSearchKeyword"
             >
               <svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true">
@@ -52,20 +71,38 @@
                   fill="none"
                 />
               </svg>
-            </button>
-          </div>
-        </Transition>
+            </motion.button>
+          </motion.div>
+        </AnimatePresence>
 
-        <Transition name="ux-fade" mode="out-in">
-          <div v-if="!isSearchMode" key="write-extras" class="write-mode-extras">
+        <AnimatePresence mode="wait">
+          <motion.div
+            v-if="!isSearchMode"
+            key="write-extras"
+            class="write-mode-extras"
+            :initial="presets.fade.initial"
+            :animate="presets.fade.animate"
+            :exit="presets.fade.exit"
+            :transition="presets.fade.transition"
+          >
             <div v-if="images.length" class="thumb-strip">
-              <div v-for="item in images" :key="item.id" class="thumb">
+              <motion.div
+                v-for="item in images"
+                :key="item.id"
+                class="thumb"
+                :initial="presets.thumbPop.initial"
+                :animate="presets.thumbPop.animate"
+                :transition="presets.thumbPop.transition"
+              >
                 <img :src="item.url" alt="预览" />
-                <button
+                <motion.button
                   type="button"
                   class="thumb-remove"
                   :disabled="submitting"
                   aria-label="移除图片"
+                  :while-hover="presets.button.hover"
+                  :while-tap="presets.button.tap"
+                  :transition="presets.button.transition"
                   @click="removeImage(item.id)"
                 >
                   <svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true">
@@ -77,12 +114,11 @@
                       fill="none"
                     />
                   </svg>
-                </button>
-              </div>
+                </motion.button>
+              </motion.div>
 
-              <button
+              <AppButton
                 v-if="!submitting && images.length < MAX_IMAGES"
-                type="button"
                 class="btn btn-dashed-tile thumb-add"
                 aria-label="添加图片"
                 title="继续添加图片"
@@ -97,7 +133,7 @@
                     fill="none"
                   />
                 </svg>
-              </button>
+              </AppButton>
             </div>
 
             <div
@@ -108,16 +144,19 @@
               aria-valuemin="0"
               aria-valuemax="100"
             >
-              <div class="upload-progress-bar" :style="{ width: `${progressPercent}%` }"></div>
+              <motion.div
+                class="upload-progress-bar"
+                :animate="{ width: `${progressPercent}%` }"
+                :transition="{ duration: 0.12, ease: 'linear' }"
+              />
             </div>
-          </div>
-        </Transition>
+          </motion.div>
+        </AnimatePresence>
       </div>
 
       <div class="input-footer">
         <div class="footer-left">
-          <button
-            type="button"
+          <AppButton
             class="btn btn-icon-text"
             :class="{ 'is-active': isSearchMode }"
             :disabled="submitting"
@@ -125,8 +164,16 @@
             :aria-label="isSearchMode ? '当前：搜索，点击或按 Tab 切换为写' : '当前：记录，点击或按 Tab 切换为搜'"
             @click="toggleSearchMode"
           >
-            <Transition name="ux-swap-label" mode="out-in">
-              <span v-if="!isSearchMode" key="write" class="mode-toggle-inner">
+            <AnimatePresence mode="wait">
+              <motion.span
+                v-if="!isSearchMode"
+                key="write"
+                class="mode-toggle-inner"
+                :initial="presets.swapLabel.initial"
+                :animate="presets.swapLabel.animate"
+                :exit="presets.swapLabel.exit"
+                :transition="presets.swapLabel.transition"
+              >
                 <svg
                   class="mode-toggle-icon"
                   viewBox="0 0 24 24"
@@ -144,8 +191,16 @@
                   />
                 </svg>
                 <span class="mode-toggle-label">写</span>
-              </span>
-              <span v-else key="search" class="mode-toggle-inner">
+              </motion.span>
+              <motion.span
+                v-else
+                key="search"
+                class="mode-toggle-inner"
+                :initial="presets.swapLabel.initial"
+                :animate="presets.swapLabel.animate"
+                :exit="presets.swapLabel.exit"
+                :transition="presets.swapLabel.transition"
+              >
                 <svg
                   class="mode-toggle-icon"
                   viewBox="0 0 24 24"
@@ -169,52 +224,66 @@
                   />
                 </svg>
                 <span class="mode-toggle-label">搜</span>
-              </span>
-            </Transition>
-          </button>
-          <Transition name="ux-fade" mode="out-in">
-            <button
+              </motion.span>
+            </AnimatePresence>
+          </AppButton>
+          <AnimatePresence mode="wait">
+            <motion.div
               v-if="!isSearchMode"
               key="pick"
-              type="button"
-              class="btn btn-icon"
-              :disabled="submitting || images.length >= MAX_IMAGES"
-              :title="
-                images.length >= MAX_IMAGES
-                  ? `最多 ${MAX_IMAGES} 张`
-                  : '从本地选择图片'
-              "
-              aria-label="选择本地图片"
-              @click="openFilePicker"
+              :initial="presets.fade.initial"
+              :animate="presets.fade.animate"
+              :exit="presets.fade.exit"
+              :transition="presets.fade.transition"
             >
-              <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
-                <rect
-                  x="3"
-                  y="4"
-                  width="18"
-                  height="16"
-                  rx="2.5"
-                  stroke="currentColor"
-                  stroke-width="1.6"
-                  fill="none"
-                />
-                <circle cx="8.5" cy="9.5" r="1.5" fill="currentColor" />
-                <path
-                  d="M4.5 17.5l4.5-5 4 4 2.5-3 4 5"
-                  stroke="currentColor"
-                  stroke-width="1.6"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  fill="none"
-                />
-              </svg>
-            </button>
-          </Transition>
+              <AppButton
+                class="btn btn-icon"
+                :disabled="submitting || images.length >= MAX_IMAGES"
+                :title="
+                  images.length >= MAX_IMAGES
+                    ? `最多 ${MAX_IMAGES} 张`
+                    : '从本地选择图片'
+                "
+                aria-label="选择本地图片"
+                @click="openFilePicker"
+              >
+                <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+                  <rect
+                    x="3"
+                    y="4"
+                    width="18"
+                    height="16"
+                    rx="2.5"
+                    stroke="currentColor"
+                    stroke-width="1.6"
+                    fill="none"
+                  />
+                  <circle cx="8.5" cy="9.5" r="1.5" fill="currentColor" />
+                  <path
+                    d="M4.5 17.5l4.5-5 4 4 2.5-3 4 5"
+                    stroke="currentColor"
+                    stroke-width="1.6"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    fill="none"
+                  />
+                </svg>
+              </AppButton>
+            </motion.div>
+          </AnimatePresence>
         </div>
 
         <div class="footer-right">
-          <Transition name="ux-fade" mode="out-in">
-            <div v-if="!isSearchMode" key="write-actions" class="footer-right-group">
+          <AnimatePresence mode="wait">
+            <motion.div
+              v-if="!isSearchMode"
+              key="write-actions"
+              class="footer-right-group"
+              :initial="presets.fade.initial"
+              :animate="presets.fade.animate"
+              :exit="presets.fade.exit"
+              :transition="presets.fade.transition"
+            >
               <span
                 v-if="images.length"
                 class="counter"
@@ -230,16 +299,15 @@
                 <span class="hint-plus">+</span>
                 <kbd>Enter</kbd>
               </span>
-              <button
-                type="button"
+              <AppButton
                 class="btn btn-primary"
                 :disabled="!canSubmit"
                 @click="onSubmit"
               >
                 保存
-              </button>
-            </div>
-          </Transition>
+              </AppButton>
+            </motion.div>
+          </AnimatePresence>
         </div>
       </div>
 
@@ -257,7 +325,10 @@
 
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { AnimatePresence, motion } from 'motion-v'
 import { isImageFileSizeAllowed } from '../../constants/uploadLimits'
+import { useMotionPresets } from '../../composables/useMotionPresets'
+import AppButton from '../motion/AppButton.vue'
 
 const props = defineProps({
   modelValue: {
@@ -294,6 +365,8 @@ const emit = defineEmits([
   'search',
   'search-cancel',
 ])
+
+const { presets } = useMotionPresets()
 
 const MIN_HEIGHT = 112
 const MAX_HEIGHT = 280
@@ -465,7 +538,6 @@ const exitSearchMode = () => {
   emit('update:modelValue', writeDraftSnapshot.value)
 }
 
-/** 由 <Transition @after-enter> 回调，保证新输入框已挂载后再聚焦 */
 const focusActiveInput = () => {
   if (isSearchMode.value) {
     searchInputRef.value?.focus()
@@ -531,6 +603,8 @@ watch(
   () => nextTick(adjustHeight),
 )
 
+watch(isSearchMode, () => nextTick(focusActiveInput))
+
 onMounted(() => {
   const platform =
     (typeof navigator !== 'undefined' &&
@@ -562,8 +636,6 @@ defineExpose({ reset, addImages, exitSearchMode })
   background: var(--color-surface);
   box-shadow: var(--shadow-card);
   overflow: hidden;
-  transition: border-color var(--motion-fast),
-    box-shadow var(--motion-fast);
 }
 
 .input-shell:focus-within {
@@ -580,6 +652,10 @@ defineExpose({ reset, addImages, exitSearchMode })
   flex-direction: column;
   flex: 0 1 auto;
   min-height: 0;
+  width: 100%;
+}
+
+.input-mode-panel {
   width: 100%;
 }
 
@@ -650,7 +726,6 @@ defineExpose({ reset, addImages, exitSearchMode })
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  transition: background var(--motion-fast), color var(--motion-fast);
 }
 
 .search-field-wrap .search-clear:hover {
@@ -674,7 +749,6 @@ defineExpose({ reset, addImages, exitSearchMode })
   background: var(--color-bg);
   border: 1px solid var(--color-border);
   flex-shrink: 0;
-  animation: thumb-pop var(--motion-fast) ease-out;
 }
 
 .thumb img {
@@ -701,18 +775,15 @@ defineExpose({ reset, addImages, exitSearchMode })
   justify-content: center;
   cursor: pointer;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.18);
-  transition: background var(--motion-fast), transform var(--motion-fast);
 }
 
 .thumb-remove:hover {
   background: #18181b;
-  transform: scale(1.08);
 }
 
 .thumb-remove:disabled {
   opacity: 0.5;
   cursor: not-allowed;
-  transform: none;
 }
 
 .thumb-add {
@@ -720,7 +791,6 @@ defineExpose({ reset, addImages, exitSearchMode })
   height: 64px;
   border-radius: 8px;
   flex-shrink: 0;
-  animation: thumb-pop var(--motion-fast) ease-out;
 }
 
 .upload-progress {
@@ -734,7 +804,6 @@ defineExpose({ reset, addImages, exitSearchMode })
   height: 100%;
   background: var(--color-accent);
   border-radius: 2px;
-  transition: width 120ms linear;
 }
 
 .input-footer {
@@ -863,27 +932,5 @@ defineExpose({ reset, addImages, exitSearchMode })
   color: var(--color-accent);
   font-weight: 500;
   font-variant-numeric: tabular-nums;
-}
-
-@keyframes thumb-pop {
-  from {
-    opacity: 0;
-    transform: scale(0.92);
-  }
-  to {
-    opacity: 1;
-    transform: scale(1);
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .thumb,
-  .thumb-add {
-    animation: none;
-  }
-  .thumb-remove,
-  .upload-progress-bar {
-    transition: none;
-  }
 }
 </style>

@@ -35,7 +35,17 @@
   --font-base:
     "Inter", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei",
     "Helvetica Neue", Arial, sans-serif;
-  --motion-fast: 180ms ease;
+
+  /*
+   * === Motion 动效规范 ===
+   * 项目已引入 motion-v（Framer Motion for Vue）。
+   * 所有 UI 动效（进出场、切换、hover/tap、layout 过渡）须通过 motion 组件
+   * 或 composables/useMotionPresets.js 实现，禁止在 CSS 中手写
+   * transition / animation / @keyframes（骨架屏 shimmer 等纯装饰循环除外）。
+   *
+   * 按钮微交互：使用 components/motion/AppButton.vue
+   * 预设时长：useMotionPresets.js → MOTION_DURATION（0.18s）
+   */
 
   /* === App shell layout === */
   --sidebar-width: 232px;

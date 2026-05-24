@@ -1,22 +1,35 @@
 <template>
   <section class="trash-panel">
     <header class="trash-notice" role="note">
-      <svg
-        viewBox="0 0 24 24"
-        width="16"
-        height="16"
-        fill="none"
-        stroke="currentColor"
-        stroke-width="1.8"
-        stroke-linecap="round"
-        stroke-linejoin="round"
-        aria-hidden="true"
+      <div class="trash-notice-main">
+        <svg
+          viewBox="0 0 24 24"
+          width="16"
+          height="16"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="1.8"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          aria-hidden="true"
+        >
+          <circle cx="12" cy="12" r="9" />
+          <path d="M12 8v4" />
+          <circle cx="12" cy="16" r="0.5" fill="currentColor" stroke="none" />
+        </svg>
+        <span>回收站只保留 30 天，过期后将自动清除。</span>
+      </div>
+      <motion.button
+        type="button"
+        class="trash-clear-all"
+        :disabled="loading || clearingAll || !items.length || actionLoadingId != null"
+        :while-hover="presets.button.hover"
+        :while-tap="presets.button.tap"
+        :transition="presets.button.transition"
+        @click="handleClearAll"
       >
-        <circle cx="12" cy="12" r="9" />
-        <path d="M12 8v4" />
-        <circle cx="12" cy="16" r="0.5" fill="currentColor" stroke="none" />
-      </svg>
-      <span>回收站只保留 30 天，过期后将自动清除。</span>
+        {{ clearingAll ? '清空中…' : '清空回收站' }}
+      </motion.button>
     </header>
 
     <p v-if="loading" class="trash-state">加载中…</p>
@@ -38,22 +51,20 @@
           </div>
 
           <div class="trash-card-actions">
-            <button
-              type="button"
+            <AppButton
               class="btn btn-primary trash-action-btn"
               :disabled="actionLoadingId === note.id"
               @click="handleRestore(note.id)"
             >
               {{ actionLoadingId === note.id ? '处理中…' : '恢复' }}
-            </button>
-            <button
-              type="button"
+            </AppButton>
+            <AppButton
               class="btn btn-icon-text trash-delete-btn"
               :disabled="actionLoadingId === note.id"
               @click="handleDeleteForever(note.id)"
             >
               彻底删除
-            </button>
+            </AppButton>
           </div>
         </article>
       </li>
@@ -63,11 +74,16 @@
 
 <script setup>
 import { ref, watch } from 'vue'
+import { motion } from 'motion-v'
 import {
   deleteRecycleForever,
   fetchRecycleList,
   restoreRecycleNote,
 } from '../../api/note'
+import { useMotionPresets } from '../../composables/useMotionPresets'
+import AppButton from '../motion/AppButton.vue'
+
+const { presets } = useMotionPresets()
 
 const props = defineProps({
   active: {
@@ -80,6 +96,7 @@ const emit = defineEmits(['count-change', 'restored', 'error'])
 
 const items = ref([])
 const loading = ref(false)
+const clearingAll = ref(false)
 const actionLoadingId = ref(null)
 let loadToken = 0
 
@@ -144,13 +161,30 @@ const handleDeleteForever = async (id) => {
   if (actionLoadingId.value != null) return
   actionLoadingId.value = id
   try {
-    await deleteRecycleForever(id)
+    await deleteRecycleForever([id])
     items.value = items.value.filter((item) => item.id !== id)
     syncCount()
   } catch (error) {
     emit('error', error)
   } finally {
     actionLoadingId.value = null
+  }
+}
+
+const handleClearAll = async () => {
+  if (clearingAll.value || !items.value.length || actionLoadingId.value != null) {
+    return
+  }
+  clearingAll.value = true
+  try {
+    const ids = items.value.map((item) => item.id)
+    await deleteRecycleForever(ids)
+    items.value = []
+    syncCount()
+  } catch (error) {
+    emit('error', error)
+  } finally {
+    clearingAll.value = false
   }
 }
 
@@ -181,20 +215,52 @@ defineExpose({ reload: loadList })
 
 .trash-notice {
   display: flex;
-  align-items: flex-start;
-  gap: 8px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
   margin: 0 0 16px;
   padding: 10px 12px;
   border-radius: var(--radius-md);
-  background: rgba(217, 119, 6, 0.08);
-  color: #92400e;
+  background: #efefef;
+  color: var(--color-secondary-text);
   font-size: 13px;
   line-height: 1.5;
 }
 
-.trash-notice svg {
+.trash-notice-main {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  min-width: 0;
+}
+
+.trash-notice-main svg {
   flex: 0 0 auto;
   margin-top: 1px;
+}
+
+.trash-clear-all {
+  flex: 0 0 auto;
+  border: 0;
+  background: transparent;
+  padding: 4px 8px;
+  border-radius: 6px;
+  color: var(--color-error);
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.trash-clear-all:hover:not(:disabled) {
+  background: rgba(220, 38, 38, 0.08);
+  color: #b91c1c;
+}
+
+.trash-clear-all:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
 }
 
 .trash-state {
@@ -298,6 +364,15 @@ defineExpose({ reload: loadList })
 @media (max-width: 720px) {
   .trash-panel {
     padding-top: 16px;
+  }
+
+  .trash-notice {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .trash-clear-all {
+    align-self: flex-end;
   }
 
   .trash-card {
