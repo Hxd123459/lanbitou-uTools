@@ -47,34 +47,89 @@
           :exit="presets.listItemExit"
         >
           <article class="trash-card">
-          <div class="trash-card-body">
             <div class="trash-card-meta">
-              <span v-if="(note.title || '').trim()" class="trash-card-tag">
-                {{ note.title }}
-              </span>
-              <time class="trash-card-time">{{ formatTime(note.createdAt) }}</time>
+              <div class="trash-card-meta-left">
+                <span v-if="(note.title || '').trim()" class="trash-card-tag">
+                  {{ note.title }}
+                </span>
+                <time class="trash-card-time">{{ formatTime(note.createdAt) }}</time>
+              </div>
+              <div
+                class="trash-card-actions"
+                :class="{ 'is-busy': actionLoadingId === note.id }"
+              >
+                <motion.button
+                  type="button"
+                  class="icon-btn"
+                  title="恢复"
+                  :disabled="actionLoadingId === note.id"
+                  :while-hover="presets.button.hover"
+                  :while-tap="presets.button.tap"
+                  :transition="presets.button.transition"
+                  @click="handleRestore(note.id)"
+                >
+                  <svg
+                    v-if="actionLoadingId === note.id"
+                    class="icon-spin"
+                    viewBox="0 0 24 24"
+                    width="14"
+                    height="14"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    aria-hidden="true"
+                  >
+                    <path d="M12 2a10 10 0 1 0 10 10" stroke-linecap="round" />
+                  </svg>
+                  <svg
+                    v-else
+                    viewBox="0 0 24 24"
+                    width="14"
+                    height="14"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.8"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    aria-hidden="true"
+                  >
+                    <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+                    <path d="M3 3v5h5" />
+                  </svg>
+                </motion.button>
+                <motion.button
+                  type="button"
+                  class="icon-btn icon-btn-danger"
+                  title="彻底删除"
+                  :disabled="actionLoadingId === note.id"
+                  :while-hover="presets.button.hover"
+                  :while-tap="presets.button.tap"
+                  :transition="presets.button.transition"
+                  @click="handleDeleteForever(note.id)"
+                >
+                  <svg
+                    viewBox="0 0 24 24"
+                    width="14"
+                    height="14"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.8"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    aria-hidden="true"
+                  >
+                    <path d="M3 6h18" />
+                    <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                    <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+                    <path d="M10 11v6" />
+                    <path d="M14 11v6" />
+                  </svg>
+                </motion.button>
+              </div>
             </div>
             <p class="trash-card-preview">
               {{ previewText(note) }}
             </p>
-          </div>
-
-          <div class="trash-card-actions">
-            <AppButton
-              class="btn btn-primary trash-action-btn"
-              :disabled="actionLoadingId === note.id"
-              @click="handleRestore(note.id)"
-            >
-              {{ actionLoadingId === note.id ? '处理中…' : '恢复' }}
-            </AppButton>
-            <AppButton
-              class="btn btn-icon-text trash-delete-btn"
-              :disabled="actionLoadingId === note.id"
-              @click="handleDeleteForever(note.id)"
-            >
-              彻底删除
-            </AppButton>
-          </div>
           </article>
         </motion.li>
       </AnimatePresence>
@@ -91,7 +146,6 @@ import {
   restoreRecycleNote,
 } from '../../api/note'
 import { useMotionPresets } from '../../composables/useMotionPresets'
-import AppButton from '../motion/AppButton.vue'
 
 const { presets } = useMotionPresets()
 
@@ -296,28 +350,30 @@ defineExpose({ reload: loadList })
 }
 
 .trash-card {
-  display: flex;
-  align-items: flex-start;
-  gap: 12px;
   padding: 14px 16px;
   border-radius: var(--radius-md);
   background: #ffffff;
   box-shadow: var(--shadow-card);
 }
 
-.trash-card-body {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
+.trash-card:hover {
+  box-shadow: 0 4px 14px rgba(24, 24, 27, 0.08);
 }
 
 .trash-card-meta {
   display: flex;
   align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.trash-card-meta-left {
+  display: flex;
+  align-items: center;
   flex-wrap: wrap;
   gap: 8px;
+  min-width: 0;
 }
 
 .trash-card-tag {
@@ -350,27 +406,58 @@ defineExpose({ reload: loadList })
 }
 
 .trash-card-actions {
-  flex: 0 0 auto;
   display: flex;
-  flex-direction: column;
-  align-items: stretch;
-  gap: 8px;
-  align-self: center;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+  opacity: 0;
+  transform: translateY(-1px);
 }
 
-.trash-action-btn {
-  min-width: 72px;
+.trash-card:hover .trash-card-actions,
+.trash-card:focus-within .trash-card-actions,
+.trash-card-actions.is-busy {
+  opacity: 1;
+  transform: translateY(0);
 }
 
-.trash-delete-btn {
+.icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--color-secondary-text);
+  cursor: pointer;
+}
+
+.icon-btn:hover:not(:disabled) {
+  background: rgba(24, 24, 27, 0.06);
+  color: var(--color-text);
+}
+
+.icon-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.icon-btn-danger:hover:not(:disabled) {
+  background: rgba(220, 38, 38, 0.08);
   color: var(--color-error);
-  border-color: rgba(220, 38, 38, 0.22);
 }
 
-.trash-delete-btn:hover:not(:disabled) {
-  border-color: rgba(220, 38, 38, 0.45);
-  background: rgba(220, 38, 38, 0.06);
-  color: var(--color-error);
+.icon-spin {
+  animation: trash-icon-spin 0.8s linear infinite;
+}
+
+@keyframes trash-icon-spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 @media (max-width: 720px) {
@@ -387,19 +474,5 @@ defineExpose({ reload: loadList })
     align-self: flex-end;
   }
 
-  .trash-card {
-    flex-direction: column;
-  }
-
-  .trash-card-actions {
-    flex-direction: row;
-    align-self: stretch;
-    width: 100%;
-  }
-
-  .trash-action-btn,
-  .trash-delete-btn {
-    flex: 1;
-  }
 }
 </style>
