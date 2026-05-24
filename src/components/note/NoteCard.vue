@@ -1198,6 +1198,17 @@ function formatTime(dateValue) {
   font-weight: 500;
 }
 
+@keyframes thumb-pop {
+  from {
+    opacity: 0;
+    transform: scale(0.92);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
 .editor-bar {
   display: flex;
   align-items: center;
