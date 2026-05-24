@@ -7,11 +7,11 @@
         class="struct-note-modal"
         role="dialog"
         aria-modal="true"
-        aria-labelledby="struct-note-modal-title"
-        :initial="presets.fade.initial"
-        :animate="presets.fade.animate"
-        :exit="presets.fade.exit"
-        :transition="presets.fade.transition"
+        aria-label="新建文件"
+        :initial="{ opacity: 0, y: 28 }"
+        :animate="{ opacity: 1, y: 0 }"
+        :exit="{ opacity: 0, y: 28 }"
+        :transition="{ duration: 0.26, ease: [0.22, 1, 0.36, 1] }"
       >
         <motion.button
           type="button"
@@ -27,50 +27,36 @@
           </svg>
         </motion.button>
 
+        <motion.button
+          type="button"
+          class="btn btn-primary struct-note-modal-save"
+          :disabled="saving || !canSave"
+          :while-hover="presets.button.hover"
+          :while-tap="presets.button.tap"
+          :transition="presets.button.transition"
+          @click="handleSave"
+        >
+          {{ saving ? '保存中…' : '保存' }}
+        </motion.button>
+
         <div class="struct-note-modal-body">
-          <h2 id="struct-note-modal-title" class="struct-note-modal-title">新建文件</h2>
-
-          <label class="struct-note-field">
-            <span class="struct-note-label">标题</span>
-            <input
-              ref="titleInputRef"
-              v-model="draftTitle"
-              class="struct-note-input"
-              type="text"
-              maxlength="80"
-              placeholder="输入标题"
-              spellcheck="false"
-              :disabled="saving"
-            />
-          </label>
-
-          <label class="struct-note-field struct-note-field--grow">
-            <span class="struct-note-label">内容</span>
-            <textarea
-              v-model="draftContent"
-              class="struct-note-textarea"
-              placeholder="输入内容…"
-              spellcheck="false"
-              :disabled="saving"
-            />
-          </label>
-
-          <div class="struct-note-modal-actions">
-            <AppButton
-              class="btn btn-icon-text"
-              :disabled="saving"
-              @click="emitClose"
-            >
-              取消
-            </AppButton>
-            <AppButton
-              class="btn btn-primary"
-              :disabled="saving || !canSave"
-              @click="handleSave"
-            >
-              {{ saving ? '保存中…' : '保存' }}
-            </AppButton>
-          </div>
+          <input
+            ref="titleInputRef"
+            v-model="draftTitle"
+            class="struct-note-title-input"
+            type="text"
+            maxlength="80"
+            placeholder="请输入标题"
+            spellcheck="false"
+            :disabled="saving"
+          />
+          <textarea
+            v-model="draftContent"
+            class="struct-note-content-textarea"
+            placeholder="开始写作…"
+            spellcheck="false"
+            :disabled="saving"
+          />
         </div>
       </motion.div>
     </AnimatePresence>
@@ -81,7 +67,6 @@
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { AnimatePresence, motion } from 'motion-v'
 import { useMotionPresets } from '../../composables/useMotionPresets'
-import AppButton from '../motion/AppButton.vue'
 
 const props = defineProps({
   visible: {
@@ -102,9 +87,7 @@ const draftTitle = ref('')
 const draftContent = ref('')
 const titleInputRef = ref(null)
 
-const canSave = computed(
-  () => draftTitle.value.trim().length > 0 && draftContent.value.trim().length > 0,
-)
+const canSave = computed(() => draftTitle.value.trim().length > 0)
 
 const resetDraft = () => {
   draftTitle.value = ''
@@ -184,6 +167,13 @@ defineExpose({ resetDraft })
   background: rgba(24, 24, 27, 0.1);
 }
 
+.struct-note-modal-save {
+  position: absolute;
+  top: 21px;
+  right: 18px;
+  z-index: 2;
+}
+
 .struct-note-modal-body {
   flex: 1;
   min-height: 0;
@@ -191,77 +181,56 @@ defineExpose({ resetDraft })
   flex-direction: column;
   width: min(760px, 100%);
   margin: 0 auto;
-  padding: 72px 24px 32px;
+  padding: 80px 24px 32px;
   box-sizing: border-box;
 }
 
-.struct-note-modal-title {
-  margin: 0 0 24px;
-  font-size: 22px;
+.struct-note-title-input {
+  flex: 0 0 auto;
+  width: 100%;
+  border: none;
+  outline: none;
+  background: transparent;
+  font-size: 28px;
   font-weight: 600;
   color: var(--color-primary);
-  letter-spacing: 0.2px;
+  font-family: inherit;
+  padding: 0;
+  margin-bottom: 20px;
+  caret-color: var(--color-accent);
 }
 
-.struct-note-field {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  margin-bottom: 18px;
+.struct-note-title-input::placeholder {
+  color: #d1d5db;
 }
 
-.struct-note-field--grow {
+.struct-note-title-input:focus {
+  outline: none;
+  box-shadow: none;
+}
+
+.struct-note-content-textarea {
   flex: 1;
   min-height: 0;
-  margin-bottom: 24px;
-}
-
-.struct-note-label {
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--color-secondary-text);
-}
-
-.struct-note-input {
-  height: 40px;
-  padding: 0 14px;
-  border: 1px solid var(--color-border);
-  border-radius: 10px;
-  background: #ffffff;
-  color: var(--color-text);
-  font-family: inherit;
-  font-size: 15px;
+  width: 100%;
+  border: none;
   outline: none;
-}
-
-.struct-note-input:focus {
-  border-color: rgba(37, 99, 235, 0.45);
-  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.08);
-}
-
-.struct-note-textarea {
-  flex: 1;
-  min-height: 280px;
-  padding: 14px 16px;
-  border: 1px solid var(--color-border);
-  border-radius: 12px;
-  background: #ffffff;
-  color: var(--color-text);
+  background: transparent;
   font-family: inherit;
   font-size: 15px;
-  line-height: 1.6;
+  line-height: 1.75;
+  color: var(--color-text);
   resize: none;
+  padding: 0;
+  caret-color: var(--color-accent);
+}
+
+.struct-note-content-textarea::placeholder {
+  color: #d1d5db;
+}
+
+.struct-note-content-textarea:focus {
   outline: none;
-}
-
-.struct-note-textarea:focus {
-  border-color: rgba(37, 99, 235, 0.45);
-  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.08);
-}
-
-.struct-note-modal-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 10px;
+  box-shadow: none;
 }
 </style>

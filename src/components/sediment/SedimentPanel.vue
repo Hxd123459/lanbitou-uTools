@@ -34,7 +34,7 @@
       </nav>
 
       <AppButton
-        class="btn btn-icon-text sediment-create-file"
+        class="btn btn-primary sediment-create-file"
         title="新建文件"
         @click="openCreateNoteModal"
       >
@@ -54,7 +54,6 @@
           <line x1="12" y1="18" x2="12" y2="12" />
           <line x1="9" y1="15" x2="15" y2="15" />
         </svg>
-        <span>新建文件</span>
       </AppButton>
     </header>
 
@@ -122,77 +121,85 @@
         </li>
 
         <li class="folder-grid-item">
-          <motion.div
-            v-if="creatingFolder"
-            class="folder-create-form"
-            role="group"
-            aria-label="新建文件夹"
-            :initial="presets.thumbPop.initial"
-            :animate="presets.thumbPop.animate"
-            :transition="presets.thumbPop.transition"
-          >
-            <span class="folder-icon-wrap folder-icon-wrap--draft" aria-hidden="true">
-              <svg
-                viewBox="0 0 24 24"
-                width="34"
-                height="34"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="1.5"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-              >
-                <path
-                  d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.93a2 2 0 0 1-1.66-.9l-.82-1.2A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2z"
-                />
-              </svg>
-            </span>
-            <input
-              ref="folderNameInputRef"
-              v-model="draftFolderName"
-              class="folder-name-input"
-              type="text"
-              maxlength="20"
-              placeholder="文件夹名称"
-              spellcheck="false"
-              :disabled="folderSaving"
-              @keydown.esc.prevent="cancelCreateFolder"
-              @keydown.enter.prevent="confirmCreateFolder"
-              @blur="onFolderInputBlur"
-            />
-          </motion.div>
+          <AnimatePresence mode="wait">
+            <motion.div
+              v-if="creatingFolder"
+              key="folder-create-form"
+              class="folder-create-form"
+              role="group"
+              aria-label="新建文件夹"
+              :initial="{ opacity: 0, scale: 0.86, y: 8 }"
+              :animate="{ opacity: 1, scale: 1, y: 0 }"
+              :exit="{ opacity: 0, scale: 0.86, y: 8 }"
+              :transition="{ duration: 0.2, ease: 'easeOut' }"
+            >
+              <span class="folder-icon-wrap folder-icon-wrap--draft" aria-hidden="true">
+                <svg
+                  viewBox="0 0 24 24"
+                  width="34"
+                  height="34"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.5"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path
+                    d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.93a2 2 0 0 1-1.66-.9l-.82-1.2A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2z"
+                  />
+                </svg>
+              </span>
+              <input
+                ref="folderNameInputRef"
+                v-model="draftFolderName"
+                class="folder-name-input"
+                type="text"
+                maxlength="20"
+                placeholder="文件夹名称"
+                spellcheck="false"
+                :disabled="folderSaving"
+                @keydown.esc.prevent="cancelCreateFolder"
+                @keydown.enter.prevent="confirmCreateFolder"
+                @blur="onFolderInputBlur"
+              />
+            </motion.div>
 
-          <motion.button
-            v-else
-            type="button"
-            class="folder-create"
-            title="新建文件夹"
-            :disabled="folderSaving"
-            :while-hover="presets.button.hover"
-            :while-tap="presets.button.tap"
-            :transition="presets.button.transition"
-            @click="startCreateFolder"
-          >
-            <span class="folder-create-icon" aria-hidden="true">
-              <svg
-                viewBox="0 0 24 24"
-                width="22"
-                height="22"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="1.8"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-              >
-                <path
-                  d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.93a2 2 0 0 1-1.66-.9l-.82-1.2A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2z"
-                />
-                <line x1="12" y1="11" x2="12" y2="17" />
-                <line x1="9" y1="14" x2="15" y2="14" />
-              </svg>
-            </span>
-            <span class="folder-create-label">新建文件夹</span>
-          </motion.button>
+            <motion.button
+              v-else
+              key="folder-create-btn"
+              type="button"
+              class="folder-create"
+              title="新建文件夹"
+              :disabled="folderSaving"
+              :initial="{ opacity: 0, scale: 0.86 }"
+              :animate="{ opacity: 1, scale: 1 }"
+              :exit="{ opacity: 0, scale: 0.86 }"
+              :transition="{ duration: 0.2, ease: 'easeOut' }"
+              :while-hover="presets.button.hover"
+              :while-tap="presets.button.tap"
+              @click="startCreateFolder"
+            >
+              <span class="folder-create-icon" aria-hidden="true">
+                <svg
+                  viewBox="0 0 24 24"
+                  width="22"
+                  height="22"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.8"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path
+                    d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.93a2 2 0 0 1-1.66-.9l-.82-1.2A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2z"
+                  />
+                  <line x1="12" y1="11" x2="12" y2="17" />
+                  <line x1="9" y1="14" x2="15" y2="14" />
+                </svg>
+              </span>
+              <span class="folder-create-label">新建文件夹</span>
+            </motion.button>
+          </AnimatePresence>
         </li>
       </ul>
     </motion.div>
@@ -208,7 +215,7 @@
 
 <script setup>
 import { computed, nextTick, ref, watch } from 'vue'
-import { motion } from 'motion-v'
+import { AnimatePresence, motion } from 'motion-v'
 import {
   createNoteInFolder,
   createStructFolder,
@@ -316,7 +323,8 @@ const confirmCreateFolder = async () => {
       parentId: currentParentId.value,
       name,
     })
-    cancelCreateFolder()
+    creatingFolder.value = false
+    draftFolderName.value = ''
     await loadCurrentList()
   } catch (error) {
     emit('error', error)
@@ -448,6 +456,9 @@ watch(
 
 .sediment-create-file {
   flex: 0 0 auto;
+  width: 32px;
+  height: 32px;
+  padding: 0;
 }
 
 .folder-grid-wrap {
@@ -591,7 +602,7 @@ watch(
 }
 
 .folder-create-form {
-  align-items: stretch;
+  align-items: center;
 }
 
 .folder-name-input {
