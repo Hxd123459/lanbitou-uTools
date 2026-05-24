@@ -67,6 +67,10 @@ export function useMotionPresets() {
           transition: OFF,
         },
         layoutSpring: OFF,
+        listItemExit: {
+          opacity: 0,
+          transition: OFF,
+        },
       }
     }
 
@@ -112,6 +116,13 @@ export function useMotionPresets() {
         transition: { duration: 0.3, ease: 'easeOut' },
       },
       layoutSpring: { type: 'spring', bounce: 0.2, duration: 0.4 },
+      listItemExit: {
+        opacity: 0,
+        x: 32,
+        height: 0,
+        marginBottom: 0,
+        transition: { duration: 0.22, ease: 'easeIn' },
+      },
     }
   })
 

@@ -93,7 +93,11 @@
       </div>
 
       <!-- 沉淀 -->
-      <SedimentPanel v-show="activeTab === 'sediment'" />
+      <SedimentPanel
+        v-show="activeTab === 'sediment'"
+        :active="activeTab === 'sediment'"
+        @error="notifyError"
+      />
 
       <!-- 回响 -->
       <section v-show="activeTab === 'echo'" class="note-list placeholder-panel">

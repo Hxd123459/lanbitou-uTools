@@ -43,13 +43,16 @@ async function request(path, options = {}) {
     throw new ApiError(response.status || 'PARSE_ERROR', '响应解析失败')
   }
 
-  if (payload?.code === 200) {
-    return payload.data
+  if (payload && typeof payload === 'object' && !Array.isArray(payload) && 'code' in payload) {
+    if (payload.code === 200) {
+      return payload.data
+    }
+    const code = payload.code ?? response.status ?? 'SYSTEM_ERROR'
+    const msg = payload.msg || '系统异常'
+    throw new ApiError(code, msg)
   }
 
-  const code = payload?.code ?? response.status ?? 'SYSTEM_ERROR'
-  const msg = payload?.msg || '系统异常'
-  throw new ApiError(code, msg)
+  return payload
 }
 
 export function post(path, body = {}) {

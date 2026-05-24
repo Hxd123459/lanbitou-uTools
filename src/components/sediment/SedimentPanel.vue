@@ -36,6 +36,7 @@
       <AppButton
         class="btn btn-icon-text sediment-create-file"
         title="新建文件"
+        @click="openCreateNoteModal"
       >
         <svg
           viewBox="0 0 24 24"
@@ -57,21 +58,23 @@
       </AppButton>
     </header>
 
-    <div class="folder-grid-wrap">
+    <p v-if="loading" class="sediment-state">加载中…</p>
+
+    <motion.div v-else class="folder-grid-wrap">
       <ul class="folder-grid" role="list">
         <li
-          v-for="folder in currentFolders"
-          :key="folder.id"
+          v-for="item in folderItems"
+          :key="`folder-${item.id}`"
           class="folder-grid-item"
         >
           <motion.button
             type="button"
             class="folder-card"
-            :title="folder.name"
+            :title="item.name"
             :while-hover="presets.button.hover"
             :while-tap="presets.button.tap"
             :transition="presets.button.transition"
-            @click="enterFolder(folder)"
+            @click="enterFolder(item)"
           >
             <span class="folder-icon-wrap" aria-hidden="true">
               <svg
@@ -89,16 +92,44 @@
                 />
               </svg>
             </span>
-            <span class="folder-name">{{ folder.name }}</span>
+            <span class="folder-name">{{ item.name }}</span>
           </motion.button>
         </li>
 
+        <li
+          v-for="item in noteItems"
+          :key="`note-${item.id}`"
+          class="folder-grid-item"
+        >
+          <div class="folder-card folder-card--note" :title="item.name">
+            <span class="folder-icon-wrap folder-icon-wrap--note" aria-hidden="true">
+              <svg
+                viewBox="0 0 24 24"
+                width="34"
+                height="34"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.5"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                <polyline points="14 2 14 8 20 8" />
+              </svg>
+            </span>
+            <span class="folder-name">{{ item.name }}</span>
+          </div>
+        </li>
+
         <li class="folder-grid-item">
-          <div
+          <motion.div
             v-if="creatingFolder"
             class="folder-create-form"
             role="group"
             aria-label="新建文件夹"
+            :initial="presets.thumbPop.initial"
+            :animate="presets.thumbPop.animate"
+            :transition="presets.thumbPop.transition"
           >
             <span class="folder-icon-wrap folder-icon-wrap--draft" aria-hidden="true">
               <svg
@@ -124,17 +155,19 @@
               maxlength="20"
               placeholder="文件夹名称"
               spellcheck="false"
+              :disabled="folderSaving"
               @keydown.esc.prevent="cancelCreateFolder"
               @keydown.enter.prevent="confirmCreateFolder"
               @blur="onFolderInputBlur"
             />
-          </div>
+          </motion.div>
 
           <motion.button
             v-else
             type="button"
             class="folder-create"
             title="新建文件夹"
+            :disabled="folderSaving"
             :while-hover="presets.button.hover"
             :while-tap="presets.button.tap"
             :transition="presets.button.transition"
@@ -162,87 +195,99 @@
           </motion.button>
         </li>
       </ul>
-    </div>
+    </motion.div>
+
+    <StructNoteCreateModal
+      :visible="createNoteVisible"
+      :saving="noteSaving"
+      @close="closeCreateNoteModal"
+      @save="handleCreateNote"
+    />
   </section>
 </template>
 
 <script setup>
-import { computed, nextTick, ref } from 'vue'
+import { computed, nextTick, ref, watch } from 'vue'
 import { motion } from 'motion-v'
+import {
+  createNoteInFolder,
+  createStructFolder,
+  fetchFolderList,
+} from '../../api/structFolder'
 import { useMotionPresets } from '../../composables/useMotionPresets'
 import AppButton from '../motion/AppButton.vue'
+import StructNoteCreateModal from './StructNoteCreateModal.vue'
+
+const props = defineProps({
+  active: {
+    type: Boolean,
+    default: false,
+  },
+})
+
+const emit = defineEmits(['error'])
 
 const { presets } = useMotionPresets()
 
-const MOCK_TREE = [
-  {
-    id: 'mock-work',
-    name: '工作笔记',
-    children: [
-      { id: 'mock-work-a', name: '项目 A', children: [] },
-      { id: 'mock-work-meeting', name: '会议记录', children: [] },
-    ],
-  },
-  {
-    id: 'mock-ideas',
-    name: '个人灵感',
-    children: [],
-  },
-  {
-    id: 'mock-read',
-    name: '读书笔记',
-    children: [
-      { id: 'mock-read-2025', name: '2025', children: [] },
-    ],
-  },
-]
-
-function cloneTree(nodes) {
-  return nodes.map((node) => ({
-    ...node,
-    children: cloneTree(node.children || []),
-  }))
-}
-
-// 模块级缓存：切换 tab 保留，刷新页面消失
-const folderTree = ref(cloneTree(MOCK_TREE))
+const items = ref([])
 const pathStack = ref([])
-
+const loading = ref(false)
+const folderSaving = ref(false)
 const creatingFolder = ref(false)
 const draftFolderName = ref('')
 const folderNameInputRef = ref(null)
+
+const createNoteVisible = ref(false)
+const noteSaving = ref(false)
+
+let loadToken = 0
+
+const currentParentId = computed(() =>
+  pathStack.value.length
+    ? pathStack.value[pathStack.value.length - 1].id
+    : 0,
+)
 
 const breadcrumbs = computed(() => [
   { id: null, label: '沉淀' },
   ...pathStack.value.map((item) => ({ id: item.id, label: item.name })),
 ])
 
-const currentFolders = computed(() => {
-  let nodes = folderTree.value
-  for (const segment of pathStack.value) {
-    const matched = nodes.find((folder) => folder.id === segment.id)
-    if (!matched) return []
-    nodes = matched.children
-  }
-  return nodes
-})
+const folderItems = computed(() =>
+  items.value.filter((item) => item.type === 'folder'),
+)
 
-const getCurrentContainer = () => {
-  let nodes = folderTree.value
-  for (const segment of pathStack.value) {
-    const matched = nodes.find((folder) => folder.id === segment.id)
-    if (!matched) return nodes
-    nodes = matched.children
+const noteItems = computed(() =>
+  items.value.filter((item) => item.type === 'note'),
+)
+
+const loadCurrentList = async () => {
+  const token = ++loadToken
+  loading.value = true
+  try {
+    const list = await fetchFolderList(currentParentId.value)
+    if (token !== loadToken) return
+    items.value = list
+  } catch (error) {
+    if (token !== loadToken) return
+    items.value = []
+    emit('error', error)
+  } finally {
+    if (token === loadToken) {
+      loading.value = false
+    }
   }
-  return nodes
 }
 
 const enterFolder = (folder) => {
+  if (folder.type !== 'folder') return
   pathStack.value.push({ id: folder.id, name: folder.name })
+  loadCurrentList()
 }
 
 const navigateToCrumb = (index) => {
   pathStack.value = pathStack.value.slice(0, index)
+  loadCurrentList()
 }
 
 const startCreateFolder = async () => {
@@ -253,24 +298,31 @@ const startCreateFolder = async () => {
 }
 
 const cancelCreateFolder = () => {
+  if (folderSaving.value) return
   creatingFolder.value = false
   draftFolderName.value = ''
 }
 
-const confirmCreateFolder = () => {
+const confirmCreateFolder = async () => {
   const name = draftFolderName.value.trim()
-  if (!name) {
+  if (!name || folderSaving.value) {
     cancelCreateFolder()
     return
   }
 
-  getCurrentContainer().push({
-    id: `session-${Date.now()}`,
-    name,
-    children: [],
-  })
-
-  cancelCreateFolder()
+  folderSaving.value = true
+  try {
+    await createStructFolder({
+      parentId: currentParentId.value,
+      name,
+    })
+    cancelCreateFolder()
+    await loadCurrentList()
+  } catch (error) {
+    emit('error', error)
+  } finally {
+    folderSaving.value = false
+  }
 }
 
 const onFolderInputBlur = () => {
@@ -280,6 +332,41 @@ const onFolderInputBlur = () => {
     cancelCreateFolder()
   }
 }
+
+const openCreateNoteModal = () => {
+  createNoteVisible.value = true
+}
+
+const closeCreateNoteModal = () => {
+  if (noteSaving.value) return
+  createNoteVisible.value = false
+}
+
+const handleCreateNote = async ({ title, content }) => {
+  if (noteSaving.value) return
+  noteSaving.value = true
+  try {
+    await createNoteInFolder({
+      parentId: currentParentId.value,
+      title,
+      content,
+    })
+    createNoteVisible.value = false
+    await loadCurrentList()
+  } catch (error) {
+    emit('error', error)
+  } finally {
+    noteSaving.value = false
+  }
+}
+
+watch(
+  () => props.active,
+  (isActive) => {
+    if (isActive) loadCurrentList()
+  },
+  { immediate: true },
+)
 </script>
 
 <style scoped>
@@ -300,6 +387,13 @@ const onFolderInputBlur = () => {
   gap: 16px;
   padding: 0 0 24px;
   flex: 0 0 auto;
+}
+
+.sediment-state {
+  margin: 48px 0;
+  text-align: center;
+  color: var(--color-secondary-text);
+  font-size: 14px;
 }
 
 .sediment-breadcrumb {
@@ -397,9 +491,18 @@ const onFolderInputBlur = () => {
   text-align: center;
 }
 
+.folder-card--note {
+  cursor: default;
+}
+
 .folder-card:hover .folder-icon-wrap {
   box-shadow: 0 6px 18px rgba(24, 24, 27, 0.1);
   border-color: rgba(37, 99, 235, 0.12);
+}
+
+.folder-card--note:hover .folder-icon-wrap {
+  box-shadow: var(--shadow-card);
+  border-color: rgba(24, 24, 27, 0.06);
 }
 
 .folder-card:focus-visible {
@@ -421,6 +524,10 @@ const onFolderInputBlur = () => {
   background: #ffffff;
   color: #ca8a04;
   box-shadow: var(--shadow-card);
+}
+
+.folder-icon-wrap--note {
+  color: var(--color-accent);
 }
 
 .folder-icon-wrap--draft {

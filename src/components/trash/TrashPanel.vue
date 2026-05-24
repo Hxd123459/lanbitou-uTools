@@ -36,8 +36,17 @@
     <p v-else-if="!items.length" class="trash-state">回收站为空</p>
 
     <ul v-else class="trash-list" role="list">
-      <li v-for="note in items" :key="note.id" class="trash-list-item">
-        <article class="trash-card">
+      <AnimatePresence mode="popLayout">
+        <motion.li
+          v-for="note in items"
+          :key="note.id"
+          class="trash-list-item"
+          layout
+          :initial="presets.reveal.initial"
+          :animate="presets.reveal.animate"
+          :exit="presets.listItemExit"
+        >
+          <article class="trash-card">
           <div class="trash-card-body">
             <div class="trash-card-meta">
               <span v-if="(note.title || '').trim()" class="trash-card-tag">
@@ -66,15 +75,16 @@
               彻底删除
             </AppButton>
           </div>
-        </article>
-      </li>
+          </article>
+        </motion.li>
+      </AnimatePresence>
     </ul>
   </section>
 </template>
 
 <script setup>
 import { ref, watch } from 'vue'
-import { motion } from 'motion-v'
+import { AnimatePresence, motion } from 'motion-v'
 import {
   deleteRecycleForever,
   fetchRecycleList,
@@ -281,6 +291,8 @@ defineExpose({ reload: loadList })
 
 .trash-list-item {
   width: 100%;
+  overflow: hidden;
+  list-style: none;
 }
 
 .trash-card {

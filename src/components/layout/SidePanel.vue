@@ -188,15 +188,13 @@ const navMotion = computed(() => ({
   padding: 10px 12px;
   border-radius: var(--radius-md);
   background: rgba(255, 255, 255, 0.85);
-  box-shadow: 0 1px 3px rgba(24, 24, 27, 0.06),
-    0 0 0 1px rgba(37, 99, 235, 0.08);
+  box-shadow: 0 1px 3px rgba(24, 24, 27, 0.06);
   cursor: text;
 }
 
 .sidebar-search-field:focus-within {
   background: #ffffff;
-  box-shadow: 0 1px 3px rgba(24, 24, 27, 0.08),
-    0 0 0 2px rgba(37, 99, 235, 0.14);
+  box-shadow: 0 1px 3px rgba(24, 24, 27, 0.08);
 }
 
 .sidebar-search-icon {
@@ -284,8 +282,7 @@ const navMotion = computed(() => ({
   inset: 0;
   border-radius: var(--radius-md);
   background: rgba(255, 255, 255, 0.85);
-  box-shadow: 0 1px 3px rgba(24, 24, 27, 0.06),
-    0 0 0 1px rgba(37, 99, 235, 0.08);
+  box-shadow: 0 1px 3px rgba(24, 24, 27, 0.06);
   z-index: 0;
 }
 
