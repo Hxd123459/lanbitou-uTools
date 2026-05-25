@@ -21,6 +21,7 @@
               rows="1"
               :style="{ height: inputHeight + 'px' }"
               @input="onInput"
+              @blur="onWriteBlur"
               @keydown="onKeydown"
               @paste="onPaste"
             />
@@ -49,6 +50,7 @@
               spellcheck="false"
               @keydown="onSearchKeydown"
               @input="onSearchInput"
+              @blur="onSearchBlur"
               @paste="onSearchPaste"
             />
             <motion.button
@@ -402,13 +404,36 @@ const canSubmit = computed(
 )
 
 
+const getActiveTextarea = () =>
+  isSearchMode.value ? searchInputRef.value : textareaRef.value
+
 const adjustHeight = () => {
-  const el = textareaRef.value
+  const el = getActiveTextarea()
   if (!el) return
-  el.style.height = 'auto'
-  const next = Math.min(Math.max(el.scrollHeight, MIN_HEIGHT), MAX_HEIGHT)
-  el.style.height = `${next}px`
-  inputHeight.value = next
+  const minH = isSearchMode.value ? 44 : MIN_HEIGHT
+  inputHeight.value = minH
+  nextTick(() => {
+    const next = Math.min(Math.max(el.scrollHeight, minH), MAX_HEIGHT)
+    inputHeight.value = next
+  })
+}
+
+const onWriteBlur = () => {
+  nextTick(() => {
+    adjustHeight()
+    if (!props.modelValue.trim() && !images.value.length) {
+      inputHeight.value = MIN_HEIGHT
+    }
+  })
+}
+
+const onSearchBlur = () => {
+  nextTick(() => {
+    adjustHeight()
+    if (!searchKeyword.value.trim()) {
+      inputHeight.value = 44
+    }
+  })
 }
 
 const onInput = (event) => {
@@ -487,6 +512,7 @@ const removeImage = (id) => {
 const reset = () => {
   images.value.forEach((item) => URL.revokeObjectURL(item.url))
   images.value = []
+  nextTick(adjustHeight)
 }
 
 const onSubmit = () => {
@@ -603,7 +629,12 @@ watch(
   () => nextTick(adjustHeight),
 )
 
-watch(isSearchMode, () => nextTick(focusActiveInput))
+watch(isSearchMode, () => {
+  nextTick(() => {
+    adjustHeight()
+    focusActiveInput()
+  })
+})
 
 onMounted(() => {
   const platform =

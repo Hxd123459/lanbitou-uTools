@@ -159,3 +159,8 @@ export async function deleteRecycleForever(ids) {
   if (!idList.length) return null
   return get('/api/note/recycle/deleteForever', { ids: idList.join(',') })
 }
+
+export async function fetchAllTags() {
+  const data = await get('/api/note/allTags')
+  return Array.isArray(data) ? data : []
+}

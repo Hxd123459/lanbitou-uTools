@@ -22,7 +22,15 @@
     <template #content>
       <!-- 主页：v-show 保活 DOM，避免切回时重挂载阻塞侧栏选中态 -->
       <div v-show="activeTab === 'home'" class="tab-panel tab-panel--home">
-        <section v-show="!searchState.active" class="note-list">
+        <NoteViewSwitcher
+          v-model="noteViewMode"
+          class="home-view-switcher"
+        />
+
+        <section
+          v-show="noteViewMode === 'list' && !searchState.active"
+          class="note-list"
+        >
           <p
             v-if="!assistantStore.visibleNotes.length && !assistantStore.loadingNotes"
             class="empty-state"
@@ -53,7 +61,10 @@
           </AnimatePresence>
         </section>
 
-        <section v-if="searchState.active" class="note-list">
+        <section
+          v-show="noteViewMode === 'list' && searchState.active"
+          class="note-list"
+        >
           <header class="search-summary">
             <span class="search-summary-label">
               搜索结果
@@ -106,6 +117,11 @@
             </motion.li>
           </AnimatePresence>
         </section>
+
+        <NoteTagCloud
+          v-show="noteViewMode === 'tags'"
+          :active="activeTab === 'home' && noteViewMode === 'tags'"
+        />
       </div>
 
       <!-- 沉淀 -->
@@ -148,7 +164,7 @@
 </template>
 
 <script setup>
-import { nextTick, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
+import { nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { AnimatePresence, motion } from 'motion-v'
 import CopyToast from '../components/feedback/CopyToast.vue'
 import { useMotionPresets } from '../composables/useMotionPresets'
@@ -158,6 +174,8 @@ import SedimentPanel from '../components/sediment/SedimentPanel.vue'
 import TrashPanel from '../components/trash/TrashPanel.vue'
 import SidePanel from '../components/layout/SidePanel.vue'
 import NoteCard from '../components/note/NoteCard.vue'
+import NoteTagCloud from '../components/note/NoteTagCloud.vue'
+import NoteViewSwitcher from '../components/note/NoteViewSwitcher.vue'
 import { useCopyNote } from '../composables/useCopyNote'
 import { ApiError } from '../api/http'
 import { deleteBlock, searchNotes } from '../api/note'
@@ -172,6 +190,13 @@ const inputBarRef = ref(null)
 const assistantStore = useAssistantStore()
 
 const activeTab = ref('home')
+const noteViewMode = ref('list')
+
+watch(noteViewMode, (mode) => {
+  if (mode === 'tags' && searchState.active) {
+    exitSearch()
+  }
+})
 
 const handleRecycleRestored = async () => {
   try {
@@ -386,6 +411,14 @@ onBeforeUnmount(() => {
 
 .tab-panel--home {
   overflow: hidden;
+}
+
+.home-view-switcher {
+  flex: 0 0 auto;
+  width: 100%;
+  max-width: var(--frame-inner-width);
+  margin-bottom: 10px;
+  box-sizing: border-box;
 }
 
 .note-list {
