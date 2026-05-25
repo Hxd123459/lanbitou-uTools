@@ -64,28 +64,77 @@
     <p v-if="loading" class="sediment-state">加载中…</p>
 
     <motion.div v-else class="folder-grid-wrap">
-      <ul class="folder-grid" role="list">
-        <li
-          v-for="item in folderItems"
-          :key="`folder-${item.id}`"
-          class="folder-grid-item"
-          :class="{ 'is-dragging-source': draggingItem?.id === item.id }"
-          draggable="true"
-          @dragstart="onDragStart(item, $event)"
-          @dragend="onDragEnd"
+      <div class="folder-grid" role="list">
+        <VueDraggable
+          v-model="items"
+          tag="ul"
+          class="folder-grid-sortable"
+          :animation="180"
+          :disabled="sortDisabled"
+          handle=".folder-sort-handle"
+          filter=".card-move-handle, .card-action-btn, .folder-name-input"
+          :prevent-on-filter="false"
+          ghost-class="folder-sort-ghost"
+          chosen-class="folder-sort-chosen"
+          drag-class="folder-sort-drag"
+          @start="onSortDragStart"
+          @end="onSortDragEnd"
         >
+          <li
+            v-for="item in items"
+            :key="getItemKey(item)"
+            class="folder-grid-item"
+            :class="{
+              'is-dragging-source':
+                sortDraggingId === item.id || moveDraggingItem?.id === item.id,
+            }"
+          >
           <!-- 重命名态 -->
-          <div v-if="renamingId === item.id" class="folder-create-form">
-            <span class="folder-icon-wrap" aria-hidden="true">
-              <svg viewBox="0 0 24 24" width="34" height="34" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.93a2 2 0 0 1-1.66-.9l-.82-1.2A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2z" />
+          <div
+            v-if="renamingId === item.id"
+            class="folder-create-form"
+            @dragstart.stop
+          >
+            <span
+              class="folder-icon-wrap"
+              :class="{ 'folder-icon-wrap--note': item.type === 'note' }"
+              aria-hidden="true"
+            >
+              <svg
+                v-if="item.type === 'folder'"
+                viewBox="0 0 24 24"
+                width="34"
+                height="34"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.5"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path
+                  d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.93a2 2 0 0 1-1.66-.9l-.82-1.2A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2z"
+                />
+              </svg>
+              <svg
+                v-else
+                viewBox="0 0 24 24"
+                width="34"
+                height="34"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.5"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                <polyline points="14 2 14 8 20 8" />
               </svg>
             </span>
             <input
               v-model="draftRename"
               class="folder-name-input"
               type="text"
-              maxlength="20"
+              :maxlength="item.type === 'folder' ? 20 : 80"
               spellcheck="false"
               :disabled="renameSaving"
               @keydown.enter.prevent="confirmRename(item)"
@@ -95,7 +144,11 @@
           </div>
 
           <!-- 删除确认态 -->
-          <div v-else-if="deletingId === item.id" class="folder-create-form">
+          <div
+            v-else-if="deletingId === item.id"
+            class="folder-create-form"
+            @dragstart.stop
+          >
             <span class="folder-icon-wrap folder-icon-wrap--danger" aria-hidden="true">
               <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
                 <polyline points="3 6 5 6 21 6" /><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" /><path d="M10 11v6M14 11v6" /><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
@@ -110,80 +163,38 @@
           <!-- 正常态 -->
           <div v-else class="folder-item-wrap">
             <button
+              v-if="item.type === 'folder'"
               type="button"
-              class="folder-card"
+              class="folder-card folder-sort-handle"
               :class="{ 'folder-card--drop-over': dropTargetId === item.id }"
               :title="item.name"
-              @click="!isDragging && enterFolder(item)"
-              @dragover.prevent="onFolderDragOver(item, $event)"
+              @click="!isMoveDragging && enterFolder(item)"
+              @dragover.prevent.stop="onFolderDragOver(item, $event)"
               @dragleave="onFolderDragLeave(item, $event)"
-              @drop.prevent="onDropToFolder(item)"
+              @drop.prevent.stop="onDropToFolder(item)"
             >
               <span class="folder-icon-wrap" aria-hidden="true">
-                <svg viewBox="0 0 24 24" width="34" height="34" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-                  <path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.93a2 2 0 0 1-1.66-.9l-.82-1.2A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2z" />
+                <svg
+                  viewBox="0 0 24 24"
+                  width="34"
+                  height="34"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.5"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path
+                    d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.93a2 2 0 0 1-1.66-.9l-.82-1.2A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2z"
+                  />
                 </svg>
               </span>
               <span class="folder-name">{{ item.name }}</span>
             </button>
-            <div class="card-actions" @click.stop @mousedown.stop>
-              <button class="card-action-btn" title="重命名" @click="startRename(item)">
-                <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" /><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" /></svg>
-              </button>
-              <button class="card-action-btn card-action-btn--danger" title="删除" @click="startDelete(item)">
-                <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6" /><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" /></svg>
-              </button>
-            </div>
-          </div>
-        </li>
-
-        <li
-          v-for="item in noteItems"
-          :key="`note-${item.id}`"
-          class="folder-grid-item"
-          :class="{ 'is-dragging-source': draggingItem?.id === item.id }"
-          draggable="true"
-          @dragstart="onDragStart(item, $event)"
-          @dragend="onDragEnd"
-        >
-          <!-- 重命名态 -->
-          <div v-if="renamingId === item.id" class="folder-create-form">
-            <span class="folder-icon-wrap folder-icon-wrap--note" aria-hidden="true">
-              <svg viewBox="0 0 24 24" width="34" height="34" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14 2 14 8 20 8" />
-              </svg>
-            </span>
-            <input
-              v-model="draftRename"
-              class="folder-name-input"
-              type="text"
-              maxlength="80"
-              spellcheck="false"
-              :disabled="renameSaving"
-              @keydown.enter.prevent="confirmRename(item)"
-              @keydown.esc.prevent="cancelRename"
-              @blur="cancelRename"
-            />
-          </div>
-
-          <!-- 删除确认态 -->
-          <div v-else-if="deletingId === item.id" class="folder-create-form">
-            <span class="folder-icon-wrap folder-icon-wrap--danger" aria-hidden="true">
-              <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-                <polyline points="3 6 5 6 21 6" /><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" /><path d="M10 11v6M14 11v6" /><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
-              </svg>
-            </span>
-            <div class="folder-delete-row">
-              <button class="folder-delete-yes" :disabled="deleteSaving" @click="confirmDelete(item)">删除</button>
-              <button class="folder-delete-no" @click="deletingId = null">取消</button>
-            </div>
-          </div>
-
-          <!-- 正常态 -->
-          <div v-else class="folder-item-wrap">
             <motion.button
+              v-else
               type="button"
-              class="folder-card folder-card--note"
+              class="folder-card folder-card--note folder-sort-handle"
               :title="item.name"
               :while-hover="presets.button.hover"
               :while-tap="presets.button.tap"
@@ -191,24 +202,95 @@
               @click="openNoteView(item)"
             >
               <span class="folder-icon-wrap folder-icon-wrap--note" aria-hidden="true">
-                <svg viewBox="0 0 24 24" width="34" height="34" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14 2 14 8 20 8" />
+                <svg
+                  viewBox="0 0 24 24"
+                  width="34"
+                  height="34"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.5"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                  <polyline points="14 2 14 8 20 8" />
                 </svg>
               </span>
               <span class="folder-name">{{ item.name }}</span>
             </motion.button>
-            <div class="card-actions" @click.stop @mousedown.stop>
-              <button class="card-action-btn" title="重命名" @click="startRename(item)">
-                <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" /><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" /></svg>
+            <div
+              class="card-actions"
+              draggable="false"
+              @click.stop
+              @mousedown.stop
+              @dragstart.stop
+            >
+              <button
+                type="button"
+                class="card-action-btn card-move-handle"
+                title="移动到…"
+                draggable="true"
+                @dragstart.stop="onMoveDragStart(item, $event)"
+                @dragend="onMoveDragEnd"
+              >
+                <svg
+                  viewBox="0 0 24 24"
+                  width="12"
+                  height="12"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2.2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="M5 9h14" />
+                  <path d="M5 15h14" />
+                  <path d="M9 5v14" />
+                  <path d="M15 5v14" />
+                </svg>
               </button>
-              <button class="card-action-btn card-action-btn--danger" title="删除" @click="startDelete(item)">
-                <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6" /><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" /></svg>
+              <button class="card-action-btn" title="重命名" @click="startRename(item)">
+                <svg
+                  viewBox="0 0 24 24"
+                  width="12"
+                  height="12"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2.2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                  <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+                </svg>
+              </button>
+              <button
+                class="card-action-btn card-action-btn--danger"
+                title="删除"
+                @click="startDelete(item)"
+              >
+                <svg
+                  viewBox="0 0 24 24"
+                  width="12"
+                  height="12"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2.2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <polyline points="3 6 5 6 21 6" />
+                  <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+                </svg>
               </button>
             </div>
           </div>
-        </li>
+          </li>
+        </VueDraggable>
 
-        <li class="folder-grid-item">
+        <ul class="folder-grid-static">
+          <li class="folder-grid-item">
           <AnimatePresence mode="wait">
             <motion.div
               v-if="creatingFolder"
@@ -288,8 +370,9 @@
               <span class="folder-create-label">新建文件夹</span>
             </motion.button>
           </AnimatePresence>
-        </li>
-      </ul>
+          </li>
+        </ul>
+      </div>
     </motion.div>
 
     <StructNoteCreateModal
@@ -311,6 +394,7 @@
 <script setup>
 import { computed, nextTick, ref, watch } from 'vue'
 import { AnimatePresence, motion } from 'motion-v'
+import { VueDraggable } from 'vue-draggable-plus'
 import {
   createNoteInFolder,
   createStructFolder,
@@ -318,6 +402,7 @@ import {
   fetchFolderList,
   moveStructItem,
   renameStructItem,
+  updateStructSort,
 } from '../../api/structFolder'
 import { useMotionPresets } from '../../composables/useMotionPresets'
 import AppButton from '../motion/AppButton.vue'
@@ -350,10 +435,12 @@ const noteSaving = ref(false)
 const noteViewVisible = ref(false)
 const activeNoteItem = ref(null)
 
-// 拖拽状态
-const draggingItem = ref(null)
+// 拖拽：卡片排序（Sortable）+ 手柄移动（原生）
+const moveDraggingItem = ref(null)
+const sortDraggingId = ref(null)
+const sortSaving = ref(false)
 const dropTargetId = ref(null)
-const isDragging = ref(false)
+const isMoveDragging = ref(false)
 const crumbDragOver = ref(-1)
 
 // 重命名
@@ -378,13 +465,43 @@ const breadcrumbs = computed(() => [
   ...pathStack.value.map((item) => ({ id: item.id, label: item.name })),
 ])
 
-const folderItems = computed(() =>
-  items.value.filter((item) => item.type === 'folder'),
+const sortDisabled = computed(
+  () =>
+    sortSaving.value ||
+    renamingId.value != null ||
+    deletingId.value != null ||
+    creatingFolder.value,
 )
 
-const noteItems = computed(() =>
-  items.value.filter((item) => item.type === 'note'),
-)
+const getItemKey = (item) =>
+  item.type === 'folder' ? `folder-${item.id}` : `note-${item.id}`
+
+const buildNamedDragGhost = (item) => {
+  const ghost = document.createElement('div')
+  ghost.className = 'sediment-drag-ghost'
+  const isNote = item.type === 'note'
+  ghost.innerHTML = `
+    <span class="sediment-drag-ghost-icon ${isNote ? 'is-note' : ''}">
+      <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+        ${
+          isNote
+            ? '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>'
+            : '<path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.93a2 2 0 0 1-1.66-.9l-.82-1.2A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2z"/>'
+        }
+      </svg>
+    </span>
+    <span class="sediment-drag-ghost-name"></span>
+  `
+  ghost.querySelector('.sediment-drag-ghost-name').textContent = item.name || ''
+  document.body.appendChild(ghost)
+  return ghost
+}
+
+const setNamedDragImage = (event, item) => {
+  const ghost = buildNamedDragGhost(item)
+  event.dataTransfer.setDragImage(ghost, ghost.offsetWidth / 2, ghost.offsetHeight / 2)
+  requestAnimationFrame(() => ghost.remove())
+}
 
 const loadCurrentList = async () => {
   const token = ++loadToken
@@ -521,29 +638,53 @@ const confirmDelete = async (item) => {
   }
 }
 
-// ---- 拖拽 ----
-const onDragStart = (item, event) => {
-  draggingItem.value = item
-  isDragging.value = true
-  event.dataTransfer.effectAllowed = 'move'
-  event.dataTransfer.setData('text/plain', String(item.id))
-  // 仅用图标作为拖拽 ghost，去掉白色方块背景
-  const iconEl = event.currentTarget.querySelector('.folder-icon-wrap')
-  if (iconEl) {
-    event.dataTransfer.setDragImage(iconEl, iconEl.offsetWidth / 2, iconEl.offsetHeight / 2)
+// ---- 排序拖拽（拖卡片）----
+const onSortDragStart = (evt) => {
+  const item = items.value[evt.oldIndex]
+  sortDraggingId.value = item?.id ?? null
+}
+
+const onSortDragEnd = async (evt) => {
+  sortDraggingId.value = null
+  if (evt.oldIndex === evt.newIndex || evt.oldIndex == null || evt.newIndex == null) {
+    return
+  }
+
+  const list = items.value.map((item, index) => ({
+    id: item.id,
+    sort: index,
+  }))
+
+  sortSaving.value = true
+  try {
+    await updateStructSort(list)
+  } catch (error) {
+    emit('error', error)
+    await loadCurrentList()
+  } finally {
+    sortSaving.value = false
   }
 }
 
-const onDragEnd = () => {
-  draggingItem.value = null
+// ---- 移动拖拽（拖手柄 → 文件夹/面包屑）----
+const onMoveDragStart = (item, event) => {
+  moveDraggingItem.value = item
+  isMoveDragging.value = true
+  event.dataTransfer.effectAllowed = 'move'
+  event.dataTransfer.setData('text/plain', String(item.id))
+  setNamedDragImage(event, item)
+}
+
+const onMoveDragEnd = () => {
+  moveDraggingItem.value = null
   dropTargetId.value = null
   crumbDragOver.value = -1
-  isDragging.value = false
+  isMoveDragging.value = false
 }
 
 // ---- 面包屑拖放（拖出文件夹）----
 const onCrumbDragOver = (index) => {
-  if (!draggingItem.value) return
+  if (!moveDraggingItem.value) return
   crumbDragOver.value = index
 }
 
@@ -552,11 +693,8 @@ const onCrumbDragLeave = (index) => {
 }
 
 const onDropToCrumb = async (crumb) => {
-  const item = draggingItem.value
-  crumbDragOver.value = -1
-  draggingItem.value = null
-  dropTargetId.value = null
-  isDragging.value = false
+  const item = moveDraggingItem.value
+  onMoveDragEnd()
   if (!item) return
   const targetParentId = crumb.id ?? 0
   try {
@@ -568,7 +706,7 @@ const onDropToCrumb = async (crumb) => {
 }
 
 const onFolderDragOver = (folder, event) => {
-  const dragging = draggingItem.value
+  const dragging = moveDraggingItem.value
   if (!dragging || dragging.id === folder.id) return
   event.dataTransfer.dropEffect = 'move'
   dropTargetId.value = folder.id
@@ -581,10 +719,8 @@ const onFolderDragLeave = (folder, event) => {
 }
 
 const onDropToFolder = async (folder) => {
-  const item = draggingItem.value
-  draggingItem.value = null
-  dropTargetId.value = null
-  isDragging.value = false
+  const item = moveDraggingItem.value
+  onMoveDragEnd()
   if (!item || item.id === folder.id) return
   try {
     await moveStructItem({ id: item.id, targetParentId: folder.id })
@@ -736,6 +872,13 @@ watch(
   gap: 18px 22px;
   margin: 0;
   padding: 8px 0 0;
+}
+
+.folder-grid-sortable,
+.folder-grid-static {
+  display: contents;
+  margin: 0;
+  padding: 0;
   list-style: none;
 }
 
@@ -778,11 +921,37 @@ watch(
   pointer-events: none;
 }
 
-.folder-grid-item[draggable='true'] {
+.folder-sort-handle {
   cursor: grab;
 }
 
-.folder-grid-item[draggable='true']:active {
+.folder-sort-handle:active {
+  cursor: grabbing;
+}
+
+.folder-sort-ghost {
+  opacity: 0.92;
+}
+
+.folder-sort-ghost .folder-name {
+  color: var(--color-primary);
+  font-weight: 600;
+}
+
+.folder-sort-chosen .folder-icon-wrap {
+  box-shadow: 0 8px 20px rgba(37, 99, 235, 0.14);
+  border-color: rgba(37, 99, 235, 0.2);
+}
+
+.folder-sort-drag {
+  opacity: 0.35;
+}
+
+.card-move-handle {
+  cursor: grab;
+}
+
+.card-move-handle:active {
   cursor: grabbing;
 }
 
@@ -1022,5 +1191,54 @@ watch(
   .folder-grid {
     gap: 14px 16px;
   }
+}
+</style>
+
+<style>
+.sediment-drag-ghost {
+  position: fixed;
+  top: -9999px;
+  left: -9999px;
+  z-index: 9999;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 220px;
+  padding: 6px 10px 6px 6px;
+  border-radius: 10px;
+  border: 1px solid rgba(24, 24, 27, 0.08);
+  background: rgba(255, 255, 255, 0.98);
+  box-shadow: 0 4px 14px rgba(24, 24, 27, 0.12);
+  pointer-events: none;
+  font-family: var(--font-base);
+}
+
+.sediment-drag-ghost-icon {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  background: rgba(202, 138, 4, 0.12);
+  color: #ca8a04;
+}
+
+.sediment-drag-ghost-icon.is-note {
+  background: rgba(37, 99, 235, 0.1);
+  color: #2563eb;
+}
+
+.sediment-drag-ghost-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: #18181b;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.3;
 }
 </style>

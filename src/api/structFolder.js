@@ -39,3 +39,8 @@ export async function moveStructItem({ id, targetParentId }) {
 export async function deleteStructItem(id) {
   return get(`/struct/folder/delete/${id}`)
 }
+
+/** @param {{ id: number, sort: number }[]} list */
+export async function updateStructSort(list) {
+  return post('/struct/folder/updateSort', list)
+}
