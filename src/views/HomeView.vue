@@ -10,6 +10,7 @@
         v-model="inputValue"
         :submitting="noteSubmitting"
         :upload-progress="uploadProgress"
+        :compact="inputBarCompact"
         @submit="handleSubmit"
         @limit-exceeded="handleLimitExceeded"
         @image-too-large="handleImageTooLarge"
@@ -19,13 +20,30 @@
     <template #content>
       <!-- 主页：v-show 保活 DOM，避免切回时重挂载阻塞侧栏选中态 -->
       <div v-show="activeTab === 'home'" class="tab-panel tab-panel--home">
-        <NoteViewSwitcher
-          :model-value="noteViewMode"
-          class="home-view-switcher"
-          @update:model-value="onNoteViewModeChange"
-        />
+        <AnimatePresence :initial="false">
+          <motion.div
+            v-if="switcherVisible"
+            key="home-view-switcher"
+            class="home-view-switcher"
+            :initial="presets.reveal.initial"
+            :animate="presets.reveal.animate"
+            :exit="presets.reveal.exit"
+            :transition="presets.reveal.transition"
+          >
+            <NoteViewSwitcher
+              :model-value="noteViewMode"
+              @update:model-value="onNoteViewModeChange"
+              @search="onNoteSearch"
+            />
+          </motion.div>
+        </AnimatePresence>
 
-        <section v-show="noteViewMode === 'list'" class="note-list">
+        <section
+          v-show="noteViewMode === 'list'"
+          ref="noteListRef"
+          class="note-list"
+          @scroll="onNoteListScroll"
+        >
           <header v-if="tagFilterState.active" class="tag-filter-summary">
             <span class="tag-filter-summary-label">
               标签
@@ -49,8 +67,19 @@
             </motion.button>
           </header>
 
+          <p v-if="isSearchActive && searchState.loading" class="empty-state">
+            搜索中…
+          </p>
           <p
-            v-if="
+            v-else-if="isSearchActive && !searchState.list.length"
+            class="empty-state"
+          >
+            未找到与「{{ searchKeyword }}」相关的笔记。
+          </p>
+
+          <p
+            v-else-if="
+              !isSearchActive &&
               !tagFilterState.active &&
               !assistantStore.visibleNotes.length &&
               !assistantStore.loadingNotes
@@ -93,8 +122,30 @@
             </li>
           </ul>
 
+          <ul
+            v-else-if="isSearchActive && searchState.list.length"
+            class="note-list-items"
+          >
+            <li
+              v-for="note in searchState.list"
+              :key="`search-${note.id}`"
+              class="note-list-item"
+            >
+              <NoteCard
+                :note="note"
+                :highlight="searchKeyword"
+                @edit-save="handleEditSave"
+                @delete="handleDelete"
+                @copied="handleCopied"
+                @copy-failed="handleCopyFailed"
+                @pin="handlePin"
+                @image-too-large="handleImageTooLarge"
+              />
+            </li>
+          </ul>
+
           <AnimatePresence
-            v-if="!tagFilterState.active"
+            v-else-if="!tagFilterState.active"
             mode="popLayout"
             as="ul"
             class="note-list-items note-list-anim"
@@ -168,7 +219,7 @@
 </template>
 
 <script setup>
-import { onBeforeUnmount, onMounted, reactive, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { AnimatePresence, motion } from 'motion-v'
 import CopyToast from '../components/feedback/CopyToast.vue'
 import { useMotionPresets } from '../composables/useMotionPresets'
@@ -182,7 +233,7 @@ import NoteTagCloud from '../components/note/NoteTagCloud.vue'
 import NoteViewSwitcher from '../components/note/NoteViewSwitcher.vue'
 import { useCopyNote } from '../composables/useCopyNote'
 import { ApiError } from '../api/http'
-import { deleteBlock, fetchNotesByTag } from '../api/note'
+import { deleteBlock, fetchNotesByTag, searchNotes } from '../api/note'
 import { useAssistantStore } from '../stores/assistantStore'
 
 const { presets } = useMotionPresets()
@@ -195,6 +246,20 @@ const assistantStore = useAssistantStore()
 
 const activeTab = ref('home')
 const noteViewMode = ref('list')
+const searchKeyword = ref('')
+const noteListRef = ref(null)
+const switcherVisible = ref(true)
+const inputBarCompact = ref(false)
+let lastListScrollTop = 0
+let searchToken = 0
+
+const searchState = reactive({
+  loading: false,
+  list: [],
+  total: 0,
+})
+
+const isSearchActive = computed(() => searchKeyword.value.length > 0)
 
 const tagFilterState = reactive({
   active: false,
@@ -208,6 +273,60 @@ let tagFilterToken = 0
 const onNoteViewModeChange = (mode) => {
   noteViewMode.value = mode
   if (mode === 'list') clearTagFilter()
+}
+
+const runNoteSearch = async (keyword) => {
+  const myToken = ++searchToken
+  searchState.loading = true
+  try {
+    const { list, total } = await searchNotes({ keyword, size: 50 })
+    if (myToken !== searchToken) return
+    searchState.list = list
+    searchState.total = total
+  } catch (error) {
+    if (myToken !== searchToken) return
+    searchState.list = []
+    notifyError(error)
+  } finally {
+    if (myToken === searchToken) searchState.loading = false
+  }
+}
+
+const resetNoteSearch = () => {
+  searchToken += 1
+  searchState.loading = false
+  searchState.list = []
+  searchState.total = 0
+}
+
+const onNoteSearch = (keyword) => {
+  const trimmed = keyword.trim()
+  searchKeyword.value = trimmed
+  if (!trimmed) {
+    resetNoteSearch()
+    return
+  }
+  noteViewMode.value = 'list'
+  clearTagFilter()
+  runNoteSearch(trimmed)
+}
+
+const onNoteListScroll = () => {
+  const el = noteListRef.value
+  if (!el || activeTab.value !== 'home' || noteViewMode.value !== 'list') return
+
+  const top = el.scrollTop
+  if (top <= 0) {
+    switcherVisible.value = true
+    inputBarCompact.value = false
+  } else if (top > lastListScrollTop) {
+    switcherVisible.value = false
+    inputBarCompact.value = true
+  } else if (top < lastListScrollTop) {
+    switcherVisible.value = true
+    inputBarCompact.value = false
+  }
+  lastListScrollTop = top
 }
 
 const clearTagFilter = () => {
@@ -392,6 +511,14 @@ const notifyError = (error) => {
   openToast(`[UNKNOWN] ${message}`, 'error')
 }
 
+watch(noteViewMode, (mode) => {
+  if (mode !== 'list') {
+    switcherVisible.value = true
+    inputBarCompact.value = false
+    lastListScrollTop = 0
+  }
+})
+
 onMounted(async () => {
   try {
     await assistantStore.loadInitialNotes()
@@ -425,6 +552,7 @@ onBeforeUnmount(() => {
   max-width: var(--frame-inner-width);
   margin-bottom: 10px;
   box-sizing: border-box;
+  overflow: hidden;
 }
 
 .note-list {

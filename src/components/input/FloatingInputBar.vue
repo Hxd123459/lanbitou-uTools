@@ -183,6 +183,10 @@ const props = defineProps({
     type: Number,
     default: 0,
   },
+  compact: {
+    type: Boolean,
+    default: false,
+  },
 })
 
 const emit = defineEmits([
@@ -203,6 +207,8 @@ const fileInputRef = ref(null)
 const isMac = ref(false)
 const images = ref([])
 const inputHeight = ref(MIN_HEIGHT)
+const initialHeight = ref(MIN_HEIGHT)
+const savedHeight = ref(null)
 const isFocused = ref(false)
 
 const shortcutLabel = computed(() => (isMac.value ? '⌘' : 'Ctrl'))
@@ -349,13 +355,32 @@ watch(
   () => nextTick(adjustHeight),
 )
 
+watch(
+  () => props.compact,
+  (isCompact) => {
+    if (isCompact) {
+      if (savedHeight.value === null) savedHeight.value = inputHeight.value
+      inputHeight.value = initialHeight.value
+      return
+    }
+    if (savedHeight.value !== null) {
+      inputHeight.value = savedHeight.value
+      savedHeight.value = null
+    }
+    nextTick(adjustHeight)
+  },
+)
+
 onMounted(() => {
   const platform =
     (typeof navigator !== 'undefined' &&
       (navigator.userAgentData?.platform || navigator.platform || '')) ||
     ''
   isMac.value = /Mac|iPhone|iPad|iPod/i.test(platform)
-  nextTick(adjustHeight)
+  nextTick(async () => {
+    await adjustHeight()
+    initialHeight.value = inputHeight.value
+  })
 })
 
 onBeforeUnmount(() => {
