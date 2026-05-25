@@ -39,7 +39,9 @@
             </span>
             <span class="tag-filter-summary-count">
               <template v-if="tagFilterState.loading">加载中…</template>
-              <template v-else>共 {{ tagFilterState.list.length }} 条</template>
+              <template v-else-if="tagFilterState.list.length">
+                共 {{ tagFilterState.list.length }} 条
+              </template>
             </span>
             <motion.button
               type="button"
@@ -64,38 +66,56 @@
             还没有笔记，先记录一条吧。
           </p>
 
-          <p
-            v-else-if="
-              tagFilterState.active &&
-              !tagFilterState.loading &&
-              !tagFilterState.list.length
-            "
-            class="empty-state"
-          >
-            标签「{{ tagFilterState.tagName }}」下暂无笔记。
-          </p>
-
-          <AnimatePresence mode="popLayout">
-            <motion.li
-              v-for="note in displayListNotes"
-              :key="note.id"
-              class="note-list-item"
-              layout
-              :initial="presets.reveal.initial"
-              :animate="presets.reveal.animate"
-              :exit="presets.listItemExit"
+          <template v-if="tagFilterState.active">
+            <p v-if="tagFilterState.loading" class="empty-state">加载中…</p>
+            <p
+              v-else-if="!tagFilterState.list.length"
+              class="empty-state"
             >
-              <NoteCard
-                :note="note"
-                @edit-save="handleEditSave"
-                @delete="handleDelete"
-                @copied="handleCopied"
-                @copy-failed="handleCopyFailed"
-                @pin="handlePin"
-                @image-too-large="handleImageTooLarge"
-              />
-            </motion.li>
-          </AnimatePresence>
+              标签「{{ tagFilterState.tagName }}」下暂无笔记。
+            </p>
+            <ul v-else class="note-list-items">
+              <li
+                v-for="note in tagFilterState.list"
+                :key="`tag-${tagFilterState.tagId}-${note.id}`"
+                class="note-list-item"
+              >
+                <NoteCard
+                  :note="note"
+                  @edit-save="handleEditSave"
+                  @delete="handleDelete"
+                  @copied="handleCopied"
+                  @copy-failed="handleCopyFailed"
+                  @pin="handlePin"
+                  @image-too-large="handleImageTooLarge"
+                />
+              </li>
+            </ul>
+          </template>
+
+          <template v-else>
+            <AnimatePresence mode="popLayout">
+              <motion.li
+                v-for="note in assistantStore.visibleNotes"
+                :key="note.id"
+                class="note-list-item"
+                layout
+                :initial="presets.reveal.initial"
+                :animate="presets.reveal.animate"
+                :exit="presets.listItemExit"
+              >
+                <NoteCard
+                  :note="note"
+                  @edit-save="handleEditSave"
+                  @delete="handleDelete"
+                  @copied="handleCopied"
+                  @copy-failed="handleCopyFailed"
+                  @pin="handlePin"
+                  @image-too-large="handleImageTooLarge"
+                />
+              </motion.li>
+            </AnimatePresence>
+          </template>
         </section>
 
         <section
@@ -202,7 +222,7 @@
 </template>
 
 <script setup>
-import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
+import { nextTick, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 import { AnimatePresence, motion } from 'motion-v'
 import CopyToast from '../components/feedback/CopyToast.vue'
 import { useMotionPresets } from '../composables/useMotionPresets'
@@ -238,12 +258,6 @@ const tagFilterState = reactive({
   list: [],
 })
 let tagFilterToken = 0
-
-const displayListNotes = computed(() =>
-  tagFilterState.active
-    ? tagFilterState.list
-    : assistantStore.visibleNotes,
-)
 
 const onNoteViewModeChange = (mode) => {
   noteViewMode.value = mode
@@ -545,6 +559,17 @@ onBeforeUnmount(() => {
 .note-list-item {
   width: 100%;
   max-width: var(--frame-inner-width);
+  list-style: none;
+}
+
+.note-list-items {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+  width: 100%;
+  margin: 0;
+  padding: 0;
   list-style: none;
 }
 
