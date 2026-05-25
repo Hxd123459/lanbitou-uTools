@@ -807,11 +807,11 @@ function formatTime(dateValue) {
   border: 0;
   border-radius: var(--radius-md);
   background: #ffffff;
-  box-shadow: var(--shadow-card);
 }
 
-.note-card:hover {
-  box-shadow: 0 4px 14px rgba(24, 24, 27, 0.08);
+.note-card:hover,
+.note-card:focus-within {
+  box-shadow: var(--shadow-card-hover);
 }
 
 .note-card.is-editing {
@@ -870,7 +870,7 @@ function formatTime(dateValue) {
   background: linear-gradient(
     180deg,
     rgba(37, 99, 235, 0.04) 0%,
-    #ffffff 60%
+    transparent 60%
   );
 }
 

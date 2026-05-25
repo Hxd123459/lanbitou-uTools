@@ -345,7 +345,6 @@ defineExpose({ reload: loadList })
 
 .trash-list-item {
   width: 100%;
-  overflow: hidden;
   list-style: none;
 }
 
@@ -353,11 +352,11 @@ defineExpose({ reload: loadList })
   padding: 14px 16px;
   border-radius: var(--radius-md);
   background: #ffffff;
-  box-shadow: var(--shadow-card);
 }
 
-.trash-card:hover {
-  box-shadow: 0 4px 14px rgba(24, 24, 27, 0.08);
+.trash-card:hover,
+.trash-card:focus-within {
+  box-shadow: var(--shadow-card-hover);
 }
 
 .trash-card-meta {
