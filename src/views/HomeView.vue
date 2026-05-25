@@ -10,12 +10,9 @@
         v-model="inputValue"
         :submitting="noteSubmitting"
         :upload-progress="uploadProgress"
-        :search-loading="searchState.loading"
         @submit="handleSubmit"
         @limit-exceeded="handleLimitExceeded"
         @image-too-large="handleImageTooLarge"
-        @search="handleSearch"
-        @search-cancel="handleSearchCancel"
       />
     </template>
 
@@ -28,10 +25,7 @@
           @update:model-value="onNoteViewModeChange"
         />
 
-        <section
-          v-show="noteViewMode === 'list' && !searchState.active"
-          class="note-list"
-        >
+        <section v-show="noteViewMode === 'list'" class="note-list">
           <header v-if="tagFilterState.active" class="tag-filter-summary">
             <span class="tag-filter-summary-label">
               标签
@@ -118,63 +112,6 @@
           </template>
         </section>
 
-        <section
-          v-show="noteViewMode === 'list' && searchState.active"
-          class="note-list"
-        >
-          <header class="search-summary">
-            <span class="search-summary-label">
-              搜索结果
-              <span class="search-summary-keyword">「{{ searchState.keyword }}」</span>
-            </span>
-            <span class="search-summary-count">
-              <template v-if="searchState.loading">搜索中…</template>
-              <template v-else>共 {{ searchState.total }} 条</template>
-            </span>
-            <motion.button
-              type="button"
-              class="search-summary-clear"
-              :while-hover="presets.button.hover"
-              :while-tap="presets.button.tap"
-              :transition="presets.button.transition"
-              @click="exitSearch"
-            >
-              清空
-            </motion.button>
-          </header>
-
-          <p
-            v-if="!searchState.loading && !searchState.list.length"
-            class="empty-state"
-          >
-            没有匹配 「{{ searchState.keyword }}」 的笔记。
-          </p>
-
-          <AnimatePresence mode="popLayout">
-            <motion.li
-              v-for="note in searchState.list"
-              :key="`search-${note.id}`"
-              class="note-list-item"
-              layout
-              :initial="presets.reveal.initial"
-              :animate="presets.reveal.animate"
-              :exit="presets.listItemExit"
-            >
-              <NoteCard
-                :note="note"
-                :highlight="searchState.keyword"
-                :plain="true"
-                @edit-save="handleEditSave"
-                @delete="handleDelete"
-                @copied="handleCopied"
-                @copy-failed="handleCopyFailed"
-                @pin="handlePin"
-                @image-too-large="handleImageTooLarge"
-              />
-            </motion.li>
-          </AnimatePresence>
-        </section>
-
         <NoteTagCloud
           v-show="noteViewMode === 'tags'"
           :active="activeTab === 'home' && noteViewMode === 'tags'"
@@ -236,7 +173,7 @@ import NoteTagCloud from '../components/note/NoteTagCloud.vue'
 import NoteViewSwitcher from '../components/note/NoteViewSwitcher.vue'
 import { useCopyNote } from '../composables/useCopyNote'
 import { ApiError } from '../api/http'
-import { deleteBlock, fetchNotesByTag, searchNotes } from '../api/note'
+import { deleteBlock, fetchNotesByTag } from '../api/note'
 import { useAssistantStore } from '../stores/assistantStore'
 
 const { presets } = useMotionPresets()
@@ -261,10 +198,6 @@ let tagFilterToken = 0
 
 const onNoteViewModeChange = (mode) => {
   noteViewMode.value = mode
-  if (mode === 'tags') {
-    if (searchState.active) exitSearch()
-    return
-  }
   if (mode === 'list') clearTagFilter()
 }
 
@@ -278,7 +211,6 @@ const clearTagFilter = () => {
 }
 
 const handleTagSelect = async (tag) => {
-  if (searchState.active) exitSearch()
   noteViewMode.value = 'list'
 
   const tagId = tag?.tagId
@@ -324,19 +256,8 @@ const handleRecycleRestored = async () => {
 const onTabChange = (tab) => {
   if (activeTab.value === tab) return
   activeTab.value = tab
-  if (tab !== 'home' && searchState.active) {
-    nextTick(() => exitSearch())
-  }
 }
 
-const searchState = reactive({
-  active: false,
-  loading: false,
-  keyword: '',
-  total: 0,
-  list: [],
-})
-let searchToken = 0
 const {
   showToast,
   toastText,
@@ -372,45 +293,6 @@ const handleLimitExceeded = (max) => {
 
 const handleImageTooLarge = () => {
   openToast('单张图片须小于 10 MB', 'error', { duration: 2200 })
-}
-
-const handleSearch = async ({ keyword }) => {
-  const trimmed = (keyword || '').trim()
-  if (!trimmed) return
-  clearTagFilter()
-  const myToken = ++searchToken
-  searchState.active = true
-  searchState.keyword = trimmed
-  searchState.loading = true
-  try {
-    const result = await searchNotes({ keyword: trimmed, page: 1, size: 20 })
-    if (myToken !== searchToken) return
-    searchState.total = result.total
-    searchState.list = result.list
-  } catch (error) {
-    if (myToken !== searchToken) return
-    searchState.list = []
-    searchState.total = 0
-    notifyError(error)
-  } finally {
-    if (myToken === searchToken) {
-      searchState.loading = false
-    }
-  }
-}
-
-const handleSearchCancel = () => {
-  searchToken += 1
-  searchState.active = false
-  searchState.loading = false
-  searchState.keyword = ''
-  searchState.total = 0
-  searchState.list = []
-}
-
-const exitSearch = () => {
-  handleSearchCancel()
-  inputBarRef.value?.exitSearchMode?.()
 }
 
 const handleEditSave = async ({
@@ -598,48 +480,6 @@ onBeforeUnmount(() => {
   text-align: center;
   color: var(--color-secondary-text);
   font-size: 14px;
-}
-
-.search-summary {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 8px 12px;
-  margin-bottom: 4px;
-  border-radius: var(--radius-md);
-  background: rgba(24, 24, 27, 0.04);
-  color: var(--color-secondary-text);
-  font-size: 13px;
-}
-
-.search-summary-label {
-  font-weight: 500;
-  color: var(--color-primary);
-}
-
-.search-summary-keyword {
-  color: var(--color-text);
-  font-weight: 600;
-}
-
-.search-summary-count {
-  flex: 1;
-  font-variant-numeric: tabular-nums;
-}
-
-.search-summary-clear {
-  border: 0;
-  background: transparent;
-  color: var(--color-secondary-text);
-  font-size: 13px;
-  cursor: pointer;
-  padding: 4px 8px;
-  border-radius: 6px;
-}
-
-.search-summary-clear:hover {
-  background: rgba(24, 24, 27, 0.08);
-  color: var(--color-primary);
 }
 
 .tag-filter-summary {

@@ -144,7 +144,10 @@
         class="note-editor"
         spellcheck="false"
         :disabled="saving"
-        @input="autoGrow"
+        :style="{ height: editorHeight + 'px' }"
+        @input="onEditorInput"
+        @focus="onEditorFocus"
+        @blur="onEditorBlur"
         @keydown="onEditorKeydown"
         @paste="onEditorPaste"
       />
@@ -361,6 +364,8 @@ const emit = defineEmits([
 const assistantStore = useAssistantStore()
 
 const MAX_IMAGES = 20
+const EDITOR_MIN_HEIGHT = 60
+const EDITOR_MAX_HEIGHT = 480
 
 const draftContent = ref('')
 const draftTitle = ref('')
@@ -370,6 +375,11 @@ const editorRef = ref(null)
 const editFileInputRef = ref(null)
 const contentRootRef = ref(null)
 const isMac = ref(false)
+const editorHeight = ref(EDITOR_MIN_HEIGHT)
+const isEditorFocused = ref(false)
+
+let listScrollEl = null
+let lastListScrollTop = 0
 
 const HIGHLIGHT_CLASS = 'note-highlight'
 const HIGHLIGHT_SKIP_SELECTOR =
@@ -475,19 +485,89 @@ function cloneImagesForDraft() {
   }))
 }
 
+const measureEditorHeight = (el) => {
+  editorHeight.value = EDITOR_MIN_HEIGHT
+  return new Promise((resolve) => {
+    requestAnimationFrame(() => {
+      const next = Math.min(
+        Math.max(el.scrollHeight, EDITOR_MIN_HEIGHT),
+        EDITOR_MAX_HEIGHT,
+      )
+      editorHeight.value = next
+      resolve(next)
+    })
+  })
+}
+
+const adjustEditorHeight = async () => {
+  const el = editorRef.value
+  if (!el) return
+  await measureEditorHeight(el)
+}
+
+const shrinkEditorHeight = async () => {
+  const el = editorRef.value
+  if (!el) return
+  if (!draftContent.value.trim()) {
+    editorHeight.value = EDITOR_MIN_HEIGHT
+    return
+  }
+  await adjustEditorHeight()
+}
+
+const bindListScroll = () => {
+  unbindListScroll()
+  listScrollEl = editorRef.value?.closest('.note-list') ?? null
+  lastListScrollTop = listScrollEl?.scrollTop ?? 0
+  listScrollEl?.addEventListener('scroll', onListScroll, { passive: true })
+}
+
+const unbindListScroll = () => {
+  listScrollEl?.removeEventListener('scroll', onListScroll)
+  listScrollEl = null
+}
+
+const onListScroll = () => {
+  if (!isEditing.value || !listScrollEl) return
+  const top = listScrollEl.scrollTop
+  if (top < lastListScrollTop) {
+    isEditorFocused.value = false
+    shrinkEditorHeight()
+  }
+  lastListScrollTop = top
+}
+
+const onEditorFocus = () => {
+  isEditorFocused.value = true
+  nextTick(adjustEditorHeight)
+}
+
+const onEditorBlur = () => {
+  isEditorFocused.value = false
+  nextTick(shrinkEditorHeight)
+}
+
+const onEditorInput = () => {
+  nextTick(adjustEditorHeight)
+}
+
 const enterEdit = async () => {
   revokeDraftNewUrls()
   draftContent.value = contentText.value
   draftTitle.value = titleText.value
   draftImageItems.value = cloneImagesForDraft()
+  editorHeight.value = EDITOR_MIN_HEIGHT
   assistantStore.setEditingNoteId(props.note.id)
   await nextTick()
-  autoGrow()
+  await adjustEditorHeight()
+  bindListScroll()
   editorRef.value?.focus()
 }
 
 const cancelEdit = () => {
   if (saving.value) return
+  unbindListScroll()
+  editorHeight.value = EDITOR_MIN_HEIGHT
   revokeDraftNewUrls()
   draftContent.value = ''
   draftTitle.value = ''
@@ -566,13 +646,6 @@ const onTitleKeydown = (event) => {
   }
 }
 
-const autoGrow = () => {
-  const el = editorRef.value
-  if (!el) return
-  el.style.height = 'auto'
-  el.style.height = `${Math.min(el.scrollHeight, 480)}px`
-}
-
 const onEditorKeydown = (event) => {
   if (event.isComposing) return
   if (event.key === 'Escape') {
@@ -607,6 +680,8 @@ const saveEdit = async () => {
         .map((i) => i.file)
     }
     await Promise.resolve(emit('edit-save', payload))
+    unbindListScroll()
+    editorHeight.value = EDITOR_MIN_HEIGHT
     revokeDraftNewUrls()
     draftContent.value = ''
     draftTitle.value = ''
@@ -648,6 +723,8 @@ watch(
   () => assistantStore.editingNoteId,
   (newId) => {
     if (newId !== props.note.id) {
+      unbindListScroll()
+      editorHeight.value = EDITOR_MIN_HEIGHT
       if (draftContent.value) draftContent.value = ''
       if (draftTitle.value) draftTitle.value = ''
       revokeDraftNewUrls()
@@ -657,6 +734,7 @@ watch(
 )
 
 onBeforeUnmount(() => {
+  unbindListScroll()
   revokeDraftNewUrls()
 })
 
@@ -1094,7 +1172,6 @@ function formatTime(dateValue) {
 .note-editor {
   display: block;
   width: 100%;
-  min-height: 60px;
   max-height: 480px;
   margin: 0;
   padding: 0;
@@ -1109,6 +1186,7 @@ function formatTime(dateValue) {
   line-height: 1.6;
   word-break: break-word;
   scrollbar-width: thin;
+  box-sizing: border-box;
 }
 
 .note-editor:disabled {
