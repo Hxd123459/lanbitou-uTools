@@ -41,7 +41,7 @@ function mapBlockToNote(item) {
   }
 }
 
-export async function fetchBlockListByDate(currentDate) {
+export async function fetchBlockListByDate(currentDate, tagId = null) {
   let date = currentDate
   if (!date) {
     date = formatDateParam(new Date())
@@ -49,8 +49,14 @@ export async function fetchBlockListByDate(currentDate) {
     date = formatDateParam(date)
   }
 
-  const params = { date }
-  const data = await get('/api/note/listByDay', params)
+  const body = {
+    date,
+    tagId:
+      tagId != null && tagId !== '' && Number.isFinite(Number(tagId))
+        ? Number(tagId)
+        : null,
+  }
+  const data = await post('/api/note/listByDay', body)
   return Array.isArray(data) ? data.map(mapBlockToNote) : []
 }
 
@@ -163,4 +169,8 @@ export async function deleteRecycleForever(ids) {
 export async function fetchAllTags() {
   const data = await get('/api/note/allTags')
   return Array.isArray(data) ? data : []
+}
+
+export async function fetchNotesByTag(tagId) {
+  return fetchBlockListByDate(undefined, tagId)
 }

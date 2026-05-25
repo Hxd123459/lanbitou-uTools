@@ -72,26 +72,21 @@ const modes = [
 .note-view-switcher {
   display: flex;
   align-items: center;
-  gap: 4px;
+  flex-wrap: wrap;
+  gap: 6px;
   width: 100%;
-  padding: 4px;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  background: var(--color-surface);
-  box-shadow: var(--shadow-card);
   box-sizing: border-box;
 }
 
 .switcher-btn {
-  flex: 1;
+  flex: 0 0 auto;
   display: inline-flex;
   align-items: center;
-  justify-content: center;
   gap: 6px;
-  min-height: 32px;
-  padding: 6px 12px;
+  min-height: 28px;
+  padding: 4px 10px;
   border: 0;
-  border-radius: 8px;
+  border-radius: 6px;
   background: transparent;
   color: var(--color-secondary-text);
   font-size: 13px;
@@ -101,14 +96,12 @@ const modes = [
 }
 
 .switcher-btn:hover:not(.is-active) {
-  background: var(--btn-icon-bg-hover);
   color: var(--color-text);
 }
 
 .switcher-btn.is-active {
-  background: rgba(37, 99, 235, 0.1);
   color: var(--color-accent);
-  box-shadow: 0 1px 2px rgba(24, 24, 27, 0.06);
+  font-weight: 600;
 }
 
 .switcher-icon {

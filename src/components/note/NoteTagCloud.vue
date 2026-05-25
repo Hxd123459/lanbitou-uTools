@@ -12,12 +12,12 @@
         :key="tag.tagId"
         type="button"
         class="tag-cloud-item"
-        :style="tagStyle(tag, index)"
         role="listitem"
         :title="`${tag.tagName} · ${tag.noteCount} 条笔记`"
         :initial="presets.reveal.initial"
         :animate="presets.reveal.animate"
         :transition="{ ...presets.reveal.transition, delay: Math.min(index * 0.02, 0.24) }"
+        @click="$emit('select', tag)"
       >
         <span class="tag-cloud-name">{{ tag.tagName }}</span>
         <span class="tag-cloud-count">{{ tag.noteCount }}</span>
@@ -27,7 +27,7 @@
 </template>
 
 <script setup>
-import { computed, onMounted, ref, watch } from 'vue'
+import { onMounted, ref, watch } from 'vue'
 import { motion } from 'motion-v'
 import { ApiError } from '../../api/http'
 import { fetchAllTags } from '../../api/note'
@@ -40,33 +40,14 @@ const props = defineProps({
   },
 })
 
+defineEmits(['select'])
+
 const { presets } = useMotionPresets()
 
 const loading = ref(false)
 const error = ref('')
 const tags = ref([])
 let loadToken = 0
-
-const countRange = computed(() => {
-  const counts = tags.value.map((t) => Number(t.noteCount) || 0)
-  const max = Math.max(...counts, 1)
-  const min = Math.min(...counts, 0)
-  return { min, max }
-})
-
-const tagStyle = (tag, index) => {
-  const count = Number(tag.noteCount) || 0
-  const { min, max } = countRange.value
-  const ratio = max === min ? 0.55 : (count - min) / (max - min)
-  const fontSize = 12 + ratio * 10
-  const opacity = 0.72 + ratio * 0.28
-  const rotate = ((index % 5) - 2) * 1.2
-  return {
-    fontSize: `${fontSize}px`,
-    opacity: String(opacity),
-    transform: `rotate(${rotate}deg)`,
-  }
-}
 
 const loadTags = async () => {
   const token = ++loadToken
@@ -132,36 +113,35 @@ onMounted(() => {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  justify-content: center;
-  gap: 10px 14px;
-  padding: 16px 8px 8px;
+  justify-content: flex-start;
+  gap: 8px 10px;
+  padding: 12px 0 8px;
   min-height: 120px;
 }
 
 .tag-cloud-item {
   display: inline-flex;
-  align-items: baseline;
+  align-items: center;
   gap: 6px;
-  padding: 6px 14px;
+  padding: 6px 12px;
   border: 1px solid var(--color-border);
   border-radius: 999px;
   background: var(--color-surface);
   color: var(--color-text);
+  font-size: 13px;
   font-weight: 500;
   line-height: 1.35;
   cursor: pointer;
-  box-shadow: var(--shadow-card);
   font-family: inherit;
 }
 
 .tag-cloud-item:hover {
   border-color: rgba(37, 99, 235, 0.35);
   color: var(--color-accent);
-  box-shadow: var(--shadow-card-hover);
 }
 
 .tag-cloud-count {
-  font-size: 0.72em;
+  font-size: 12px;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
   color: var(--color-secondary-text);

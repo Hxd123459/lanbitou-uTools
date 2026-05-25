@@ -23,24 +23,61 @@
       <!-- 主页：v-show 保活 DOM，避免切回时重挂载阻塞侧栏选中态 -->
       <div v-show="activeTab === 'home'" class="tab-panel tab-panel--home">
         <NoteViewSwitcher
-          v-model="noteViewMode"
+          :model-value="noteViewMode"
           class="home-view-switcher"
+          @update:model-value="onNoteViewModeChange"
         />
 
         <section
           v-show="noteViewMode === 'list' && !searchState.active"
           class="note-list"
         >
+          <header v-if="tagFilterState.active" class="tag-filter-summary">
+            <span class="tag-filter-summary-label">
+              标签
+              <span class="tag-filter-summary-name">「{{ tagFilterState.tagName }}」</span>
+            </span>
+            <span class="tag-filter-summary-count">
+              <template v-if="tagFilterState.loading">加载中…</template>
+              <template v-else>共 {{ tagFilterState.list.length }} 条</template>
+            </span>
+            <motion.button
+              type="button"
+              class="tag-filter-summary-clear"
+              :while-hover="presets.button.hover"
+              :while-tap="presets.button.tap"
+              :transition="presets.button.transition"
+              @click="clearTagFilter"
+            >
+              清空
+            </motion.button>
+          </header>
+
           <p
-            v-if="!assistantStore.visibleNotes.length && !assistantStore.loadingNotes"
+            v-if="
+              !tagFilterState.active &&
+              !assistantStore.visibleNotes.length &&
+              !assistantStore.loadingNotes
+            "
             class="empty-state"
           >
             还没有笔记，先记录一条吧。
           </p>
 
+          <p
+            v-else-if="
+              tagFilterState.active &&
+              !tagFilterState.loading &&
+              !tagFilterState.list.length
+            "
+            class="empty-state"
+          >
+            标签「{{ tagFilterState.tagName }}」下暂无笔记。
+          </p>
+
           <AnimatePresence mode="popLayout">
             <motion.li
-              v-for="note in assistantStore.visibleNotes"
+              v-for="note in displayListNotes"
               :key="note.id"
               class="note-list-item"
               layout
@@ -121,6 +158,7 @@
         <NoteTagCloud
           v-show="noteViewMode === 'tags'"
           :active="activeTab === 'home' && noteViewMode === 'tags'"
+          @select="handleTagSelect"
         />
       </div>
 
@@ -164,7 +202,7 @@
 </template>
 
 <script setup>
-import { nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 import { AnimatePresence, motion } from 'motion-v'
 import CopyToast from '../components/feedback/CopyToast.vue'
 import { useMotionPresets } from '../composables/useMotionPresets'
@@ -178,7 +216,7 @@ import NoteTagCloud from '../components/note/NoteTagCloud.vue'
 import NoteViewSwitcher from '../components/note/NoteViewSwitcher.vue'
 import { useCopyNote } from '../composables/useCopyNote'
 import { ApiError } from '../api/http'
-import { deleteBlock, searchNotes } from '../api/note'
+import { deleteBlock, fetchNotesByTag, searchNotes } from '../api/note'
 import { useAssistantStore } from '../stores/assistantStore'
 
 const { presets } = useMotionPresets()
@@ -192,11 +230,73 @@ const assistantStore = useAssistantStore()
 const activeTab = ref('home')
 const noteViewMode = ref('list')
 
-watch(noteViewMode, (mode) => {
-  if (mode === 'tags' && searchState.active) {
-    exitSearch()
-  }
+const tagFilterState = reactive({
+  active: false,
+  loading: false,
+  tagId: '',
+  tagName: '',
+  list: [],
 })
+let tagFilterToken = 0
+
+const displayListNotes = computed(() =>
+  tagFilterState.active
+    ? tagFilterState.list
+    : assistantStore.visibleNotes,
+)
+
+const onNoteViewModeChange = (mode) => {
+  noteViewMode.value = mode
+  if (mode === 'tags') {
+    if (searchState.active) exitSearch()
+    return
+  }
+  if (mode === 'list') clearTagFilter()
+}
+
+const clearTagFilter = () => {
+  tagFilterToken += 1
+  tagFilterState.active = false
+  tagFilterState.loading = false
+  tagFilterState.tagId = ''
+  tagFilterState.tagName = ''
+  tagFilterState.list = []
+}
+
+const handleTagSelect = async (tag) => {
+  if (searchState.active) exitSearch()
+  noteViewMode.value = 'list'
+
+  const tagId = tag?.tagId
+  const tagName = tag?.tagName || '未命名'
+  if (!tagId) return
+
+  const myToken = ++tagFilterToken
+  tagFilterState.active = true
+  tagFilterState.tagId = tagId
+  tagFilterState.tagName = tagName
+  tagFilterState.loading = true
+  tagFilterState.list = []
+
+  try {
+    const list = await fetchNotesByTag(tagId)
+    if (myToken !== tagFilterToken) return
+    tagFilterState.list = list
+  } catch (error) {
+    if (myToken !== tagFilterToken) return
+    const local = assistantStore.visibleNotes.filter(
+      (note) => (note.title || '') === tagName,
+    )
+    if (local.length) {
+      tagFilterState.list = local
+    } else {
+      tagFilterState.list = []
+      notifyError(error)
+    }
+  } finally {
+    if (myToken === tagFilterToken) tagFilterState.loading = false
+  }
+}
 
 const handleRecycleRestored = async () => {
   try {
@@ -263,6 +363,7 @@ const handleImageTooLarge = () => {
 const handleSearch = async ({ keyword }) => {
   const trimmed = (keyword || '').trim()
   if (!trimmed) return
+  clearTagFilter()
   const myToken = ++searchToken
   searchState.active = true
   searchState.keyword = trimmed
@@ -512,6 +613,48 @@ onBeforeUnmount(() => {
 }
 
 .search-summary-clear:hover {
+  background: rgba(24, 24, 27, 0.08);
+  color: var(--color-primary);
+}
+
+.tag-filter-summary {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  margin-bottom: 4px;
+  border-radius: var(--radius-md);
+  background: rgba(37, 99, 235, 0.06);
+  color: var(--color-secondary-text);
+  font-size: 13px;
+}
+
+.tag-filter-summary-label {
+  font-weight: 500;
+  color: var(--color-primary);
+}
+
+.tag-filter-summary-name {
+  color: var(--color-accent);
+  font-weight: 600;
+}
+
+.tag-filter-summary-count {
+  flex: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.tag-filter-summary-clear {
+  border: 0;
+  background: transparent;
+  color: var(--color-secondary-text);
+  font-size: 13px;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 6px;
+}
+
+.tag-filter-summary-clear:hover {
   background: rgba(24, 24, 27, 0.08);
   color: var(--color-primary);
 }
