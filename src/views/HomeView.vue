@@ -1,11 +1,7 @@
 <template>
   <MainFrame :show-input-area="activeTab === 'home'">
     <template #sidebar>
-      <SidePanel
-        :active-tab="activeTab"
-        :trash-count="recycleCount"
-        @tab-change="onTabChange"
-      />
+      <SidePanel :active-tab="activeTab" @tab-change="onTabChange" />
     </template>
 
     <template #input>
@@ -34,17 +30,27 @@
             还没有笔记，先记录一条吧。
           </p>
 
-          <NoteCard
-            v-for="note in assistantStore.visibleNotes"
-            :key="note.id"
-            :note="note"
-            @edit-save="handleEditSave"
-            @delete="handleDelete"
-            @copied="handleCopied"
-            @copy-failed="handleCopyFailed"
-            @pin="handlePin"
-            @image-too-large="handleImageTooLarge"
-          />
+          <AnimatePresence mode="popLayout">
+            <motion.li
+              v-for="note in assistantStore.visibleNotes"
+              :key="note.id"
+              class="note-list-item"
+              layout
+              :initial="presets.reveal.initial"
+              :animate="presets.reveal.animate"
+              :exit="presets.listItemExit"
+            >
+              <NoteCard
+                :note="note"
+                @edit-save="handleEditSave"
+                @delete="handleDelete"
+                @copied="handleCopied"
+                @copy-failed="handleCopyFailed"
+                @pin="handlePin"
+                @image-too-large="handleImageTooLarge"
+              />
+            </motion.li>
+          </AnimatePresence>
         </section>
 
         <section v-if="searchState.active" class="note-list">
@@ -76,19 +82,29 @@
             没有匹配 「{{ searchState.keyword }}」 的笔记。
           </p>
 
-          <NoteCard
-            v-for="note in searchState.list"
-            :key="`search-${note.id}`"
-            :note="note"
-            :highlight="searchState.keyword"
-            :plain="true"
-            @edit-save="handleEditSave"
-            @delete="handleDelete"
-            @copied="handleCopied"
-            @copy-failed="handleCopyFailed"
-            @pin="handlePin"
-            @image-too-large="handleImageTooLarge"
-          />
+          <AnimatePresence mode="popLayout">
+            <motion.li
+              v-for="note in searchState.list"
+              :key="`search-${note.id}`"
+              class="note-list-item"
+              layout
+              :initial="presets.reveal.initial"
+              :animate="presets.reveal.animate"
+              :exit="presets.listItemExit"
+            >
+              <NoteCard
+                :note="note"
+                :highlight="searchState.keyword"
+                :plain="true"
+                @edit-save="handleEditSave"
+                @delete="handleDelete"
+                @copied="handleCopied"
+                @copy-failed="handleCopyFailed"
+                @pin="handlePin"
+                @image-too-large="handleImageTooLarge"
+              />
+            </motion.li>
+          </AnimatePresence>
         </section>
       </div>
 
@@ -116,7 +132,6 @@
       <TrashPanel
         v-show="activeTab === 'trash'"
         :active="activeTab === 'trash'"
-        @count-change="recycleCount = $event"
         @restored="handleRecycleRestored"
         @error="notifyError"
       />
@@ -134,7 +149,7 @@
 
 <script setup>
 import { nextTick, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
-import { motion } from 'motion-v'
+import { AnimatePresence, motion } from 'motion-v'
 import CopyToast from '../components/feedback/CopyToast.vue'
 import { useMotionPresets } from '../composables/useMotionPresets'
 import FloatingInputBar from '../components/input/FloatingInputBar.vue'
@@ -145,7 +160,7 @@ import SidePanel from '../components/layout/SidePanel.vue'
 import NoteCard from '../components/note/NoteCard.vue'
 import { useCopyNote } from '../composables/useCopyNote'
 import { ApiError } from '../api/http'
-import { deleteBlock, fetchRecycleList, searchNotes } from '../api/note'
+import { deleteBlock, searchNotes } from '../api/note'
 import { useAssistantStore } from '../stores/assistantStore'
 
 const { presets } = useMotionPresets()
@@ -157,16 +172,6 @@ const inputBarRef = ref(null)
 const assistantStore = useAssistantStore()
 
 const activeTab = ref('home')
-const recycleCount = ref(0)
-
-const refreshRecycleCount = async () => {
-  try {
-    const list = await fetchRecycleList()
-    recycleCount.value = list.length
-  } catch {
-    recycleCount.value = 0
-  }
-}
 
 const handleRecycleRestored = async () => {
   try {
@@ -300,7 +305,6 @@ const handleDelete = ({ id }) => {
     try {
       await deleteBlock(id)
       assistantStore.removeNoteLocal(id)
-      await refreshRecycleCount()
     } catch (error) {
       assistantStore.setNotePendingDelete(id, false)
       notifyError(error)
@@ -360,7 +364,6 @@ const notifyError = (error) => {
 onMounted(async () => {
   try {
     await assistantStore.loadInitialNotes()
-    await refreshRecycleCount()
   } catch (error) {
     notifyError(error)
   }
@@ -403,6 +406,12 @@ onBeforeUnmount(() => {
   width: 100%;
   max-width: var(--frame-inner-width);
   box-sizing: border-box;
+}
+
+.note-list-item {
+  width: 100%;
+  max-width: var(--frame-inner-width);
+  list-style: none;
 }
 
 .note-list::-webkit-scrollbar {

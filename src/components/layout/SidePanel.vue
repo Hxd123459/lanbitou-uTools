@@ -60,7 +60,9 @@
             stroke-linecap="round"
             stroke-linejoin="round"
           >
-            <path d="M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1v-9.5z" />
+            <path d="M4 5.5h7v7H4z" />
+            <path d="M15 4h5v5.5L16.5 14H13V8.5L15 4z" />
+            <path d="M8 15.5h7v5.5H8z" />
           </svg>
           <svg
             v-else-if="item.id === 'sediment'"
@@ -110,13 +112,6 @@
         </span>
 
         <span class="nav-item-label">{{ item.label }}</span>
-
-        <span
-          v-if="item.id === 'trash' && trashCount > 0"
-          class="nav-item-badge"
-        >
-          {{ trashCount > 99 ? '99+' : trashCount }}
-        </span>
       </motion.button>
     </nav>
   </motion.aside>
@@ -133,16 +128,12 @@ defineProps({
     type: String,
     default: 'home',
   },
-  trashCount: {
-    type: Number,
-    default: 0,
-  },
 })
 
 defineEmits(['tab-change'])
 
 const navItems = [
-  { id: 'home', label: '主页' },
+  { id: 'home', label: '碎片' },
   { id: 'sediment', label: '沉淀' },
   { id: 'echo', label: '回响' },
   { id: 'trash', label: '回收站' },
@@ -303,24 +294,6 @@ const navMotion = computed(() => ({
   min-width: 0;
 }
 
-.nav-item-badge {
-  position: relative;
-  z-index: 1;
-  flex: 0 0 auto;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 18px;
-  height: 18px;
-  padding: 0 5px;
-  border-radius: 99px;
-  background: rgba(220, 38, 38, 0.1);
-  color: var(--color-error);
-  font-size: 10.5px;
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
-}
-
 @media (max-width: 720px) {
   .app-sidebar {
     flex: 0 0 72px;
@@ -345,8 +318,7 @@ const navMotion = computed(() => ({
     padding: 0 4px 14px;
   }
 
-  .nav-item-label,
-  .nav-item-badge {
+  .nav-item-label {
     display: none;
   }
 
