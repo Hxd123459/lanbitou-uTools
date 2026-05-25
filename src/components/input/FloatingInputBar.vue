@@ -194,7 +194,7 @@ const emit = defineEmits([
 
 const { presets } = useMotionPresets()
 
-const MIN_HEIGHT = 112
+const MIN_HEIGHT = 80
 const MAX_HEIGHT = 280
 const MAX_IMAGES = 20
 
