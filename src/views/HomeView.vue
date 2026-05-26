@@ -1,5 +1,5 @@
 <template>
-  <MainFrame :show-input-area="activeTab === 'home'">
+  <MainFrame :show-input-area="activeTab === 'home' && noteViewMode !== 'select'">
     <template #sidebar>
       <SidePanel :active-tab="activeTab" @tab-change="onTabChange" />
     </template>
@@ -30,9 +30,10 @@
         </div>
 
         <section
-          v-show="noteViewMode === 'list'"
+          v-show="noteViewMode === 'list' || noteViewMode === 'select'"
           ref="noteListRef"
           class="note-list"
+          :class="{ 'note-list--selecting': noteViewMode === 'select' }"
           @scroll="onNoteListScroll"
         >
           <header v-if="tagFilterState.active" class="tag-filter-summary">
@@ -58,7 +59,14 @@
             </motion.button>
           </header>
 
-          <p v-if="isSearchActive && searchState.loading" class="empty-state">
+          <p
+            v-if="noteViewMode === 'select' && !assistantStore.visibleNotes.length && !assistantStore.loadingNotes"
+            class="empty-state"
+          >
+            还没有笔记，先记录一条吧。
+          </p>
+
+          <p v-else-if="isSearchActive && searchState.loading" class="empty-state">
             搜索中…
           </p>
           <p
@@ -92,6 +100,24 @@
           >
             标签「{{ tagFilterState.tagName }}」下暂无笔记。
           </p>
+          <ul
+            v-else-if="noteViewMode === 'select'"
+            class="note-list-items"
+          >
+            <li
+              v-for="note in assistantStore.visibleNotes"
+              :key="`select-${note.id}`"
+              class="note-list-item"
+            >
+              <NoteCard
+                :note="note"
+                selectable
+                :selected="isNoteSelected(note.id)"
+                @toggle-select="toggleNoteSelect(note.id)"
+              />
+            </li>
+          </ul>
+
           <ul
             v-else-if="tagFilterState.active"
             class="note-list-items"
@@ -163,6 +189,18 @@
           </AnimatePresence>
         </section>
 
+        <div
+          v-if="noteViewMode === 'select' && selectedNoteIds.size > 0"
+          class="note-bulk-bar-wrap"
+        >
+          <NoteBulkActionBar
+            :count="selectedNoteIds.size"
+            :busy="bulkActionBusy"
+            @sediment="handleBulkSediment"
+            @delete="handleBulkDelete"
+          />
+        </div>
+
         <NoteTagCloud
           v-show="noteViewMode === 'tags'"
           :active="activeTab === 'home' && noteViewMode === 'tags'"
@@ -219,12 +257,18 @@ import MainFrame from '../components/layout/MainFrame.vue'
 import SedimentPanel from '../components/sediment/SedimentPanel.vue'
 import TrashPanel from '../components/trash/TrashPanel.vue'
 import SidePanel from '../components/layout/SidePanel.vue'
+import NoteBulkActionBar from '../components/note/NoteBulkActionBar.vue'
 import NoteCard from '../components/note/NoteCard.vue'
 import NoteTagCloud from '../components/note/NoteTagCloud.vue'
 import NoteViewSwitcher from '../components/note/NoteViewSwitcher.vue'
 import { useCopyNote } from '../composables/useCopyNote'
 import { ApiError } from '../api/http'
-import { deleteBlock, fetchNotesByTag, searchNotes } from '../api/note'
+import {
+  deleteBlock,
+  fetchNotesByTag,
+  moveBlocksToSediment,
+  searchNotes,
+} from '../api/note'
 import { useAssistantStore } from '../stores/assistantStore'
 
 const { presets } = useMotionPresets()
@@ -240,6 +284,8 @@ const noteViewMode = ref('list')
 const searchKeyword = ref('')
 const noteListRef = ref(null)
 const inputBarCompact = ref(false)
+const selectedNoteIds = ref(new Set())
+const bulkActionBusy = ref(false)
 let lastListScrollTop = 0
 let searchToken = 0
 
@@ -260,9 +306,31 @@ const tagFilterState = reactive({
 })
 let tagFilterToken = 0
 
+const clearNoteSelection = () => {
+  selectedNoteIds.value = new Set()
+}
+
+const isNoteSelected = (id) => selectedNoteIds.value.has(id)
+
+const toggleNoteSelect = (id) => {
+  const next = new Set(selectedNoteIds.value)
+  if (next.has(id)) next.delete(id)
+  else next.add(id)
+  selectedNoteIds.value = next
+}
+
 const onNoteViewModeChange = (mode) => {
+  if (noteViewMode.value === 'select' && mode !== 'select') {
+    clearNoteSelection()
+  }
   noteViewMode.value = mode
   if (mode === 'list') clearTagFilter()
+  if (mode === 'select') {
+    resetNoteSearch()
+    searchKeyword.value = ''
+    clearTagFilter()
+    scrollNoteListToTop()
+  }
 }
 
 const scrollNoteListToTop = () => {
@@ -313,9 +381,45 @@ const onNoteSearch = (keyword) => {
   runNoteSearch(trimmed)
 }
 
+const handleBulkDelete = () => {
+  const ids = [...selectedNoteIds.value]
+  if (!ids.length) return
+  clearNoteSelection()
+  ids.forEach((id) => handleDelete({ id }))
+}
+
+const handleBulkSediment = async () => {
+  const ids = [...selectedNoteIds.value]
+  if (!ids.length || bulkActionBusy.value) return
+  bulkActionBusy.value = true
+  try {
+    await moveBlocksToSediment(ids)
+    ids.forEach((id) => {
+      if (assistantStore.editingNoteId === id) {
+        assistantStore.setEditingNoteId(null)
+      }
+      assistantStore.removeNoteLocal(id)
+    })
+    clearNoteSelection()
+    noteViewMode.value = 'list'
+    activeTab.value = 'sediment'
+    openToast(`已将 ${ids.length} 条笔记移入沉淀`, 'success', { duration: 1800 })
+  } catch (error) {
+    notifyError(error)
+  } finally {
+    bulkActionBusy.value = false
+  }
+}
+
 const onNoteListScroll = () => {
   const el = noteListRef.value
-  if (!el || activeTab.value !== 'home' || noteViewMode.value !== 'list') return
+  if (
+    !el ||
+    activeTab.value !== 'home' ||
+    (noteViewMode.value !== 'list' && noteViewMode.value !== 'select')
+  ) {
+    return
+  }
 
   const top = el.scrollTop
   if (top <= 0) {
@@ -511,7 +615,7 @@ const notifyError = (error) => {
 }
 
 watch(noteViewMode, (mode) => {
-  if (mode !== 'list') {
+  if (mode !== 'list' && mode !== 'select') {
     inputBarCompact.value = false
     lastListScrollTop = 0
   }
@@ -541,7 +645,29 @@ onBeforeUnmount(() => {
 }
 
 .tab-panel--home {
+  position: relative;
   overflow: hidden;
+}
+
+.note-bulk-bar-wrap {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 16px;
+  z-index: 4;
+  display: flex;
+  justify-content: center;
+  padding: 0 4px;
+  box-sizing: border-box;
+  pointer-events: none;
+}
+
+.note-bulk-bar-wrap > * {
+  pointer-events: auto;
+}
+
+.note-list--selecting {
+  padding-bottom: 88px;
 }
 
 .home-view-switcher {

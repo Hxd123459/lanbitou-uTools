@@ -5,8 +5,37 @@
       'is-editing': isEditing,
       'is-pinned-top': isPinnedTop,
       'is-pinned-bottom': isPinnedBottom,
+      'is-selectable': selectable,
+      'is-selected': selectable && selected,
     }"
+    @click="onSelectableCardClick"
   >
+    <button
+      v-if="selectable && !note?.isPending"
+      type="button"
+      class="note-select-control"
+      :aria-pressed="selected"
+      :aria-label="selected ? '取消选中' : '选中笔记'"
+      @click.stop="emit('toggle-select')"
+    >
+      <span class="note-select-box" aria-hidden="true">
+        <svg
+          v-if="selected"
+          viewBox="0 0 24 24"
+          width="12"
+          height="12"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2.6"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m5 12 4 4L19 6" />
+        </svg>
+      </span>
+    </button>
+
+    <div class="note-card-main">
     <div class="note-meta">
       <div class="meta-left">
         <label
@@ -35,7 +64,7 @@
         >
         <span class="note-time">{{ timeText }}</span>
       </div>
-      <div v-if="!note?.isPending" class="meta-actions">
+      <div v-if="!selectable && !note?.isPending" class="meta-actions">
         <motion.button
           v-if="!isEditing"
           class="icon-btn"
@@ -315,6 +344,7 @@
 
       <NoteImageGallery v-if="images.length" :images="images" />
     </template>
+    </div>
   </article>
 </template>
 
@@ -350,6 +380,14 @@ const props = defineProps({
     type: String,
     default: '',
   },
+  selectable: {
+    type: Boolean,
+    default: false,
+  },
+  selected: {
+    type: Boolean,
+    default: false,
+  },
 })
 
 const emit = defineEmits([
@@ -359,6 +397,7 @@ const emit = defineEmits([
   'copy-failed',
   'pin',
   'image-too-large',
+  'toggle-select',
 ])
 
 const assistantStore = useAssistantStore()
@@ -864,6 +903,12 @@ function legacyCopy(text) {
   }
 }
 
+const onSelectableCardClick = (event) => {
+  if (!props.selectable || props.note?.isPending) return
+  if (event.target.closest('a, button, input, textarea, label, .thumb-strip')) return
+  emit('toggle-select')
+}
+
 function formatTime(dateValue) {
   if (!dateValue) return '----'
   const date = new Date(dateValue)
@@ -887,9 +932,58 @@ function formatTime(dateValue) {
   background: #ffffff;
 }
 
+.note-card.is-selectable {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  cursor: pointer;
+}
+
+.note-card.is-selected {
+  background: rgba(37, 99, 235, 0.06);
+  box-shadow: 0 0 0 1px rgba(37, 99, 235, 0.28);
+}
+
+.note-select-control {
+  flex: 0 0 auto;
+  margin-top: 2px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+}
+
+.note-select-box {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border: 1.5px solid var(--color-border);
+  border-radius: 4px;
+  background: var(--color-surface);
+  color: #ffffff;
+  box-sizing: border-box;
+}
+
+.note-card.is-selected .note-select-box {
+  border-color: var(--color-accent);
+  background: var(--color-accent);
+}
+
+.note-card-main {
+  flex: 1;
+  min-width: 0;
+}
+
 .note-card:hover,
 .note-card:focus-within {
   box-shadow: var(--shadow-card-hover);
+}
+
+.note-card.is-selected:hover,
+.note-card.is-selected:focus-within {
+  box-shadow: 0 0 0 1px rgba(37, 99, 235, 0.34);
 }
 
 .note-card.is-editing {

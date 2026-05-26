@@ -127,6 +127,13 @@ export async function deleteBlock(id) {
   return get('/api/note/delete', { id })
 }
 
+/** 将碎片笔记批量移入沉淀（根目录） */
+export async function moveBlocksToSediment(ids, parentId = 0) {
+  const idList = (Array.isArray(ids) ? ids : [ids]).filter((id) => id != null)
+  if (!idList.length) return null
+  return post('/api/note/moveToSediment', { ids: idList, parentId })
+}
+
 export async function setPinBlock(id, pinWeightValue) {
   const data = await post('/api/note/setPin', { id, pinWeightValue })
   return data

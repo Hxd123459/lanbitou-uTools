@@ -29,7 +29,7 @@
             <path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01" />
           </svg>
           <svg
-            v-else
+            v-else-if="item.id === 'tags'"
             viewBox="0 0 24 24"
             width="14"
             height="14"
@@ -42,12 +42,26 @@
             <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z" />
             <circle cx="7" cy="7" r="1.5" fill="currentColor" stroke="none" />
           </svg>
+          <svg
+            v-else
+            viewBox="0 0 24 24"
+            width="14"
+            height="14"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.8"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <rect x="3" y="3" width="18" height="18" rx="3" />
+            <path d="m9 12 2 2 4-4" />
+          </svg>
         </span>
         <span>{{ item.label }}</span>
       </motion.button>
     </div>
 
-    <div class="switcher-search-area">
+    <div v-if="modelValue !== 'select'" class="switcher-search-area">
       <AnimatePresence mode="wait" :initial="false">
         <motion.button
           v-if="!searchExpanded"
@@ -148,6 +162,7 @@ const { presets } = useMotionPresets()
 const modes = [
   { id: 'list', label: '列表' },
   { id: 'tags', label: '标签' },
+  { id: 'select', label: '选择' },
 ]
 
 const draftQuery = ref('')
