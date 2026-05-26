@@ -21,10 +21,10 @@
         <input
           type="search"
           class="sidebar-search-input"
-          placeholder="搜索笔记…"
+          placeholder="给我一个想法"
           autocomplete="off"
           spellcheck="false"
-          aria-label="搜索笔记"
+          aria-label="给我一个想法"
         />
       </label>
     </div>
