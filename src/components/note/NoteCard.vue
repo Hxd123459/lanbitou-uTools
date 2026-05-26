@@ -926,8 +926,10 @@ function formatTime(dateValue) {
 <style scoped>
 .note-card {
   position: relative;
+  width: 100%;
+  box-sizing: border-box;
   padding: 14px 16px;
-  border: 0;
+  border: 1px solid transparent;
   border-radius: var(--radius-md);
   background: #ffffff;
 }
@@ -941,7 +943,7 @@ function formatTime(dateValue) {
 
 .note-card.is-selected {
   background: rgba(37, 99, 235, 0.06);
-  box-shadow: 0 0 0 1px rgba(37, 99, 235, 0.28);
+  border-color: rgba(37, 99, 235, 0.32);
 }
 
 .note-select-control {
@@ -978,16 +980,17 @@ function formatTime(dateValue) {
 
 .note-card:hover,
 .note-card:focus-within {
-  box-shadow: var(--shadow-card-hover);
+  border-color: rgba(200, 200, 200, 0.45);
 }
 
 .note-card.is-selected:hover,
 .note-card.is-selected:focus-within {
-  box-shadow: 0 0 0 1px rgba(37, 99, 235, 0.34);
+  border-color: rgba(37, 99, 235, 0.42);
 }
 
 .note-card.is-editing {
-  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.08);
+  border-color: rgba(37, 99, 235, 0.22);
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.08);
 }
 
 .note-meta {

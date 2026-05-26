@@ -1,5 +1,5 @@
 <template>
-  <MainFrame :show-input-area="activeTab === 'home' && noteViewMode !== 'select'">
+  <MainFrame :show-input-area="activeTab === 'home'">
     <template #sidebar>
       <SidePanel :active-tab="activeTab" @tab-change="onTabChange" />
     </template>
@@ -60,10 +60,10 @@
           </header>
 
           <p
-            v-if="noteViewMode === 'select' && !assistantStore.visibleNotes.length && !assistantStore.loadingNotes"
+            v-if="noteViewMode === 'select' && isDisplayedNotesLoading"
             class="empty-state"
           >
-            还没有笔记，先记录一条吧。
+            加载中…
           </p>
 
           <p v-else-if="isSearchActive && searchState.loading" class="empty-state">
@@ -78,6 +78,7 @@
 
           <p
             v-else-if="
+              noteViewMode !== 'select' &&
               !isSearchActive &&
               !tagFilterState.active &&
               !assistantStore.visibleNotes.length &&
@@ -100,17 +101,29 @@
           >
             标签「{{ tagFilterState.tagName }}」下暂无笔记。
           </p>
+          <p
+            v-else-if="
+              noteViewMode === 'select' &&
+              !isSearchActive &&
+              !tagFilterState.active &&
+              !displayedNotes.length
+            "
+            class="empty-state"
+          >
+            还没有笔记，先记录一条吧。
+          </p>
           <ul
             v-else-if="noteViewMode === 'select'"
             class="note-list-items"
           >
             <li
-              v-for="note in assistantStore.visibleNotes"
+              v-for="note in displayedNotes"
               :key="`select-${note.id}`"
               class="note-list-item"
             >
               <NoteCard
                 :note="note"
+                :highlight="isSearchActive ? searchKeyword : ''"
                 selectable
                 :selected="isNoteSelected(note.id)"
                 @toggle-select="toggleNoteSelect(note.id)"
@@ -194,7 +207,6 @@
           class="note-bulk-bar-wrap"
         >
           <NoteBulkActionBar
-            :count="selectedNoteIds.size"
             :busy="bulkActionBusy"
             @sediment="handleBulkSediment"
             @delete="handleBulkDelete"
@@ -297,6 +309,18 @@ const searchState = reactive({
 
 const isSearchActive = computed(() => searchKeyword.value.length > 0)
 
+const displayedNotes = computed(() => {
+  if (tagFilterState.active) return tagFilterState.list
+  if (isSearchActive.value) return searchState.list
+  return assistantStore.visibleNotes
+})
+
+const isDisplayedNotesLoading = computed(() => {
+  if (tagFilterState.active) return tagFilterState.loading
+  if (isSearchActive.value) return searchState.loading
+  return assistantStore.loadingNotes
+})
+
 const tagFilterState = reactive({
   active: false,
   loading: false,
@@ -320,17 +344,14 @@ const toggleNoteSelect = (id) => {
 }
 
 const onNoteViewModeChange = (mode) => {
-  if (noteViewMode.value === 'select' && mode !== 'select') {
+  const prev = noteViewMode.value
+  if (prev === 'select' && mode !== 'select') {
     clearNoteSelection()
   }
-  noteViewMode.value = mode
-  if (mode === 'list') clearTagFilter()
-  if (mode === 'select') {
-    resetNoteSearch()
-    searchKeyword.value = ''
+  if (prev === 'tags' && mode === 'list') {
     clearTagFilter()
-    scrollNoteListToTop()
   }
+  noteViewMode.value = mode
 }
 
 const scrollNoteListToTop = () => {
@@ -667,16 +688,18 @@ onBeforeUnmount(() => {
 }
 
 .note-list--selecting {
-  padding-bottom: 88px;
+  padding-bottom: 108px;
 }
 
 .home-view-switcher {
   flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  min-height: 36px;
   width: 100%;
   max-width: var(--frame-inner-width);
   margin-bottom: 10px;
   box-sizing: border-box;
-  overflow: hidden;
 }
 
 .note-list {
@@ -684,7 +707,7 @@ onBeforeUnmount(() => {
   min-height: 0;
   overflow-y: auto;
   overflow-x: hidden;
-  padding: 0 0 28px;
+  padding: 0 4px 28px;
   display: flex;
   flex-direction: column;
   align-items: flex-start;

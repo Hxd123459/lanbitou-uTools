@@ -247,6 +247,7 @@ onBeforeUnmount(() => {
   align-items: center;
   gap: 10px;
   width: 100%;
+  min-height: 36px;
   box-sizing: border-box;
 }
 
@@ -257,6 +258,7 @@ onBeforeUnmount(() => {
   gap: 6px;
   flex: 0 1 auto;
   min-width: 0;
+  align-self: center;
 }
 
 .switcher-search-area {
@@ -264,8 +266,10 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: center;
   justify-content: flex-end;
+  align-self: center;
   margin-left: auto;
   min-width: 28px;
+  min-height: 28px;
   overflow: hidden;
 }
 
