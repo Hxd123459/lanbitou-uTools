@@ -210,23 +210,19 @@ export async function setPinBlock(id, pinWeightValue) {
   return data
 }
 
-export async function searchNotes({ keyword, page = 1, size = 20 } = {}) {
-  const safePage = Number.isFinite(page) && page >= 1 ? Math.floor(page) : 1
-  const safeSize = Math.min(
-    Math.max(Number.isFinite(size) ? Math.floor(size) : 20, 1),
-    50,
-  )
+export async function searchNotes({
+  keyword,
+  page = 1,
+  pageSize = NOTE_LIST_PAGE_SIZE,
+} = {}) {
+  const safePage = normalizePageNo(page)
+  const safeSize = normalizePageSize(pageSize)
   const data = await get('/api/note/search', {
     keyword: (keyword ?? '').trim(),
     page: safePage,
     size: safeSize,
   })
-  return {
-    total: data?.total ?? 0,
-    page: data?.page ?? safePage,
-    size: data?.size ?? safeSize,
-    list: Array.isArray(data?.list) ? data.list.map(mapBlockToNote) : [],
-  }
+  return parseBlockListPage(data, safePage, safeSize)
 }
 
 export async function fetchRecycleList() {

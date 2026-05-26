@@ -44,9 +44,7 @@
             </span>
             <span class="tag-filter-summary-count">
               <template v-if="tagFilterState.loading">加载中…</template>
-              <template v-else-if="tagFilterState.list.length">
-                共 {{ tagFilterState.list.length }} 条
-              </template>
+              <template v-else>共 {{ tagFilterState.total }} 条</template>
             </span>
             <motion.button
               type="button"
@@ -312,8 +310,11 @@ let searchToken = 0
 
 const searchState = reactive({
   loading: false,
+  loadingMore: false,
   list: [],
   total: 0,
+  pageNo: 0,
+  hasMore: false,
 })
 
 const isSearchActive = computed(() => searchKeyword.value.length > 0)
@@ -331,7 +332,8 @@ const isDisplayedNotesLoading = computed(() => {
 })
 
 const showListLoadingMore = computed(() => {
-  if (noteViewMode.value === 'select' || isSearchActive.value) return false
+  if (noteViewMode.value === 'select') return false
+  if (isSearchActive.value) return searchState.loadingMore
   if (tagFilterState.active) return tagFilterState.loadingMore
   return assistantStore.loadingMoreNotes
 })
@@ -343,6 +345,7 @@ const tagFilterState = reactive({
   tagId: '',
   tagName: '',
   list: [],
+  total: 0,
   pageNo: 0,
   hasMore: false,
 })
@@ -379,32 +382,68 @@ const scrollNoteListToTop = () => {
   lastListScrollTop = 0
 }
 
-const runNoteSearch = async (keyword) => {
+const appendSearchNotes = (list) => {
+  const existing = new Set(searchState.list.map((note) => note.id))
+  const next = list.filter((note) => note?.id && !existing.has(note.id))
+  if (!next.length) return
+  searchState.list = [...searchState.list, ...next]
+}
+
+const runNoteSearch = async (keyword, { reset = true } = {}) => {
+  if (!reset && !searchState.hasMore) return
+  if (searchState.loading || searchState.loadingMore) return
+
   const myToken = ++searchToken
-  searchState.loading = true
-  scrollNoteListToTop()
+  const page = reset ? 1 : searchState.pageNo + 1
+  if (reset) {
+    searchState.loading = true
+    scrollNoteListToTop()
+  } else {
+    searchState.loadingMore = true
+  }
+
   try {
-    const { list, total } = await searchNotes({ keyword, size: 50 })
+    const result = await searchNotes({
+      keyword,
+      page,
+      pageSize: NOTE_LIST_PAGE_SIZE,
+    })
     if (myToken !== searchToken) return
-    searchState.list = list
-    searchState.total = total
+    if (reset) {
+      searchState.list = result.list
+    } else {
+      appendSearchNotes(result.list)
+    }
+    searchState.total = result.total
+    searchState.pageNo = result.pageNo
+    searchState.hasMore = result.hasMore
   } catch (error) {
     if (myToken !== searchToken) return
-    searchState.list = []
+    if (reset) searchState.list = []
     notifyError(error)
   } finally {
     if (myToken === searchToken) {
       searchState.loading = false
-      scrollNoteListToTop()
+      searchState.loadingMore = false
+      if (reset) scrollNoteListToTop()
     }
   }
+}
+
+const loadMoreSearch = async () => {
+  const keyword = searchKeyword.value.trim()
+  if (!keyword) return
+  await runNoteSearch(keyword, { reset: false })
 }
 
 const resetNoteSearch = () => {
   searchToken += 1
   searchState.loading = false
+  searchState.loadingMore = false
   searchState.list = []
   searchState.total = 0
+  searchState.pageNo = 0
+  searchState.hasMore = false
 }
 
 const onNoteSearch = (keyword) => {
@@ -471,14 +510,14 @@ const onNoteListScroll = () => {
 
   const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 80
   if (nearBottom) {
-    if (
-      noteViewMode.value === 'list' &&
-      !isSearchActive.value &&
-      !tagFilterState.active
-    ) {
-      assistantStore.loadMoreNotes()
+    if (noteViewMode.value !== 'list' && noteViewMode.value !== 'select') return
+
+    if (isSearchActive.value) {
+      loadMoreSearch()
     } else if (tagFilterState.active) {
       loadMoreTagNotes()
+    } else {
+      assistantStore.loadMoreNotes()
     }
   }
 
@@ -500,6 +539,7 @@ const clearTagFilter = () => {
   tagFilterState.tagId = ''
   tagFilterState.tagName = ''
   tagFilterState.list = []
+  tagFilterState.total = 0
   tagFilterState.pageNo = 0
   tagFilterState.hasMore = false
 }
@@ -524,6 +564,7 @@ const handleTagSelect = async (tag) => {
   tagFilterState.loading = true
   tagFilterState.loadingMore = false
   tagFilterState.list = []
+  tagFilterState.total = 0
   tagFilterState.pageNo = 0
   tagFilterState.hasMore = false
 
@@ -534,6 +575,7 @@ const handleTagSelect = async (tag) => {
     })
     if (myToken !== tagFilterToken) return
     tagFilterState.list = result.list
+    tagFilterState.total = result.total
     tagFilterState.pageNo = result.pageNo
     tagFilterState.hasMore = result.hasMore
   } catch (error) {
@@ -543,9 +585,11 @@ const handleTagSelect = async (tag) => {
     )
     if (local.length) {
       tagFilterState.list = local
+      tagFilterState.total = local.length
       tagFilterState.hasMore = false
     } else {
       tagFilterState.list = []
+      tagFilterState.total = 0
       notifyError(error)
     }
   } finally {
