@@ -24,6 +24,7 @@
           <NoteViewSwitcher
             :model-value="noteViewMode"
             :search-query="searchKeyword"
+            :selected-count="selectedNoteIds.size"
             @update:model-value="onNoteViewModeChange"
             @search="onNoteSearch"
           />
@@ -462,8 +463,14 @@ const clearTagFilter = () => {
   tagFilterState.list = []
 }
 
+const clearSearch = () => {
+  resetNoteSearch()
+  searchKeyword.value = ''
+}
+
 const handleTagSelect = async (tag) => {
   noteViewMode.value = 'list'
+  if (searchKeyword.value) clearSearch()
 
   const tagId = tag?.tagId
   const tagName = tag?.tagName || '未命名'
@@ -688,7 +695,7 @@ onBeforeUnmount(() => {
 }
 
 .note-list--selecting {
-  padding-bottom: 108px;
+  padding-bottom: 92px;
 }
 
 .home-view-switcher {

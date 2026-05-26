@@ -19,8 +19,8 @@
       <span class="note-bulk-btn-icon" aria-hidden="true">
         <svg
           viewBox="0 0 24 24"
-          width="22"
-          height="22"
+          width="18"
+          height="18"
           fill="none"
           stroke="currentColor"
           stroke-width="1.8"
@@ -45,8 +45,8 @@
       <span class="note-bulk-btn-icon" aria-hidden="true">
         <svg
           viewBox="0 0 24 24"
-          width="22"
-          height="22"
+          width="18"
+          height="18"
           fill="none"
           stroke="currentColor"
           stroke-width="1.8"
@@ -84,10 +84,10 @@ const { presets } = useMotionPresets()
 .note-bulk-bar {
   display: inline-flex;
   align-items: stretch;
-  gap: 10px;
+  gap: 8px;
   width: fit-content;
   max-width: calc(100vw - 48px);
-  padding: 10px 12px;
+  padding: 8px 10px;
   border-radius: var(--radius-md);
   border: 1px solid var(--color-border);
   background: var(--color-surface);
@@ -100,22 +100,23 @@ const { presets } = useMotionPresets()
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 6px;
-  min-width: 72px;
-  min-height: 72px;
-  padding: 10px 14px;
+  gap: 4px;
+  min-width: 56px;
+  min-height: 56px;
+  padding: 8px 10px;
   border: 0;
-  border-radius: 10px;
-  background: rgba(24, 24, 27, 0.06);
+  border-radius: 8px;
+  background: transparent;
   color: var(--color-primary);
-  font-size: 13px;
-  font-weight: 600;
+  font-size: 11px;
+  font-weight: 500;
   font-family: inherit;
   cursor: pointer;
+  transition: background 0.15s ease;
 }
 
 .note-bulk-btn:hover:not(:disabled) {
-  background: rgba(24, 24, 27, 0.1);
+  background: rgba(24, 24, 27, 0.08);
 }
 
 .note-bulk-btn:disabled {
@@ -125,11 +126,10 @@ const { presets } = useMotionPresets()
 
 .note-bulk-btn--danger {
   color: var(--color-error);
-  background: rgba(220, 38, 38, 0.08);
 }
 
 .note-bulk-btn--danger:hover:not(:disabled) {
-  background: rgba(220, 38, 38, 0.14);
+  background: rgba(220, 38, 38, 0.1);
 }
 
 .note-bulk-btn-icon {

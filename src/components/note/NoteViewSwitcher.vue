@@ -61,7 +61,14 @@
       </motion.button>
     </div>
 
-    <div v-if="modelValue !== 'select'" class="switcher-search-area">
+    <span
+      v-if="modelValue === 'select' && selectedCount > 0"
+      class="switcher-selection-count"
+    >
+      已选 {{ selectedCount }} 条
+    </span>
+
+    <div class="switcher-search-area">
       <AnimatePresence mode="wait" :initial="false">
         <motion.button
           v-if="!searchExpanded"
@@ -153,6 +160,10 @@ const props = defineProps({
     type: String,
     default: '',
   },
+  selectedCount: {
+    type: Number,
+    default: 0,
+  },
 })
 
 const emit = defineEmits(['update:modelValue', 'search'])
@@ -232,7 +243,11 @@ watch(
     if (keyword !== draftQuery.value.trim()) {
       draftQuery.value = keyword
     }
-    if (keyword) searchExpanded.value = true
+    if (keyword) {
+      searchExpanded.value = true
+    } else if (!draftQuery.value.trim()) {
+      searchExpanded.value = false
+    }
   },
 )
 
@@ -259,6 +274,19 @@ onBeforeUnmount(() => {
   flex: 0 1 auto;
   min-width: 0;
   align-self: center;
+}
+
+.switcher-selection-count {
+  flex: 0 0 auto;
+  margin-left: 2px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: rgba(37, 99, 235, 0.08);
+  color: var(--color-accent);
+  font-size: 12px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.4;
 }
 
 .switcher-search-area {
