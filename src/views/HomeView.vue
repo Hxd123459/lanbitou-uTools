@@ -20,23 +20,14 @@
     <template #content>
       <!-- 主页：v-show 保活 DOM，避免切回时重挂载阻塞侧栏选中态 -->
       <div v-show="activeTab === 'home'" class="tab-panel tab-panel--home">
-        <AnimatePresence :initial="false">
-          <motion.div
-            v-if="switcherVisible"
-            key="home-view-switcher"
-            class="home-view-switcher"
-            :initial="presets.reveal.initial"
-            :animate="presets.reveal.animate"
-            :exit="presets.reveal.exit"
-            :transition="presets.reveal.transition"
-          >
-            <NoteViewSwitcher
-              :model-value="noteViewMode"
-              @update:model-value="onNoteViewModeChange"
-              @search="onNoteSearch"
-            />
-          </motion.div>
-        </AnimatePresence>
+        <div class="home-view-switcher">
+          <NoteViewSwitcher
+            :model-value="noteViewMode"
+            :search-query="searchKeyword"
+            @update:model-value="onNoteViewModeChange"
+            @search="onNoteSearch"
+          />
+        </div>
 
         <section
           v-show="noteViewMode === 'list'"
@@ -248,7 +239,6 @@ const activeTab = ref('home')
 const noteViewMode = ref('list')
 const searchKeyword = ref('')
 const noteListRef = ref(null)
-const switcherVisible = ref(true)
 const inputBarCompact = ref(false)
 let lastListScrollTop = 0
 let searchToken = 0
@@ -275,9 +265,17 @@ const onNoteViewModeChange = (mode) => {
   if (mode === 'list') clearTagFilter()
 }
 
+const scrollNoteListToTop = () => {
+  const el = noteListRef.value
+  if (!el) return
+  el.scrollTop = 0
+  lastListScrollTop = 0
+}
+
 const runNoteSearch = async (keyword) => {
   const myToken = ++searchToken
   searchState.loading = true
+  scrollNoteListToTop()
   try {
     const { list, total } = await searchNotes({ keyword, size: 50 })
     if (myToken !== searchToken) return
@@ -288,7 +286,10 @@ const runNoteSearch = async (keyword) => {
     searchState.list = []
     notifyError(error)
   } finally {
-    if (myToken === searchToken) searchState.loading = false
+    if (myToken === searchToken) {
+      searchState.loading = false
+      scrollNoteListToTop()
+    }
   }
 }
 
@@ -304,6 +305,7 @@ const onNoteSearch = (keyword) => {
   searchKeyword.value = trimmed
   if (!trimmed) {
     resetNoteSearch()
+    scrollNoteListToTop()
     return
   }
   noteViewMode.value = 'list'
@@ -317,13 +319,10 @@ const onNoteListScroll = () => {
 
   const top = el.scrollTop
   if (top <= 0) {
-    switcherVisible.value = true
     inputBarCompact.value = false
   } else if (top > lastListScrollTop) {
-    switcherVisible.value = false
     inputBarCompact.value = true
   } else if (top < lastListScrollTop) {
-    switcherVisible.value = true
     inputBarCompact.value = false
   }
   lastListScrollTop = top
@@ -513,7 +512,6 @@ const notifyError = (error) => {
 
 watch(noteViewMode, (mode) => {
   if (mode !== 'list') {
-    switcherVisible.value = true
     inputBarCompact.value = false
     lastListScrollTop = 0
   }

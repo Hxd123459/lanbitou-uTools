@@ -115,6 +115,7 @@
             aria-label="搜索笔记"
             @input="onDraftInput"
             @blur="onSearchBlur"
+            @keydown.esc="onSearchEscape"
           />
         </motion.label>
       </AnimatePresence>
@@ -123,16 +124,20 @@
 </template>
 
 <script setup>
-import { computed, nextTick, onBeforeUnmount, ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { AnimatePresence, motion } from 'motion-v'
 import { useMotionPresets } from '../../composables/useMotionPresets'
 
 const SEARCH_DEBOUNCE_MS = 400
 
-defineProps({
+const props = defineProps({
   modelValue: {
     type: String,
     default: 'list',
+  },
+  searchQuery: {
+    type: String,
+    default: '',
   },
 })
 
@@ -150,7 +155,9 @@ const searchExpanded = ref(false)
 const searchInputRef = ref(null)
 let debounceTimer = null
 
-const hasDraft = computed(() => draftQuery.value.trim().length > 0)
+const hasDraft = computed(
+  () => draftQuery.value.trim().length > 0 || props.searchQuery.trim().length > 0,
+)
 
 const searchToggleMotion = computed(() => ({
   initial: { opacity: 0, scale: 0.9 },
@@ -172,12 +179,9 @@ const emitSearch = (keyword) => {
 
 const scheduleSearch = () => {
   clearTimeout(debounceTimer)
-  const keyword = draftQuery.value.trim()
-  if (!keyword) {
-    emitSearch('')
-    return
-  }
-  debounceTimer = window.setTimeout(() => emitSearch(keyword), SEARCH_DEBOUNCE_MS)
+  debounceTimer = window.setTimeout(() => {
+    emitSearch(draftQuery.value.trim())
+  }, SEARCH_DEBOUNCE_MS)
 }
 
 const onDraftInput = (event) => {
@@ -186,13 +190,36 @@ const onDraftInput = (event) => {
 }
 
 const openSearch = () => {
+  if (!draftQuery.value && props.searchQuery) {
+    draftQuery.value = props.searchQuery
+  }
   searchExpanded.value = true
   nextTick(() => searchInputRef.value?.focus())
 }
 
-const onSearchBlur = () => {
+const onSearchBlur = (event) => {
+  const root = event.currentTarget?.closest('.note-view-switcher')
+  if (root?.contains(event.relatedTarget)) return
+  if (hasDraft.value) return
   searchExpanded.value = false
 }
+
+const onSearchEscape = () => {
+  if (!hasDraft.value) {
+    searchExpanded.value = false
+    searchInputRef.value?.blur()
+  }
+}
+
+watch(
+  () => props.searchQuery,
+  (keyword) => {
+    if (keyword !== draftQuery.value.trim()) {
+      draftQuery.value = keyword
+    }
+    if (keyword) searchExpanded.value = true
+  },
+)
 
 onBeforeUnmount(() => {
   clearTimeout(debounceTimer)

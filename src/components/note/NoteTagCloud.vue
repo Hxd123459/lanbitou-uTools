@@ -145,9 +145,13 @@ onMounted(() => {
   font-weight: 600;
   font-variant-numeric: tabular-nums;
   color: var(--color-secondary-text);
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: rgba(24, 24, 27, 0.08);
 }
 
 .tag-cloud-item:hover .tag-cloud-count {
   color: var(--color-accent);
+  background: rgba(37, 99, 235, 0.12);
 }
 </style>
