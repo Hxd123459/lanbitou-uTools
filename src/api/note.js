@@ -41,7 +41,73 @@ function mapBlockToNote(item) {
   }
 }
 
-export async function fetchBlockListByDate(currentDate, tagId = null) {
+export const NOTE_LIST_PAGE_SIZE = 20
+
+function normalizePageNo(pageNo) {
+  return Number.isFinite(pageNo) && pageNo >= 1 ? Math.floor(pageNo) : 1
+}
+
+function normalizePageSize(pageSize) {
+  const fallback = NOTE_LIST_PAGE_SIZE
+  return Math.min(
+    Math.max(Number.isFinite(pageSize) ? Math.floor(pageSize) : fallback, 1),
+    50,
+  )
+}
+
+/**
+ * 解析 listByDay 分页响应（http 层已解包为 data 对象）：
+ * { records, total, size, current, pages }
+ */
+function parseBlockListPage(data, pageNo, pageSize) {
+  let rawList = []
+  let total = null
+  let resolvedPageNo = pageNo
+  let resolvedPageSize = pageSize
+  let totalPages = null
+
+  if (Array.isArray(data)) {
+    rawList = data
+  } else if (data && typeof data === 'object') {
+    rawList = data.records ?? data.list ?? data.rows ?? []
+    total = data.total ?? data.totalCount ?? data.count ?? null
+    resolvedPageNo = data.current ?? data.pageNo ?? data.page ?? pageNo
+    resolvedPageSize = data.size ?? data.pageSize ?? pageSize
+    totalPages = data.pages ?? data.totalPages ?? null
+  }
+
+  const list = Array.isArray(rawList) ? rawList.map(mapBlockToNote) : []
+  const safePageNo = normalizePageNo(resolvedPageNo)
+  const safePageSize = normalizePageSize(resolvedPageSize)
+  const totalNum =
+    total != null && Number.isFinite(Number(total)) ? Number(total) : null
+  const pagesNum =
+    totalPages != null && Number.isFinite(Number(totalPages))
+      ? Number(totalPages)
+      : null
+
+  const hasMore =
+    pagesNum != null
+      ? safePageNo < pagesNum
+      : totalNum != null
+        ? safePageNo * safePageSize < totalNum
+        : list.length >= safePageSize
+
+  return {
+    list,
+    total: totalNum ?? list.length,
+    pageNo: safePageNo,
+    pageSize: safePageSize,
+    pages: pagesNum,
+    hasMore,
+  }
+}
+
+export async function fetchBlockListByDate(
+  currentDate,
+  tagId = null,
+  { pageNo = 1, pageSize = NOTE_LIST_PAGE_SIZE } = {},
+) {
   let date = currentDate
   if (!date) {
     date = formatDateParam(new Date())
@@ -49,15 +115,20 @@ export async function fetchBlockListByDate(currentDate, tagId = null) {
     date = formatDateParam(date)
   }
 
+  const safePageNo = normalizePageNo(pageNo)
+  const safePageSize = normalizePageSize(pageSize)
+
   const body = {
     date,
     tagId:
       tagId != null && tagId !== '' && Number.isFinite(Number(tagId))
         ? Number(tagId)
         : null,
+    pageNo: safePageNo,
+    pageSize: safePageSize,
   }
   const data = await post('/api/note/listByDay', body)
-  return Array.isArray(data) ? data.map(mapBlockToNote) : []
+  return parseBlockListPage(data, safePageNo, safePageSize)
 }
 
 export async function createBlock(content, images = [], onProgress) {
@@ -178,6 +249,6 @@ export async function fetchAllTags() {
   return Array.isArray(data) ? data : []
 }
 
-export async function fetchNotesByTag(tagId) {
-  return fetchBlockListByDate(undefined, tagId)
+export async function fetchNotesByTag(tagId, pagination = {}) {
+  return fetchBlockListByDate(undefined, tagId, pagination)
 }

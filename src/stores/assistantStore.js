@@ -6,6 +6,7 @@ import {
   fetchBlockListByDate,
   formatDateParam,
   mapBlockResources,
+  NOTE_LIST_PAGE_SIZE,
   setPinBlock,
   shiftDateString,
   updateBlock,
@@ -21,6 +22,10 @@ export const useAssistantStore = defineStore('assistant', () => {
   const notes = ref([])
   const noteIdSet = ref(new Set())
   const loadingNotes = ref(false)
+  const loadingMoreNotes = ref(false)
+  const hasMoreNotes = ref(true)
+  const currentPageNo = ref(0)
+  const currentListDate = ref(formatDateParam(new Date()))
   const nextDateCursor = ref(formatDateParam(new Date()))
   const editingNoteId = ref(null)
 
@@ -56,25 +61,48 @@ export const useAssistantStore = defineStore('assistant', () => {
     notes.value = [...notes.value, ...next]
   }
 
-  const loadNotesByDate = async (currentDate, isInitial) => {
-    if (!isInitial) return
-    loadingNotes.value = true
+  const loadNotesByDate = async (currentDate, { reset = false } = {}) => {
+    if (loadingNotes.value || loadingMoreNotes.value) return
+    if (!reset && !hasMoreNotes.value) return
+
+    const pageNo = reset ? 1 : currentPageNo.value + 1
+    if (reset) {
+      loadingNotes.value = true
+    } else {
+      loadingMoreNotes.value = true
+    }
 
     try {
-      const list = await fetchBlockListByDate(currentDate)
-      appendNotes(list)
-      const baseDate = currentDate || formatDateParam(new Date())
-      nextDateCursor.value = shiftDateString(baseDate, -1)
+      const date = currentDate || formatDateParam(new Date())
+      const result = await fetchBlockListByDate(date, null, {
+        pageNo,
+        pageSize: NOTE_LIST_PAGE_SIZE,
+      })
+      appendNotes(result.list)
+      currentPageNo.value = result.pageNo
+      hasMoreNotes.value = result.hasMore
+      currentListDate.value = date
+      if (reset) {
+        nextDateCursor.value = shiftDateString(date, -1)
+      }
     } finally {
       loadingNotes.value = false
+      loadingMoreNotes.value = false
     }
   }
 
   const loadInitialNotes = async () => {
     notes.value = []
     noteIdSet.value = new Set()
+    currentPageNo.value = 0
+    hasMoreNotes.value = true
+    currentListDate.value = formatDateParam(new Date())
     nextDateCursor.value = formatDateParam(new Date())
-    await loadNotesByDate(undefined, true)
+    await loadNotesByDate(undefined, { reset: true })
+  }
+
+  const loadMoreNotes = async () => {
+    await loadNotesByDate(currentListDate.value, { reset: false })
   }
 
   const addNote = async (text, images = [], onProgress) => {
@@ -162,12 +190,15 @@ export const useAssistantStore = defineStore('assistant', () => {
     notes,
     visibleNotes,
     loadingNotes,
+    loadingMoreNotes,
+    hasMoreNotes,
     editingNoteId,
     addNote,
     updateNote,
     removeNote,
     setPinNote,
     loadInitialNotes,
+    loadMoreNotes,
     setEditingNoteId,
     setNotePendingDelete,
     removeNoteLocal,

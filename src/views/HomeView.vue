@@ -201,6 +201,13 @@
               />
             </motion.li>
           </AnimatePresence>
+
+          <p
+            v-if="showListLoadingMore"
+            class="note-list-load-more"
+          >
+            加载更多…
+          </p>
         </section>
 
         <div
@@ -280,6 +287,7 @@ import {
   deleteBlock,
   fetchNotesByTag,
   moveBlocksToSediment,
+  NOTE_LIST_PAGE_SIZE,
   searchNotes,
 } from '../api/note'
 import { useAssistantStore } from '../stores/assistantStore'
@@ -322,12 +330,21 @@ const isDisplayedNotesLoading = computed(() => {
   return assistantStore.loadingNotes
 })
 
+const showListLoadingMore = computed(() => {
+  if (noteViewMode.value === 'select' || isSearchActive.value) return false
+  if (tagFilterState.active) return tagFilterState.loadingMore
+  return assistantStore.loadingMoreNotes
+})
+
 const tagFilterState = reactive({
   active: false,
   loading: false,
+  loadingMore: false,
   tagId: '',
   tagName: '',
   list: [],
+  pageNo: 0,
+  hasMore: false,
 })
 let tagFilterToken = 0
 
@@ -451,16 +468,40 @@ const onNoteListScroll = () => {
   } else if (top < lastListScrollTop) {
     inputBarCompact.value = false
   }
+
+  const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 80
+  if (nearBottom) {
+    if (
+      noteViewMode.value === 'list' &&
+      !isSearchActive.value &&
+      !tagFilterState.active
+    ) {
+      assistantStore.loadMoreNotes()
+    } else if (tagFilterState.active) {
+      loadMoreTagNotes()
+    }
+  }
+
   lastListScrollTop = top
+}
+
+const appendTagNotes = (list) => {
+  const existing = new Set(tagFilterState.list.map((note) => note.id))
+  const next = list.filter((note) => note?.id && !existing.has(note.id))
+  if (!next.length) return
+  tagFilterState.list = [...tagFilterState.list, ...next]
 }
 
 const clearTagFilter = () => {
   tagFilterToken += 1
   tagFilterState.active = false
   tagFilterState.loading = false
+  tagFilterState.loadingMore = false
   tagFilterState.tagId = ''
   tagFilterState.tagName = ''
   tagFilterState.list = []
+  tagFilterState.pageNo = 0
+  tagFilterState.hasMore = false
 }
 
 const clearSearch = () => {
@@ -481,12 +522,20 @@ const handleTagSelect = async (tag) => {
   tagFilterState.tagId = tagId
   tagFilterState.tagName = tagName
   tagFilterState.loading = true
+  tagFilterState.loadingMore = false
   tagFilterState.list = []
+  tagFilterState.pageNo = 0
+  tagFilterState.hasMore = false
 
   try {
-    const list = await fetchNotesByTag(tagId)
+    const result = await fetchNotesByTag(tagId, {
+      pageNo: 1,
+      pageSize: NOTE_LIST_PAGE_SIZE,
+    })
     if (myToken !== tagFilterToken) return
-    tagFilterState.list = list
+    tagFilterState.list = result.list
+    tagFilterState.pageNo = result.pageNo
+    tagFilterState.hasMore = result.hasMore
   } catch (error) {
     if (myToken !== tagFilterToken) return
     const local = assistantStore.visibleNotes.filter(
@@ -494,12 +543,42 @@ const handleTagSelect = async (tag) => {
     )
     if (local.length) {
       tagFilterState.list = local
+      tagFilterState.hasMore = false
     } else {
       tagFilterState.list = []
       notifyError(error)
     }
   } finally {
     if (myToken === tagFilterToken) tagFilterState.loading = false
+  }
+}
+
+const loadMoreTagNotes = async () => {
+  if (
+    !tagFilterState.active ||
+    !tagFilterState.hasMore ||
+    tagFilterState.loading ||
+    tagFilterState.loadingMore
+  ) {
+    return
+  }
+
+  const myToken = tagFilterToken
+  tagFilterState.loadingMore = true
+  try {
+    const result = await fetchNotesByTag(tagFilterState.tagId, {
+      pageNo: tagFilterState.pageNo + 1,
+      pageSize: NOTE_LIST_PAGE_SIZE,
+    })
+    if (myToken !== tagFilterToken) return
+    appendTagNotes(result.list)
+    tagFilterState.pageNo = result.pageNo
+    tagFilterState.hasMore = result.hasMore
+  } catch (error) {
+    if (myToken !== tagFilterToken) return
+    notifyError(error)
+  } finally {
+    if (myToken === tagFilterToken) tagFilterState.loadingMore = false
   }
 }
 
@@ -775,6 +854,14 @@ onBeforeUnmount(() => {
   text-align: center;
   color: var(--color-secondary-text);
   font-size: 14px;
+}
+
+.note-list-load-more {
+  width: 100%;
+  margin: 4px 0 12px;
+  text-align: center;
+  color: var(--color-secondary-text);
+  font-size: 13px;
 }
 
 .tag-filter-summary {
