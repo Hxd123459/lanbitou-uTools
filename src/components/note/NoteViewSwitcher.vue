@@ -162,7 +162,7 @@ const { presets } = useMotionPresets()
 const modes = [
   { id: 'list', label: '列表' },
   { id: 'tags', label: '标签' },
-  { id: 'select', label: '选择' },
+  { id: 'select', label: '多选' },
 ]
 
 const draftQuery = ref('')
