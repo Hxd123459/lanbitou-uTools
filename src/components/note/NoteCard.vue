@@ -64,7 +64,8 @@
         >
         <span class="note-time">{{ timeText }}</span>
       </div>
-      <div v-if="!selectable && !note?.isPending" class="meta-actions">
+      <div v-if="!selectable && !note?.isPending" class="meta-right">
+      <div class="meta-actions">
         <motion.button
           v-if="!isEditing"
           class="icon-btn"
@@ -157,6 +158,47 @@
             <path d="M14 11v6" />
           </svg>
         </motion.button>
+      </div>
+      <motion.span
+        v-if="hasRecall && !isEditing"
+        class="recall-indicator"
+        aria-label="回响"
+        title="回响"
+      >
+        <svg
+          viewBox="0 0 24 24"
+          width="18"
+          height="18"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="1.6"
+          aria-hidden="true"
+        >
+          <motion.circle
+            cx="12"
+            cy="12"
+            r="8"
+            :animate="recallMotion.outer"
+            :transition="recallTransition(0)"
+          />
+          <motion.circle
+            cx="12"
+            cy="12"
+            r="5"
+            :animate="recallMotion.inner"
+            :transition="recallTransition(0.4)"
+          />
+          <motion.circle
+            cx="12"
+            cy="12"
+            r="1.75"
+            fill="currentColor"
+            stroke="none"
+            :animate="recallMotion.dot"
+            :transition="recallTransition(0.2)"
+          />
+        </svg>
+      </motion.span>
       </div>
     </div>
 
@@ -369,7 +411,7 @@ import { useAssistantStore } from '../../stores/assistantStore'
 import AppButton from '../motion/AppButton.vue'
 import NoteImageGallery from './NoteImageGallery.vue'
 
-const { presets } = useMotionPresets()
+const { presets, reduced } = useMotionPresets()
 
 const props = defineProps({
   note: {
@@ -443,6 +485,25 @@ const timeText = computed(() => formatTime(props.note?.createdAt))
 const pinType = computed(() => props.note?.pinWeightType || 'DEFAULT')
 const isPinnedTop = computed(() => pinType.value === 'TOP')
 const isPinnedBottom = computed(() => pinType.value === 'BOTTOM')
+const hasRecall = computed(() => props.note?.hasRecall === true)
+
+const recallMotion = computed(() => {
+  if (reduced.value) {
+    return { outer: {}, inner: {}, dot: {} }
+  }
+  return {
+    outer: { opacity: [0.3, 1, 0.3] },
+    inner: { opacity: [0.45, 1, 0.45] },
+    dot: { scale: [1, 1.4, 1], opacity: [0.65, 1, 0.65] },
+  }
+})
+
+const recallTransition = (delay = 0) => ({
+  duration: reduced.value ? 0 : 1.6,
+  repeat: reduced.value ? 0 : Infinity,
+  ease: 'easeInOut',
+  delay,
+})
 const originalOrderedImageIds = computed(() =>
   (Array.isArray(props.note?.images) ? props.note.images : [])
     .map((img) => img.id)
@@ -1154,12 +1215,30 @@ function formatTime(dateValue) {
   white-space: nowrap;
 }
 
+.meta-right {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex-shrink: 0;
+}
+
 .meta-actions {
   display: flex;
   align-items: center;
   gap: 4px;
   opacity: 0;
   transform: translateY(-1px);
+}
+
+.recall-indicator {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  flex-shrink: 0;
+  color: var(--color-accent);
+  opacity: 1;
 }
 
 .note-card:hover .meta-actions,

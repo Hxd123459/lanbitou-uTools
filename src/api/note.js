@@ -37,6 +37,7 @@ function mapBlockToNote(item) {
     createdAt: item.createTime,
     tokenUsage: item.tokenUsage,
     pinWeightType: item.pinWeightType || 'DEFAULT',
+    hasRecall: item.hasRecall === true,
     images: mapBlockResources(item.blocks),
   }
 }

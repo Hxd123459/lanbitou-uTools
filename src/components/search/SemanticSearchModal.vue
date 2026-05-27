@@ -55,22 +55,26 @@
             </motion.div>
           </AnimatePresence>
 
+          <div class="semantic-stage-center">
           <motion.div
             class="semantic-hub"
             :initial="{ opacity: 0, scale: 0.96 }"
             :animate="{ opacity: 1, scale: 1 }"
             :transition="{ duration: 0.28, delay: 0.06, ease: [0.22, 1, 0.36, 1] }"
           >
-            <textarea
-              ref="queryInputRef"
-              v-model="query"
-              class="semantic-query"
-              rows="3"
-              :placeholder="placeholder"
-              spellcheck="false"
-              :disabled="searching"
-              @keydown.enter.exact.prevent="runSearch"
-            />
+            <div class="semantic-query-wrap">
+              <textarea
+                ref="queryInputRef"
+                v-model="query"
+                class="semantic-query"
+                rows="1"
+                :placeholder="placeholder"
+                spellcheck="false"
+                :disabled="searching"
+                @keydown.enter.exact.prevent="runSearch"
+                @input="syncQueryHeight"
+              />
+            </div>
             <p class="semantic-hint">
               <template v-if="searching">思绪正在联结记忆碎片…</template>
               <template v-else-if="searchError">{{ searchError }}</template>
@@ -78,6 +82,7 @@
               <template v-else>按 Enter 开始检索</template>
             </p>
           </motion.div>
+          </div>
         </div>
       </motion.div>
     </AnimatePresence>
@@ -121,6 +126,13 @@ const searching = ref(false)
 const searchError = ref('')
 const hasSearched = ref(false)
 const queryInputRef = ref(null)
+
+const syncQueryHeight = () => {
+  const el = queryInputRef.value
+  if (!el) return
+  el.style.height = 'auto'
+  el.style.height = `${el.scrollHeight}px`
+}
 
 const modalEase = [0.22, 1, 0.36, 1]
 
@@ -220,6 +232,7 @@ watch(
       resetState()
       window.addEventListener('keydown', onKeydown)
       await nextTick()
+      syncQueryHeight()
       queryInputRef.value?.focus()
     } else {
       window.removeEventListener('keydown', onKeydown)
@@ -268,42 +281,62 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
 
 .semantic-stage {
   position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   width: 100%;
   height: 100%;
   min-height: 0;
 }
 
-.semantic-hub {
-  position: absolute;
-  left: 50%;
-  top: 50%;
+.semantic-stage-center {
+  position: relative;
   z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   width: min(560px, calc(100% - 48px));
-  transform: translate(-50%, -50%);
-  text-align: center;
+  margin: 0 auto;
   pointer-events: auto;
+}
+
+.semantic-hub {
+  width: 100%;
+  text-align: center;
+}
+
+.semantic-query-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-height: 72px;
 }
 
 .semantic-query {
   width: 100%;
-  min-height: 96px;
+  max-width: 100%;
   border: none;
   outline: none;
   resize: none;
+  overflow: hidden;
   background: transparent;
   font-family: inherit;
-  font-size: clamp(20px, 3.2vw, 28px);
+  font-size: clamp(18px, 2.6vw, 24px);
   font-weight: 500;
-  line-height: 1.45;
+  line-height: 1.5;
   color: var(--color-primary);
   text-align: center;
   caret-color: var(--color-accent);
   padding: 0 8px;
+  box-sizing: border-box;
 }
 
 .semantic-query::placeholder {
   color: #a1a1aa;
+  font-size: 13px;
   font-weight: 400;
+  line-height: 1.55;
 }
 
 .semantic-query:disabled {
@@ -392,12 +425,16 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
 }
 
 @media (max-width: 720px) {
-  .semantic-hub {
+  .semantic-stage-center {
     width: calc(100% - 32px);
   }
 
   .semantic-query {
-    font-size: 18px;
+    font-size: 17px;
+  }
+
+  .semantic-query::placeholder {
+    font-size: 12px;
   }
 
   .semantic-fragment {
