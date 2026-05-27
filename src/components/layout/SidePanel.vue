@@ -11,7 +11,7 @@
     </div>
 
     <div class="sidebar-search">
-      <label class="sidebar-search-field">
+      <label class="sidebar-search-field" @click.prevent="openSemanticSearch">
         <span class="sidebar-search-icon" aria-hidden="true">
           <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <circle cx="11" cy="11" r="7" />
@@ -25,9 +25,17 @@
           autocomplete="off"
           spellcheck="false"
           aria-label="给我一个想法"
+          readonly
+          @focus="openSemanticSearch"
         />
       </label>
     </div>
+
+    <SemanticSearchModal
+      :visible="semanticSearchVisible"
+      @close="semanticSearchVisible = false"
+      @select-note="onSemanticNoteSelect"
+    />
 
     <nav class="sidebar-nav" aria-label="菜单">
       <motion.button
@@ -118,10 +126,11 @@
 </template>
 
 <script setup>
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { motion } from 'motion-v'
 import { useMotionPresets } from '../../composables/useMotionPresets'
 import BrandArea from '../brand/BrandArea.vue'
+import SemanticSearchModal from '../search/SemanticSearchModal.vue'
 
 defineProps({
   activeTab: {
@@ -130,7 +139,17 @@ defineProps({
   },
 })
 
-defineEmits(['tab-change'])
+const emit = defineEmits(['tab-change', 'semantic-note-select'])
+
+const semanticSearchVisible = ref(false)
+
+const openSemanticSearch = () => {
+  semanticSearchVisible.value = true
+}
+
+const onSemanticNoteSelect = (note) => {
+  emit('semantic-note-select', note)
+}
 
 const navItems = [
   { id: 'home', label: '碎片' },
