@@ -8,6 +8,10 @@
         role="dialog"
         aria-modal="true"
         aria-label="回响"
+        :initial="modalMotion.initial"
+        :animate="modalMotion.animate"
+        :exit="modalMotion.exit"
+        :transition="modalMotion.transition"
       >
         <motion.div
           class="recall-modal-backdrop"
@@ -52,6 +56,9 @@
                 <span class="recall-quote-text">{{ recall.recallText }}</span>
                 <span class="recall-quote-mark" aria-hidden="true">”</span>
               </motion.p>
+              <p v-if="showDetail && recallSourceText" class="recall-source">
+                —— {{ recallSourceText }}
+              </p>
 
               <AnimatePresence>
                 <motion.div
@@ -139,6 +146,18 @@ const codeThemes = { light: 'github-light', dark: 'github-light' }
 const md = getMarkdown('note-recall-modal')
 const modalEase = [0.22, 1, 0.36, 1]
 
+const modalMotion = computed(() => {
+  if (reduced.value) {
+    return { initial: {}, animate: {}, exit: {}, transition: { duration: 0 } }
+  }
+  return {
+    initial: { opacity: 0 },
+    animate: { opacity: 1 },
+    exit: { opacity: 0 },
+    transition: { duration: 0.22, ease: modalEase },
+  }
+})
+
 const backdropMotion = computed(() => {
   if (reduced.value) {
     return { initial: {}, animate: {}, exit: {}, transition: { duration: 0 } }
@@ -161,7 +180,7 @@ const quoteMotion = computed(() => {
   }
   if (showDetail.value) {
     return {
-      animate: { scale: 0.82, opacity: 0.9 },
+      animate: { y: -36, scale: 0.9, opacity: 0.95 },
       transition: { duration: 0.4, ease: modalEase },
     }
   }
@@ -204,6 +223,11 @@ function trimCodeBlockTrailingNewlines(nodes) {
 }
 
 const createTimeText = computed(() => formatTime(recall.value?.createTime))
+const recallSourceText = computed(() => {
+  const days = Number(recall.value?.beforeDays)
+  if (!Number.isFinite(days) || days <= 0) return ''
+  return `来自${days}天前的回响`
+})
 
 const markdownNodes = computed(() => {
   const text = recall.value?.markdownContent || ''
@@ -352,7 +376,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
 .recall-stage.is-detail {
   justify-content: center;
   gap: 20px;
-  padding: 72px 0 32px;
+  padding: 48px 0 32px;
 }
 
 .recall-quote {
@@ -368,9 +392,17 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
 }
 
 .recall-quote.is-compact {
-  font-size: clamp(14px, 2.4vw, 18px);
+  font-size: clamp(17px, 2.9vw, 22px);
   line-height: 1.5;
   max-width: min(560px, 100%);
+}
+
+.recall-source {
+  margin: -6px 0 0;
+  width: min(560px, 100%);
+  text-align: right;
+  font-size: 13px;
+  color: var(--color-secondary-text);
 }
 
 .recall-quote-mark {
@@ -397,7 +429,8 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
   width: min(640px, 100%);
   max-height: min(48vh, 440px);
   overflow-y: auto;
-  text-align: center;
+  text-align: left;
+  margin: 0 auto;
 }
 
 .recall-content-root :deep(p),
@@ -414,13 +447,12 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
   font-size: 15px;
   line-height: 1.75;
   word-break: break-word;
-  text-align: center;
+  text-align: left;
 }
 
 .recall-content-root :deep(ul),
 .recall-content-root :deep(ol) {
-  display: inline-block;
-  margin: 0 auto 0.75em;
+  margin: 0 0 0.75em;
   padding-left: 1.25em;
   text-align: left;
 }
@@ -480,7 +512,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
 .recall-expand-btn {
   position: fixed;
   left: 50%;
-  bottom: 40px;
+  bottom: 64px;
   z-index: 3;
   display: inline-flex;
   align-items: center;
@@ -488,20 +520,18 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
   width: 52px;
   height: 52px;
   margin-left: -26px;
-  border: 1px solid rgba(255, 255, 255, 0.9);
+  border: 1px solid transparent;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.82);
+  background: var(--btn-primary-bg);
   box-shadow:
     0 8px 28px rgba(37, 99, 235, 0.12),
     0 2px 8px rgba(24, 24, 27, 0.06);
-  color: var(--color-accent);
+  color: var(--btn-primary-fg);
   cursor: pointer;
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
 }
 
 .recall-expand-btn:hover {
-  background: #ffffff;
+  background: var(--btn-primary-bg-hover);
 }
 
 .recall-status {
@@ -525,7 +555,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
   }
 
   .recall-expand-btn {
-    bottom: 28px;
+    bottom: 44px;
   }
 }
 

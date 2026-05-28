@@ -12,5 +12,6 @@ export async function fetchNoteRecall(aiNoteRecallId) {
     recallText: data.recallText || '',
     markdownContent: data.markdownContent || '',
     createTime: data.createTime,
+    beforeDays: Number(data.beforeDays) || 0,
   }
 }
