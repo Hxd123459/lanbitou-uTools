@@ -186,7 +186,7 @@ const quoteMotion = computed(() => {
   }
   return {
     animate: { opacity: 1, y: 0, scale: 1 },
-    transition: { duration: 0.3, delay: 0.12, ease: modalEase },
+    transition: { duration: 0.42, delay: 0.2, ease: modalEase },
   }
 })
 
