@@ -211,6 +211,7 @@
       :visible="recallModalOpen"
       :ai-note-recall-id="note.aiNoteRecallId"
       @close="recallModalOpen = false"
+      @recall-clicked="onRecallClicked"
     />
 
     <template v-if="note?.isPending">
@@ -497,8 +498,12 @@ const timeText = computed(() => formatTime(props.note?.createdAt))
 const pinType = computed(() => props.note?.pinWeightType || 'DEFAULT')
 const isPinnedTop = computed(() => pinType.value === 'TOP')
 const isPinnedBottom = computed(() => pinType.value === 'BOTTOM')
+const recallClicked = ref(false)
 const hasRecallId = computed(
-  () => props.note?.aiNoteRecallId != null && props.note?.aiNoteRecallId !== '',
+  () =>
+    !recallClicked.value &&
+    props.note?.aiNoteRecallId != null &&
+    props.note?.aiNoteRecallId !== '',
 )
 const recallModalOpen = ref(false)
 
@@ -506,6 +511,17 @@ const openRecallModal = () => {
   if (!hasRecallId.value) return
   recallModalOpen.value = true
 }
+
+const onRecallClicked = () => {
+  recallClicked.value = true
+}
+
+watch(
+  () => props.note?.id,
+  () => {
+    recallClicked.value = false
+  },
+)
 
 const recallMotion = computed(() => {
   if (reduced.value) {

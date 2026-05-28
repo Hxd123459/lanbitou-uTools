@@ -136,7 +136,7 @@ const props = defineProps({
   aiNoteRecallId: { type: [Number, String], default: null },
 })
 
-const emit = defineEmits(['close'])
+const emit = defineEmits(['close', 'recall-clicked'])
 
 const { presets, reduced } = useMotionPresets()
 
@@ -264,10 +264,15 @@ function formatTime(dateValue) {
 
 const emitClose = () => emit('close')
 
-const revealDetail = () => {
+const revealDetail = async () => {
   if (showDetail.value) return
   if (props.aiNoteRecallId != null && props.aiNoteRecallId !== '') {
-    clickNoteMemory(props.aiNoteRecallId).catch(() => {})
+    try {
+      await clickNoteMemory(props.aiNoteRecallId)
+      emit('recall-clicked', props.aiNoteRecallId)
+    } catch {
+      // 点击上报失败不阻断展开
+    }
   }
   showDetail.value = true
 }
