@@ -89,6 +89,11 @@
                     />
                     <p v-else class="recall-content-fallback">暂无正文</p>
                   </div>
+                  <NoteImageGallery
+                    v-if="recallImages.length"
+                    :images="recallImages"
+                    class="recall-image-gallery"
+                  />
                  
                 </motion.div>
               </AnimatePresence>
@@ -131,6 +136,7 @@ import {
 } from 'vue-renderer-markdown'
 import { clickNoteMemory, fetchNoteRecall } from '../../api/noteMemory'
 import { useMotionPresets } from '../../composables/useMotionPresets'
+import NoteImageGallery from './NoteImageGallery.vue'
 
 const props = defineProps({
   visible: { type: Boolean, default: false },
@@ -249,6 +255,10 @@ const markdownNodes = computed(() => {
     return []
   }
 })
+
+const recallImages = computed(() =>
+  Array.isArray(recall.value?.images) ? recall.value.images : [],
+)
 
 function formatTime(dateValue) {
   if (!dateValue) return ''
@@ -380,11 +390,9 @@ onBeforeUnmount(() => {
   height: 100%;
   padding: 72px 24px 96px;
   box-sizing: border-box;
-  pointer-events: none;
-}
-
-.recall-modal-inner > * {
   pointer-events: auto;
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 .recall-stage {
@@ -393,13 +401,13 @@ onBeforeUnmount(() => {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  flex: 1;
+  flex: 0 0 auto;
   width: 100%;
-  min-height: 0;
+  min-height: 100%;
 }
 
 .recall-stage.is-detail {
-  justify-content: center;
+  justify-content: flex-start;
   gap: 20px;
   padding: 48px 0 32px;
 }
@@ -478,17 +486,17 @@ onBeforeUnmount(() => {
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-start;
   gap: 20px;
   width: 100%;
-  min-height: 0;
-  flex: 1;
+  min-height: auto;
+  flex: 0 0 auto;
 }
 
 .recall-content-root {
   width: min(640px, 100%);
-  max-height: min(48vh, 440px);
-  overflow-y: auto;
+  max-height: none;
+  overflow: visible;
   text-align: left;
   margin: 0 auto;
 }
@@ -570,6 +578,11 @@ onBeforeUnmount(() => {
   text-align: left; /* 文字左对齐 */
   width: 100%; /* 占满整行，才能左对齐 */
   max-width: min(640px, 100%); /* 和正文同宽 */
+}
+
+.recall-image-gallery {
+  width: min(640px, 100%);
+  margin: 2px auto 0;
 }
 
 .recall-expand-btn {

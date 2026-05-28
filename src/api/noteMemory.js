@@ -1,4 +1,17 @@
-import { get } from './http'
+import { get, resolveResourceUrl } from './http'
+
+function mapBlockResources(blocks) {
+  if (!Array.isArray(blocks)) return []
+  return blocks
+    .filter((b) => b && b.type === 'image' && b.fileUrl)
+    .slice()
+    .sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0))
+    .map((b) => ({
+      id: b.id,
+      url: resolveResourceUrl(b.fileUrl),
+      sortOrder: b.sortOrder ?? 0,
+    }))
+}
 
 /**
  * 获取回响笔记
@@ -13,6 +26,7 @@ export async function fetchNoteRecall(aiNoteRecallId) {
     markdownContent: data.markdownContent || '',
     createTime: data.createTime,
     beforeDays: Number(data.beforeDays) || 0,
+    images: mapBlockResources(data.blocks),
   }
 }
 
