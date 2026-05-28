@@ -159,11 +159,16 @@
           </svg>
         </motion.button>
       </div>
-      <motion.span
-        v-if="hasRecall && !isEditing"
+      <motion.button
+        v-if="hasRecallId && !isEditing"
+        type="button"
         class="recall-indicator"
         aria-label="回响"
         title="回响"
+        :while-hover="presets.button.hover"
+        :while-tap="presets.button.tap"
+        :transition="presets.button.transition"
+        @click.stop="openRecallModal"
       >
         <svg
           viewBox="0 0 24 24"
@@ -198,9 +203,15 @@
             :transition="recallTransition(0.2)"
           />
         </svg>
-      </motion.span>
+      </motion.button>
       </div>
     </div>
+
+    <NoteRecallModal
+      :visible="recallModalOpen"
+      :ai-note-recall-id="note.aiNoteRecallId"
+      @close="recallModalOpen = false"
+    />
 
     <template v-if="note?.isPending">
       <div class="skeleton-line w-70" />
@@ -410,6 +421,7 @@ import { useMotionPresets } from '../../composables/useMotionPresets'
 import { useAssistantStore } from '../../stores/assistantStore'
 import AppButton from '../motion/AppButton.vue'
 import NoteImageGallery from './NoteImageGallery.vue'
+import NoteRecallModal from './NoteRecallModal.vue'
 
 const { presets, reduced } = useMotionPresets()
 
@@ -485,7 +497,15 @@ const timeText = computed(() => formatTime(props.note?.createdAt))
 const pinType = computed(() => props.note?.pinWeightType || 'DEFAULT')
 const isPinnedTop = computed(() => pinType.value === 'TOP')
 const isPinnedBottom = computed(() => pinType.value === 'BOTTOM')
-const hasRecall = computed(() => props.note?.hasRecall === true)
+const hasRecallId = computed(
+  () => props.note?.aiNoteRecallId != null && props.note?.aiNoteRecallId !== '',
+)
+const recallModalOpen = ref(false)
+
+const openRecallModal = () => {
+  if (!hasRecallId.value) return
+  recallModalOpen.value = true
+}
 
 const recallMotion = computed(() => {
   if (reduced.value) {
@@ -1236,9 +1256,23 @@ function formatTime(dateValue) {
   justify-content: center;
   width: 30px;
   height: 30px;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
   flex-shrink: 0;
   color: var(--color-accent);
   opacity: 1;
+  cursor: pointer;
+}
+
+.recall-indicator:hover {
+  background: rgba(37, 99, 235, 0.08);
+}
+
+.recall-indicator:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
 }
 
 .note-card:hover .meta-actions,
