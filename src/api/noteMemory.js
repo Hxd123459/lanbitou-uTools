@@ -15,3 +15,11 @@ export async function fetchNoteRecall(aiNoteRecallId) {
     beforeDays: Number(data.beforeDays) || 0,
   }
 }
+
+/**
+ * 记录回响点击（展开）
+ * @param {number|string} aiNoteRecallId
+ */
+export function clickNoteMemory(aiNoteRecallId) {
+  return get('/note/memory/click', { aiNoteRecallId })
+}

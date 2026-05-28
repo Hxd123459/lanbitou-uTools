@@ -38,27 +38,30 @@
         </motion.button>
 
         <div class="recall-modal-inner">
-          <p v-if="loading" class="recall-status">回响浮现中…</p>
-          <p v-else-if="loadError" class="recall-status recall-status-error">{{ loadError }}</p>
+          <p v-if="loadError" class="recall-status recall-status-error">{{ loadError }}</p>
 
           <template v-else-if="recall">
             <div class="recall-stage" :class="{ 'is-detail': showDetail }">
-              <motion.p
-                v-if="recall.recallText"
-                key="recall-quote"
-                class="recall-quote"
+              <motion.div
+                v-if="recall.recallText || recallSourceText"
+                key="recall-quote-block"
+                class="recall-quote-block"
                 :class="{ 'is-compact': showDetail }"
-                :initial="quoteEnterMotion.initial"
-                :animate="quoteMotion.animate"
-                :transition="quoteMotion.transition"
+                :initial="quoteBlockEnter.initial"
+                :animate="quoteBlockMotion.animate"
+                :transition="quoteBlockMotion.transition"
               >
-                <span class="recall-quote-mark" aria-hidden="true">“</span>
-                <span class="recall-quote-text">{{ recall.recallText }}</span>
-                <span class="recall-quote-mark" aria-hidden="true">”</span>
-              </motion.p>
-              <p v-if="showDetail && recallSourceText" class="recall-source">
-                —— {{ recallSourceText }}
-              </p>
+                <div v-if="recall.recallText" class="recall-quote-cell">
+                  <p class="recall-quote" :class="{ 'is-compact': showDetail }">
+                    <span class="recall-quote-mark" aria-hidden="true">“</span>
+                    <span class="recall-quote-text">{{ recall.recallText }}</span>
+                    <span class="recall-quote-mark" aria-hidden="true">”</span>
+                  </p>
+                </div>
+                <div v-if="recallSourceText" class="recall-source-cell">
+                  <p class="recall-source">—— {{ recallSourceText }}</p>
+                </div>
+              </motion.div>
 
               <AnimatePresence>
                 <motion.div
@@ -100,7 +103,7 @@
                 :initial="{ opacity: 0, y: 12 }"
                 :animate="{ opacity: 1, y: 0 }"
                 :exit="{ opacity: 0, y: 8, scale: 0.92 }"
-                :transition="{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }"
+                :transition="expandButtonTransition"
                 :while-hover="presets.button.hover"
                 :while-tap="presets.button.tap"
                 @click="revealDetail"
@@ -125,7 +128,7 @@ import {
   getMarkdown,
   parseMarkdownToStructure,
 } from 'vue-renderer-markdown'
-import { fetchNoteRecall } from '../../api/noteMemory'
+import { clickNoteMemory, fetchNoteRecall } from '../../api/noteMemory'
 import { useMotionPresets } from '../../composables/useMotionPresets'
 
 const props = defineProps({
@@ -141,6 +144,7 @@ const recall = ref(null)
 const loading = ref(false)
 const loadError = ref('')
 const showDetail = ref(false)
+let bodyOverflowBeforeOpen = ''
 
 const codeThemes = { light: 'github-light', dark: 'github-light' }
 const md = getMarkdown('note-recall-modal')
@@ -170,11 +174,11 @@ const backdropMotion = computed(() => {
   }
 })
 
-const quoteEnterMotion = computed(() => ({
+const quoteBlockEnter = computed(() => ({
   initial: reduced.value ? {} : { opacity: 0, y: 12 },
 }))
 
-const quoteMotion = computed(() => {
+const quoteBlockMotion = computed(() => {
   if (reduced.value) {
     return { animate: {}, transition: { duration: 0 } }
   }
@@ -186,8 +190,13 @@ const quoteMotion = computed(() => {
   }
   return {
     animate: { opacity: 1, y: 0, scale: 1 },
-    transition: { duration: 0.42, delay: 0.2, ease: modalEase },
+    transition: { duration: 0.56, delay: 0.38, ease: modalEase },
   }
+})
+
+const expandButtonTransition = computed(() => {
+  if (reduced.value) return { duration: 0 }
+  return { duration: 0.48, delay: 0.62, ease: modalEase }
 })
 
 const contentMotion = computed(() => {
@@ -256,6 +265,10 @@ function formatTime(dateValue) {
 const emitClose = () => emit('close')
 
 const revealDetail = () => {
+  if (showDetail.value) return
+  if (props.aiNoteRecallId != null && props.aiNoteRecallId !== '') {
+    clickNoteMemory(props.aiNoteRecallId).catch(() => {})
+  }
   showDetail.value = true
 }
 
@@ -295,13 +308,19 @@ watch(
       resetState()
       loadRecall()
       window.addEventListener('keydown', onKeydown)
+      bodyOverflowBeforeOpen = document.body.style.overflow
+      document.body.style.overflow = 'hidden'
     } else {
       window.removeEventListener('keydown', onKeydown)
+      document.body.style.overflow = bodyOverflowBeforeOpen
     }
   },
 )
 
-onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
+onBeforeUnmount(() => {
+  window.removeEventListener('keydown', onKeydown)
+  document.body.style.overflow = bodyOverflowBeforeOpen
+})
 </script>
 
 <style scoped>
@@ -379,30 +398,65 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
   padding: 48px 0 32px;
 }
 
+.recall-quote-block {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 16px 24px;
+  width: min(720px, 100%);
+  transform-origin: center top;
+  flex-shrink: 0;
+}
+
+.recall-quote-block.is-compact {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 10px;
+}
+
+.recall-quote-cell {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+}
+
+.recall-source-cell {
+  flex: 0 0 auto;
+  max-width: min(240px, 38%);
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+.recall-quote-block.is-compact .recall-source-cell {
+  max-width: 100%;
+}
+
 .recall-quote {
   margin: 0;
-  max-width: min(640px, 100%);
-  text-align: center;
-  font-size: clamp(22px, 4.2vw, 38px);
+  text-align: left;
+  font-size: clamp(22px, 3.5vw, 26px); /* 这一行是大小 */
   font-weight: 500;
   line-height: 1.55;
   color: var(--color-primary);
-  transform-origin: center top;
-  flex-shrink: 0;
 }
 
 .recall-quote.is-compact {
   font-size: clamp(17px, 2.9vw, 22px);
   line-height: 1.5;
-  max-width: min(560px, 100%);
 }
 
 .recall-source {
-  margin: -6px 0 0;
-  width: min(560px, 100%);
+  margin: 0;
   text-align: right;
+  font-family: 'Kaiti SC', 'STKaiti', 'FangSong', 'Songti SC', serif;
   font-size: 13px;
+  font-weight: 400;
+  line-height: 1.45;
   color: var(--color-secondary-text);
+  white-space: nowrap;
 }
 
 .recall-quote-mark {
@@ -507,6 +561,9 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
   color: #a1a1aa;
   font-variant-numeric: tabular-nums;
   letter-spacing: 0.2px;
+  text-align: left; /* 文字左对齐 */
+  width: 100%; /* 占满整行，才能左对齐 */
+  max-width: min(640px, 100%); /* 和正文同宽 */
 }
 
 .recall-expand-btn {
@@ -552,6 +609,10 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
 
   .recall-quote {
     font-size: clamp(18px, 5.5vw, 28px);
+  }
+
+  .recall-source {
+    white-space: normal;
   }
 
   .recall-expand-btn {
