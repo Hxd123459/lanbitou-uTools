@@ -73,6 +73,9 @@
                   :exit="contentMotion.exit"
                   :transition="contentMotion.transition"
                 >
+                 <time v-if="createTimeText" class="recall-time" :datetime="recall.createTime">
+                    {{ createTimeText }}
+                  </time>
                   <div class="recall-content-root">
                     <MarkdownRender
                       v-if="markdownNodes.length"
@@ -86,9 +89,7 @@
                     />
                     <p v-else class="recall-content-fallback">暂无正文</p>
                   </div>
-                  <time v-if="createTimeText" class="recall-time" :datetime="recall.createTime">
-                    {{ createTimeText }}
-                  </time>
+                 
                 </motion.div>
               </AnimatePresence>
             </div>
