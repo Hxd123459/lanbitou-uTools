@@ -234,18 +234,11 @@
         @error="notifyError"
       />
 
-      <!-- 回响 -->
-      <section v-show="activeTab === 'echo'" class="note-list placeholder-panel">
-        <div class="placeholder-card">
-          <svg viewBox="0 0 24 24" width="32" height="32" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <path d="M4 12a8 8 0 0 1 16 0" />
-            <path d="M7 12a5 5 0 0 1 10 0" />
-            <circle cx="12" cy="12" r="1.5" fill="currentColor" stroke="none" />
-          </svg>
-          <h2 class="placeholder-title">回响</h2>
-          <p class="placeholder-desc">回顾与联想会汇聚于此，功能即将上线。</p>
-        </div>
-      </section>
+      <!-- 热力图 -->
+      <HeatmapPanel
+        v-show="activeTab === 'echo'"
+        :active="activeTab === 'echo'"
+      />
 
       <!-- 回收站 -->
       <TrashPanel
@@ -274,6 +267,7 @@ import { useMotionPresets } from '../composables/useMotionPresets'
 import FloatingInputBar from '../components/input/FloatingInputBar.vue'
 import MainFrame from '../components/layout/MainFrame.vue'
 import SedimentPanel from '../components/sediment/SedimentPanel.vue'
+import HeatmapPanel from '../components/heatmap/HeatmapPanel.vue'
 import TrashPanel from '../components/trash/TrashPanel.vue'
 import SidePanel from '../components/layout/SidePanel.vue'
 import NoteBulkActionBar from '../components/note/NoteBulkActionBar.vue'

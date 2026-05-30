@@ -97,9 +97,15 @@
             stroke-linecap="round"
             stroke-linejoin="round"
           >
-            <path d="M4 12a8 8 0 0 1 16 0" />
-            <path d="M7 12a5 5 0 0 1 10 0" />
-            <circle cx="12" cy="12" r="1.5" fill="currentColor" stroke="none" />
+            <rect x="3" y="3" width="5" height="5" rx="1" />
+            <rect x="10" y="3" width="5" height="5" rx="1" />
+            <rect x="17" y="3" width="4" height="5" rx="1" />
+            <rect x="3" y="10" width="5" height="5" rx="1" />
+            <rect x="10" y="10" width="5" height="5" rx="1" />
+            <rect x="17" y="10" width="4" height="5" rx="1" />
+            <rect x="3" y="17" width="5" height="4" rx="1" />
+            <rect x="10" y="17" width="5" height="4" rx="1" />
+            <rect x="17" y="17" width="4" height="4" rx="1" />
           </svg>
           <svg
             v-else-if="item.id === 'trash'"
@@ -153,8 +159,8 @@ const onSemanticNoteSelect = (note) => {
 
 const navItems = [
   { id: 'home', label: '碎片' },
-  { id: 'sediment', label: '热力图' },
-  { id: 'echo', label: '回响' },
+  { id: 'sediment', label: '沉淀' },
+  { id: 'echo', label: '热力图' },
   { id: 'trash', label: '回收站' },
 ]
 
