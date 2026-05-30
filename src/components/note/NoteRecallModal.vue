@@ -73,28 +73,29 @@
                   :exit="contentMotion.exit"
                   :transition="contentMotion.transition"
                 >
-                 <time v-if="createTimeText" class="recall-time" :datetime="recall.createTime">
+                  <time v-if="createTimeText" class="recall-time" :datetime="recall.createTime">
                     {{ createTimeText }}
                   </time>
-                  <div class="recall-content-root">
-                    <MarkdownRender
-                      v-if="markdownNodes.length"
-                      :nodes="markdownNodes"
-                      :typewriter="false"
-                      :batch-rendering="false"
-                      :defer-nodes-until-visible="false"
-                      code-block-light-theme="github-light"
-                      code-block-dark-theme="github-light"
-                      :themes="codeThemes"
+                  <div class="recall-article-body">
+                    <div class="recall-content-root">
+                      <MarkdownRender
+                        v-if="markdownNodes.length"
+                        :nodes="markdownNodes"
+                        :typewriter="false"
+                        :batch-rendering="false"
+                        :defer-nodes-until-visible="false"
+                        code-block-light-theme="github-light"
+                        code-block-dark-theme="github-light"
+                        :themes="codeThemes"
+                      />
+                      <p v-else class="recall-content-fallback">暂无正文</p>
+                    </div>
+                    <NoteImageGallery
+                      v-if="recallImages.length"
+                      :images="recallImages"
+                      class="recall-image-gallery"
                     />
-                    <p v-else class="recall-content-fallback">暂无正文</p>
                   </div>
-                  <NoteImageGallery
-                    v-if="recallImages.length"
-                    :images="recallImages"
-                    class="recall-image-gallery"
-                  />
-                 
                 </motion.div>
               </AnimatePresence>
             </div>
@@ -487,18 +488,24 @@ onBeforeUnmount(() => {
   flex-direction: column;
   align-items: center;
   justify-content: flex-start;
-  gap: 20px;
+  gap: 16px;
   width: 100%;
   min-height: auto;
   flex: 0 0 auto;
 }
 
-.recall-content-root {
+.recall-article-body {
   width: min(640px, 100%);
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+}
+
+.recall-content-root {
+  width: 100%;
   max-height: none;
   overflow: visible;
   text-align: left;
-  margin: 0 auto;
 }
 
 .recall-content-root :deep(p),
@@ -527,8 +534,8 @@ onBeforeUnmount(() => {
 
 .recall-content-root :deep(pre),
 .recall-content-root :deep(.monaco-editor) {
-  margin-left: auto;
-  margin-right: auto;
+  margin-left: 0;
+  margin-right: 0;
   text-align: left;
 }
 
@@ -575,14 +582,17 @@ onBeforeUnmount(() => {
   color: #a1a1aa;
   font-variant-numeric: tabular-nums;
   letter-spacing: 0.2px;
-  text-align: left; /* 文字左对齐 */
-  width: 100%; /* 占满整行，才能左对齐 */
-  max-width: min(640px, 100%); /* 和正文同宽 */
+  text-align: left;
+  width: min(640px, 100%);
 }
 
 .recall-image-gallery {
-  width: min(640px, 100%);
-  margin: 2px auto 0;
+  width: 100%;
+}
+
+.recall-image-gallery :deep(.gallery) {
+  width: 100%;
+  margin-top: 10px;
 }
 
 .recall-expand-btn {
