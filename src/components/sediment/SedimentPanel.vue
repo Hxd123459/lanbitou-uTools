@@ -420,6 +420,8 @@
     <StructNoteCreateModal
       :visible="createNoteVisible"
       :saving="noteSaving"
+      :initial-path-stack="pathStack"
+      :fragment-notes="pendingFragmentNotes"
       @close="closeCreateNoteModal"
       @save="handleCreateNote"
     />
@@ -479,6 +481,7 @@ const folderNameInputRef = ref(null)
 
 const createNoteVisible = ref(false)
 const noteSaving = ref(false)
+const pendingFragmentNotes = ref([])
 
 // 文件预览
 const noteViewVisible = ref(false)
@@ -836,21 +839,23 @@ const onDropToFolder = async (folder) => {
 }
 
 // ---- 新建文件 ----
-const openCreateNoteModal = () => {
+const openCreateNoteModal = (fragmentNotes = []) => {
+  pendingFragmentNotes.value = Array.isArray(fragmentNotes) ? fragmentNotes : []
   createNoteVisible.value = true
 }
 
 const closeCreateNoteModal = () => {
   if (noteSaving.value) return
   createNoteVisible.value = false
+  pendingFragmentNotes.value = []
 }
 
-const handleCreateNote = async ({ title, content }) => {
+const handleCreateNote = async ({ title, content, parentId }) => {
   if (noteSaving.value) return
   noteSaving.value = true
   try {
     await createNoteInFolder({
-      parentId: currentParentId.value,
+      parentId: parentId ?? currentParentId.value,
       title,
       content,
     })
@@ -884,6 +889,8 @@ onBeforeUnmount(() => {
   document.removeEventListener('keydown', onDocumentKeydown)
   document.removeEventListener('pointerdown', onDocumentPointerdown)
 })
+
+defineExpose({ openCreateNoteModal })
 </script>
 
 <style scoped>

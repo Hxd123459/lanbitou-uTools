@@ -228,6 +228,7 @@
 
       <!-- 沉淀 -->
       <SedimentPanel
+        ref="sedimentPanelRef"
         v-show="activeTab === 'sediment'"
         :active="activeTab === 'sediment'"
         @error="notifyError"
@@ -266,7 +267,7 @@
 </template>
 
 <script setup>
-import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { AnimatePresence, motion } from 'motion-v'
 import CopyToast from '../components/feedback/CopyToast.vue'
 import { useMotionPresets } from '../composables/useMotionPresets'
@@ -284,7 +285,6 @@ import { ApiError } from '../api/http'
 import {
   deleteBlock,
   fetchNotesByTag,
-  moveBlocksToSediment,
   NOTE_LIST_PAGE_SIZE,
   searchNotes,
 } from '../api/note'
@@ -302,6 +302,7 @@ const activeTab = ref('home')
 const noteViewMode = ref('list')
 const searchKeyword = ref('')
 const noteListRef = ref(null)
+const sedimentPanelRef = ref(null)
 const inputBarCompact = ref(false)
 const selectedNoteIds = ref(new Set())
 const bulkActionBusy = ref(false)
@@ -466,27 +467,20 @@ const handleBulkDelete = () => {
   ids.forEach((id) => handleDelete({ id }))
 }
 
-const handleBulkSediment = async () => {
+const handleBulkSediment = () => {
   const ids = [...selectedNoteIds.value]
   if (!ids.length || bulkActionBusy.value) return
-  bulkActionBusy.value = true
-  try {
-    await moveBlocksToSediment(ids)
-    ids.forEach((id) => {
-      if (assistantStore.editingNoteId === id) {
-        assistantStore.setEditingNoteId(null)
-      }
-      assistantStore.removeNoteLocal(id)
-    })
-    clearNoteSelection()
-    noteViewMode.value = 'list'
-    activeTab.value = 'sediment'
-    openToast(`已将 ${ids.length} 条笔记移入沉淀`, 'success', { duration: 1800 })
-  } catch (error) {
-    notifyError(error)
-  } finally {
-    bulkActionBusy.value = false
-  }
+
+  const idSet = new Set(ids)
+  const notes = displayedNotes.value.filter((note) => idSet.has(note.id))
+  if (!notes.length) return
+
+  clearNoteSelection()
+  noteViewMode.value = 'list'
+  activeTab.value = 'sediment'
+  nextTick(() => {
+    sedimentPanelRef.value?.openCreateNoteModal(notes)
+  })
 }
 
 const onNoteListScroll = () => {

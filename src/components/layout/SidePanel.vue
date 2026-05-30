@@ -153,7 +153,7 @@ const onSemanticNoteSelect = (note) => {
 
 const navItems = [
   { id: 'home', label: '碎片' },
-  { id: 'sediment', label: '沉淀' },
+  { id: 'sediment', label: '热力图' },
   { id: 'echo', label: '回响' },
   { id: 'trash', label: '回收站' },
 ]
