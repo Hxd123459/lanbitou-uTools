@@ -32,7 +32,7 @@
         </div>
 
         <section
-          v-show="noteViewMode === 'list' || noteViewMode === 'select' || noteViewMode === 'selected'"
+          v-show="noteViewMode === 'list' || noteViewMode === 'selected'"
           ref="noteListRef"
           class="note-list"
           :class="{ 'note-list--selecting': selectedNoteIds.size > 0 }"
@@ -60,7 +60,7 @@
           </header>
 
           <p
-            v-if="noteViewMode === 'select' && isDisplayedNotesLoading"
+            v-if="noteSelectingActive && noteViewMode === 'list' && isDisplayedNotesLoading"
             class="empty-state"
           >
             加载中…
@@ -78,7 +78,7 @@
 
           <p
             v-else-if="
-              noteViewMode !== 'select' &&
+              !noteSelectingActive &&
               noteViewMode !== 'selected' &&
               !isSearchActive &&
               !tagFilterState.active &&
@@ -104,7 +104,8 @@
           </p>
           <p
             v-else-if="
-              noteViewMode === 'select' &&
+              noteSelectingActive &&
+              noteViewMode === 'list' &&
               !isSearchActive &&
               !tagFilterState.active &&
               !displayedNotes.length
@@ -367,7 +368,7 @@ const isDisplayedNotesLoading = computed(() => {
 })
 
 const showListLoadingMore = computed(() => {
-  if (noteViewMode.value === 'select' || noteViewMode.value === 'selected') return false
+  if (noteViewMode.value === 'selected') return false
   if (isSearchActive.value) return searchState.loadingMore
   if (tagFilterState.active) return tagFilterState.loadingMore
   return assistantStore.loadingMoreNotes
@@ -408,9 +409,11 @@ const onNoteViewModeChange = (mode) => {
   const prev = noteViewMode.value
   if (mode === 'select') {
     noteSelectingActive.value = true
+    noteViewMode.value = 'list'
+    return
   }
   if (mode === 'selected' && selectedNoteIds.value.size === 0) {
-    noteViewMode.value = noteSelectingActive.value ? 'select' : 'list'
+    noteViewMode.value = 'list'
     return
   }
   if (prev === 'tags' && mode === 'list') {
@@ -420,10 +423,10 @@ const onNoteViewModeChange = (mode) => {
 }
 
 const handleBulkClearSelection = () => {
-  clearNoteSelection()
-  if (noteViewMode.value === 'selected') {
-    noteViewMode.value = noteSelectingActive.value ? 'select' : 'list'
-  }
+  exitNoteSelectingSession()
+  clearTagFilter()
+  onNoteSearch('')
+  noteViewMode.value = 'list'
 }
 
 const scrollNoteListToTop = () => {
