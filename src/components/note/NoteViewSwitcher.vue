@@ -2,7 +2,7 @@
   <div class="note-view-switcher">
     <div class="switcher-tabs" role="tablist" aria-label="笔记视图">
       <motion.button
-        v-for="item in modes"
+        v-for="item in baseModes"
         :key="item.id"
         type="button"
         class="switcher-btn"
@@ -60,40 +60,75 @@
         <span>{{ item.label }}</span>
       </motion.button>
 
-      <AnimatePresence :initial="false">
-        <motion.button
-          v-if="showSelectedTab"
-          key="selected-tab"
-          type="button"
-          class="switcher-btn switcher-btn--selected"
-          :class="{ 'is-active': modelValue === 'selected' }"
-          role="tab"
-          :aria-selected="modelValue === 'selected'"
-          :initial="selectedTabMotion.initial"
-          :animate="selectedTabMotion.animate"
-          :exit="selectedTabMotion.exit"
-          :transition="selectedTabMotion.transition"
-          :while-hover="presets.button.hover"
-          :while-tap="presets.button.tap"
-          @click="$emit('update:modelValue', 'selected')"
-        >
-          <span class="switcher-icon" aria-hidden="true">
-            <svg
-              viewBox="0 0 24 24"
-              width="14"
-              height="14"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="1.8"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-            >
-              <path d="M20 6 9 17l-5-5" />
-            </svg>
-          </span>
-          <span>已选 {{ selectedCount }}</span>
-        </motion.button>
-      </AnimatePresence>
+      <div v-if="selectingActive" class="switcher-select-slot">
+        <AnimatePresence mode="wait" :initial="false">
+          <motion.button
+            v-if="selectedCount > 0"
+            key="selected"
+            type="button"
+            class="switcher-btn"
+            :class="{ 'is-active': modelValue === 'selected' }"
+            role="tab"
+            :aria-selected="modelValue === 'selected'"
+            :initial="selectSlotMotion.initial"
+            :animate="selectSlotMotion.animate"
+            :exit="selectSlotMotion.exit"
+            :transition="selectSlotMotion.transition"
+            :while-hover="presets.button.hover"
+            :while-tap="presets.button.tap"
+            @click="$emit('update:modelValue', 'selected')"
+          >
+            <span class="switcher-icon" aria-hidden="true">
+              <svg
+                viewBox="0 0 24 24"
+                width="14"
+                height="14"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.8"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path d="M20 6 9 17l-5-5" />
+              </svg>
+            </span>
+            <span>已选 {{ selectedCount }}</span>
+          </motion.button>
+          <motion.button
+            v-else
+            key="select"
+            type="button"
+            class="switcher-btn"
+            :class="{ 'is-active': modelValue === 'select' }"
+            role="tab"
+            :aria-selected="modelValue === 'select'"
+            :initial="selectSlotMotion.initial"
+            :animate="selectSlotMotion.animate"
+            :exit="selectSlotMotion.exit"
+            :transition="selectSlotMotion.transition"
+            :while-hover="presets.button.hover"
+            :while-tap="presets.button.tap"
+            @click="$emit('update:modelValue', 'select')"
+          >
+            <span class="switcher-icon" aria-hidden="true">
+              <svg
+                viewBox="0 0 24 24"
+                width="14"
+                height="14"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.8"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <rect x="3" y="3" width="18" height="18" rx="3" />
+                <path d="m9 12 2 2 4-4" />
+              </svg>
+            </span>
+            <span>多选</span>
+          </motion.button>
+        </AnimatePresence>
+      </div>
     </div>
 
     <div class="switcher-search-area">
@@ -192,17 +227,26 @@ const props = defineProps({
     type: Number,
     default: 0,
   },
+  selectingActive: {
+    type: Boolean,
+    default: false,
+  },
 })
 
 const emit = defineEmits(['update:modelValue', 'search'])
 
 const { presets } = useMotionPresets()
 
-const modes = [
-  { id: 'list', label: '列表' },
-  { id: 'tags', label: '标签' },
-  { id: 'select', label: '多选' },
-]
+const baseModes = computed(() => {
+  const items = [
+    { id: 'list', label: '列表' },
+    { id: 'tags', label: '标签' },
+  ]
+  if (!props.selectingActive) {
+    items.push({ id: 'select', label: '多选' })
+  }
+  return items
+})
 
 const draftQuery = ref('')
 const searchExpanded = ref(false)
@@ -213,16 +257,10 @@ const hasDraft = computed(
   () => draftQuery.value.trim().length > 0 || props.searchQuery.trim().length > 0,
 )
 
-const showSelectedTab = computed(
-  () =>
-    props.selectedCount > 0
-    && (props.modelValue === 'select' || props.modelValue === 'selected'),
-)
-
-const selectedTabMotion = computed(() => ({
-  initial: { opacity: 0, scale: 0.92, x: -6 },
-  animate: { opacity: 1, scale: 1, x: 0 },
-  exit: { opacity: 0, scale: 0.92, x: -6 },
+const selectSlotMotion = computed(() => ({
+  initial: { opacity: 0, x: 10, filter: 'blur(3px)' },
+  animate: { opacity: 1, x: 0, filter: 'blur(0px)' },
+  exit: { opacity: 0, x: -10, filter: 'blur(3px)' },
   transition: presets.value.fast,
 }))
 
@@ -315,6 +353,13 @@ onBeforeUnmount(() => {
   flex: 0 1 auto;
   min-width: 0;
   align-self: center;
+}
+
+.switcher-select-slot {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
 }
 
 .switcher-search-area {

@@ -1061,8 +1061,8 @@ function formatTime(dateValue) {
 }
 
 .note-card.is-selected {
-  background: rgba(37, 99, 235, 0.06);
-  border-color: rgba(37, 99, 235, 0.32);
+  background: rgba(24, 24, 27, 0.04);
+  border-color: rgba(24, 24, 27, 0.22);
 }
 
 .note-select-control {
@@ -1088,8 +1088,8 @@ function formatTime(dateValue) {
 }
 
 .note-card.is-selected .note-select-box {
-  border-color: var(--color-accent);
-  background: var(--color-accent);
+  border-color: #18181b;
+  background: #18181b;
 }
 
 .note-select-box--remove {
@@ -1116,7 +1116,7 @@ function formatTime(dateValue) {
 
 .note-card.is-selected:hover,
 .note-card.is-selected:focus-within {
-  border-color: rgba(37, 99, 235, 0.42);
+  border-color: rgba(24, 24, 27, 0.32);
 }
 
 .note-card.is-editing {

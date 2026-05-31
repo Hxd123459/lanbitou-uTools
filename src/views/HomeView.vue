@@ -25,6 +25,7 @@
             :model-value="noteViewMode"
             :search-query="searchKeyword"
             :selected-count="selectedNoteIds.size"
+            :selecting-active="noteSelectingActive"
             @update:model-value="onNoteViewModeChange"
             @search="onNoteSearch"
           />
@@ -34,11 +35,7 @@
           v-show="noteViewMode === 'list' || noteViewMode === 'select' || noteViewMode === 'selected'"
           ref="noteListRef"
           class="note-list"
-          :class="{
-            'note-list--selecting':
-              (noteViewMode === 'select' || noteViewMode === 'selected')
-              && selectedNoteIds.size > 0,
-          }"
+          :class="{ 'note-list--selecting': selectedNoteIds.size > 0 }"
           @scroll="onNoteListScroll"
         >
           <header v-if="tagFilterState.active" class="tag-filter-summary">
@@ -143,25 +140,6 @@
           </ul>
 
           <ul
-            v-else-if="noteViewMode === 'select'"
-            class="note-list-items"
-          >
-            <li
-              v-for="note in displayedNotes"
-              :key="`select-${note.id}`"
-              class="note-list-item"
-            >
-              <NoteCard
-                :note="note"
-                :highlight="isSearchActive ? searchKeyword : ''"
-                selectable
-                :selected="isNoteSelected(note.id)"
-                @toggle-select="toggleNoteSelect(note.id)"
-              />
-            </li>
-          </ul>
-
-          <ul
             v-else-if="tagFilterState.active"
             class="note-list-items"
           >
@@ -172,12 +150,15 @@
             >
               <NoteCard
                 :note="note"
+                :selectable="showNoteSelectable"
+                :selected="showNoteSelectable && isNoteSelected(note.id)"
                 @edit-save="handleEditSave"
                 @delete="handleDelete"
                 @copied="handleCopied"
                 @copy-failed="handleCopyFailed"
                 @pin="handlePin"
                 @image-too-large="handleImageTooLarge"
+                @toggle-select="toggleNoteSelect(note.id)"
               />
             </li>
           </ul>
@@ -194,12 +175,15 @@
               <NoteCard
                 :note="note"
                 :highlight="searchKeyword"
+                :selectable="showNoteSelectable"
+                :selected="showNoteSelectable && isNoteSelected(note.id)"
                 @edit-save="handleEditSave"
                 @delete="handleDelete"
                 @copied="handleCopied"
                 @copy-failed="handleCopyFailed"
                 @pin="handlePin"
                 @image-too-large="handleImageTooLarge"
+                @toggle-select="toggleNoteSelect(note.id)"
               />
             </li>
           </ul>
@@ -221,12 +205,15 @@
             >
               <NoteCard
                 :note="note"
+                :selectable="showNoteSelectable"
+                :selected="showNoteSelectable && isNoteSelected(note.id)"
                 @edit-save="handleEditSave"
                 @delete="handleDelete"
                 @copied="handleCopied"
                 @copy-failed="handleCopyFailed"
                 @pin="handlePin"
                 @image-too-large="handleImageTooLarge"
+                @toggle-select="toggleNoteSelect(note.id)"
               />
             </motion.li>
           </AnimatePresence>
@@ -240,15 +227,11 @@
         </section>
 
         <div
-          v-if="
-            (noteViewMode === 'select' || noteViewMode === 'selected')
-            && selectedNoteIds.size > 0
-          "
+          v-if="selectedNoteIds.size > 0"
           class="note-bulk-bar-wrap"
         >
           <NoteBulkActionBar
             :busy="bulkActionBusy"
-            :selected-count="selectedNoteIds.size"
             @clear="handleBulkClearSelection"
             @sediment="handleBulkSediment"
             @delete="handleBulkDelete"
@@ -335,6 +318,7 @@ const noteListRef = ref(null)
 const sedimentPanelRef = ref(null)
 const inputBarCompact = ref(false)
 const selectedNoteIds = ref(new Set())
+const noteSelectingActive = ref(false)
 const bulkActionBusy = ref(false)
 let lastListScrollTop = 0
 let searchToken = 0
@@ -371,6 +355,10 @@ const selectedNotesList = computed(() => {
   }
   return ids.map((id) => byId.get(id)).filter(Boolean)
 })
+
+const showNoteSelectable = computed(
+  () => noteSelectingActive.value && noteViewMode.value !== 'selected',
+)
 
 const isDisplayedNotesLoading = computed(() => {
   if (tagFilterState.active) return tagFilterState.loading
@@ -411,17 +399,18 @@ const toggleNoteSelect = (id) => {
   selectedNoteIds.value = next
 }
 
+const exitNoteSelectingSession = () => {
+  noteSelectingActive.value = false
+  clearNoteSelection()
+}
+
 const onNoteViewModeChange = (mode) => {
   const prev = noteViewMode.value
-  if (
-    (prev === 'select' || prev === 'selected')
-    && mode !== 'select'
-    && mode !== 'selected'
-  ) {
-    clearNoteSelection()
+  if (mode === 'select') {
+    noteSelectingActive.value = true
   }
   if (mode === 'selected' && selectedNoteIds.value.size === 0) {
-    noteViewMode.value = 'select'
+    noteViewMode.value = noteSelectingActive.value ? 'select' : 'list'
     return
   }
   if (prev === 'tags' && mode === 'list') {
@@ -433,7 +422,7 @@ const onNoteViewModeChange = (mode) => {
 const handleBulkClearSelection = () => {
   clearNoteSelection()
   if (noteViewMode.value === 'selected') {
-    noteViewMode.value = 'select'
+    noteViewMode.value = noteSelectingActive.value ? 'select' : 'list'
   }
 }
 
@@ -524,7 +513,7 @@ const onNoteSearch = (keyword) => {
 const handleBulkDelete = () => {
   const ids = [...selectedNoteIds.value]
   if (!ids.length) return
-  clearNoteSelection()
+  exitNoteSelectingSession()
   ids.forEach((id) => handleDelete({ id }))
 }
 
@@ -535,7 +524,7 @@ const handleBulkSediment = () => {
   const notes = selectedNotesList.value
   if (!notes.length) return
 
-  clearNoteSelection()
+  exitNoteSelectingSession()
   noteViewMode.value = 'list'
   activeTab.value = 'sediment'
   nextTick(() => {
@@ -832,7 +821,7 @@ watch(
   () => selectedNoteIds.value.size,
   (count) => {
     if (count === 0 && noteViewMode.value === 'selected') {
-      noteViewMode.value = 'select'
+      noteViewMode.value = noteSelectingActive.value ? 'select' : 'list'
     }
   },
 )
