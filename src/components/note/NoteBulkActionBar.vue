@@ -27,8 +27,9 @@
           stroke-linecap="round"
           stroke-linejoin="round"
         >
-          <circle cx="12" cy="12" r="10" />
-          <path d="m15 9-6 6M9 9l6 6" />
+          <path d="M11 21 9 3" />
+          <path d="m17 13-7-1 2 8" />
+          <path d="M11 21a2 2 0 0 0 2-2v-1" />
         </svg>
       </span>
       <span class="note-bulk-btn-label">清空已选</span>

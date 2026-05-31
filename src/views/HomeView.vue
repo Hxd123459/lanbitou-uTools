@@ -38,7 +38,7 @@
           :class="{ 'note-list--selecting': selectedNoteIds.size > 0 }"
           @scroll="onNoteListScroll"
         >
-          <header v-if="tagFilterState.active" class="tag-filter-summary">
+          <header v-if="showTagFilterChrome" class="tag-filter-summary">
             <span class="tag-filter-summary-label">
               标签
               <span class="tag-filter-summary-name">「{{ tagFilterState.tagName }}」</span>
@@ -91,13 +91,13 @@
           </p>
 
           <p
-            v-if="tagFilterState.active && tagFilterState.loading"
+            v-if="showTagFilterChrome && tagFilterState.loading"
             class="empty-state"
           >
             加载中…
           </p>
           <p
-            v-else-if="tagFilterState.active && !tagFilterState.list.length"
+            v-else-if="showTagFilterChrome && !tagFilterState.list.length"
             class="empty-state"
           >
             标签「{{ tagFilterState.tagName }}」下暂无笔记。
@@ -141,7 +141,7 @@
           </ul>
 
           <ul
-            v-else-if="tagFilterState.active"
+            v-else-if="showTagFilterChrome"
             class="note-list-items"
           >
             <li
@@ -361,6 +361,10 @@ const showNoteSelectable = computed(
   () => noteSelectingActive.value && noteViewMode.value !== 'selected',
 )
 
+const showTagFilterChrome = computed(
+  () => tagFilterState.active && noteViewMode.value !== 'selected',
+)
+
 const isDisplayedNotesLoading = computed(() => {
   if (tagFilterState.active) return tagFilterState.loading
   if (isSearchActive.value) return searchState.loading
@@ -415,9 +419,6 @@ const onNoteViewModeChange = (mode) => {
   if (mode === 'selected' && selectedNoteIds.value.size === 0) {
     noteViewMode.value = 'list'
     return
-  }
-  if (prev === 'tags' && mode === 'list') {
-    clearTagFilter()
   }
   noteViewMode.value = mode
 }
@@ -540,9 +541,7 @@ const onNoteListScroll = () => {
   if (
     !el ||
     activeTab.value !== 'home' ||
-    (noteViewMode.value !== 'list'
-      && noteViewMode.value !== 'select'
-      && noteViewMode.value !== 'selected')
+    (noteViewMode.value !== 'list' && noteViewMode.value !== 'selected')
   ) {
     return
   }
@@ -558,7 +557,7 @@ const onNoteListScroll = () => {
 
   const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 80
   if (nearBottom) {
-    if (noteViewMode.value !== 'list' && noteViewMode.value !== 'select') return
+    if (noteViewMode.value !== 'list') return
 
     if (isSearchActive.value) {
       loadMoreSearch()
@@ -814,7 +813,7 @@ const notifyError = (error) => {
 }
 
 watch(noteViewMode, (mode) => {
-  if (mode !== 'list' && mode !== 'select' && mode !== 'selected') {
+  if (mode !== 'list' && mode !== 'selected') {
     inputBarCompact.value = false
     lastListScrollTop = 0
   }
@@ -824,7 +823,7 @@ watch(
   () => selectedNoteIds.value.size,
   (count) => {
     if (count === 0 && noteViewMode.value === 'selected') {
-      noteViewMode.value = noteSelectingActive.value ? 'select' : 'list'
+      noteViewMode.value = 'list'
     }
   },
 )
