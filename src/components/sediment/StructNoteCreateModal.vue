@@ -52,7 +52,7 @@
                     height="15"
                     fill="none"
                     stroke="currentColor"
-                    stroke-width="1.6"
+                    stroke-width="2"
                     stroke-linecap="round"
                     stroke-linejoin="round"
                     aria-hidden="true"
@@ -75,7 +75,7 @@
                       height="15"
                       fill="none"
                       stroke="currentColor"
-                      stroke-width="1.6"
+                      stroke-width="2"
                       stroke-linecap="round"
                       stroke-linejoin="round"
                       aria-hidden="true"
@@ -85,15 +85,13 @@
                     {{ crumb.label }}
                   </span>
                   <div class="breadcrumb-toggle-anchor">
-                    <motion.button
+                    <button
                       type="button"
                       class="breadcrumb-folder-toggle"
                       :class="{ 'is-open': folderMenuOpen }"
                       :aria-expanded="folderMenuOpen"
                       aria-label="选择文件夹"
-                      :while-hover="presets.button.hover"
-                      :while-tap="presets.button.tap"
-                      :transition="presets.button.transition"
+                      @mousedown.prevent
                       @click.stop="toggleFolderMenu"
                     >
                       <motion.svg
@@ -110,7 +108,7 @@
                       >
                         <path d="M6 9l6 6 6-6" />
                       </motion.svg>
-                    </motion.button>
+                    </button>
 
                     <AnimatePresence>
                       <motion.div
@@ -258,6 +256,45 @@
                     :key="note.id"
                     class="struct-note-fragment-item"
                   >
+                    <motion.button
+                      type="button"
+                      class="struct-note-fragment-add"
+                      :class="{ 'is-added': insertedFragmentIds.has(note.id) }"
+                      :disabled="saving || insertedFragmentIds.has(note.id)"
+                      :aria-label="insertedFragmentIds.has(note.id) ? '已加入' : '加入笔记'"
+                      :while-hover="presets.button.hover"
+                      :while-tap="presets.button.tap"
+                      :transition="presets.button.transition"
+                      @click="insertFragment(note)"
+                    >
+                      <svg
+                        v-if="insertedFragmentIds.has(note.id)"
+                        viewBox="0 0 24 24"
+                        width="14"
+                        height="14"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2.2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        aria-hidden="true"
+                      >
+                        <path d="M5 12l5 5L20 7" />
+                      </svg>
+                      <svg
+                        v-else
+                        viewBox="0 0 24 24"
+                        width="14"
+                        height="14"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2.2"
+                        stroke-linecap="round"
+                        aria-hidden="true"
+                      >
+                        <path d="M12 5v14M5 12h14" />
+                      </svg>
+                    </motion.button>
                     <div class="struct-note-fragment-main">
                       <p class="struct-note-fragment-title">
                         {{ getFragmentTitle(note) }}
@@ -266,17 +303,6 @@
                         {{ getFragmentPreview(note) }}
                       </p>
                     </div>
-                    <motion.button
-                      type="button"
-                      class="struct-note-fragment-add"
-                      :disabled="saving || insertedFragmentIds.has(note.id)"
-                      :while-hover="presets.button.hover"
-                      :while-tap="presets.button.tap"
-                      :transition="presets.button.transition"
-                      @click="insertFragment(note)"
-                    >
-                      {{ insertedFragmentIds.has(note.id) ? '已加入' : '加入' }}
-                    </motion.button>
                   </li>
                 </ul>
               </div>
@@ -655,17 +681,29 @@ defineExpose({ resetDraft })
   justify-content: center;
   width: 22px;
   height: 22px;
+  padding: 0;
   border: 0;
   border-radius: 6px;
   background: transparent;
   color: var(--color-secondary-text);
   cursor: pointer;
+  outline: none;
+  box-shadow: none;
+  -webkit-tap-highlight-color: transparent;
 }
 
 .breadcrumb-folder-toggle:hover,
 .breadcrumb-folder-toggle.is-open {
   background: rgba(24, 24, 27, 0.06);
   color: var(--color-primary);
+}
+
+.breadcrumb-folder-toggle:focus,
+.breadcrumb-folder-toggle:focus-visible,
+.breadcrumb-folder-toggle:active {
+  outline: none !important;
+  box-shadow: none !important;
+  border: 0;
 }
 
 .breadcrumb-folder-menu {
@@ -903,19 +941,33 @@ defineExpose({ resetDraft })
 
 .struct-note-fragment-add {
   flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
   border: 0;
-  border-radius: 8px;
-  padding: 6px 10px;
-  background: rgba(37, 99, 235, 0.08);
-  color: var(--color-accent);
-  font-size: 12px;
-  font-weight: 600;
+  border-radius: var(--btn-radius);
+  background: var(--btn-primary-bg);
+  color: var(--btn-primary-fg);
+  box-shadow: var(--btn-primary-shadow);
   cursor: pointer;
 }
 
+.struct-note-fragment-add:hover:not(:disabled) {
+  background: var(--btn-primary-bg-hover);
+  box-shadow: var(--btn-primary-shadow-hover);
+}
+
 .struct-note-fragment-add:disabled {
-  opacity: 0.55;
+  opacity: var(--btn-disabled-opacity);
   cursor: not-allowed;
+  box-shadow: none;
+}
+
+.struct-note-fragment-add.is-added {
+  background: var(--btn-icon-bg-hover);
+  color: var(--color-secondary-text);
 }
 
 .struct-note-title-input {
