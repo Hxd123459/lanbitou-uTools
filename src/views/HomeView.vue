@@ -31,10 +31,14 @@
         </div>
 
         <section
-          v-show="noteViewMode === 'list' || noteViewMode === 'select'"
+          v-show="noteViewMode === 'list' || noteViewMode === 'select' || noteViewMode === 'selected'"
           ref="noteListRef"
           class="note-list"
-          :class="{ 'note-list--selecting': noteViewMode === 'select' }"
+          :class="{
+            'note-list--selecting':
+              (noteViewMode === 'select' || noteViewMode === 'selected')
+              && selectedNoteIds.size > 0,
+          }"
           @scroll="onNoteListScroll"
         >
           <header v-if="tagFilterState.active" class="tag-filter-summary">
@@ -78,6 +82,7 @@
           <p
             v-else-if="
               noteViewMode !== 'select' &&
+              noteViewMode !== 'selected' &&
               !isSearchActive &&
               !tagFilterState.active &&
               !assistantStore.visibleNotes.length &&
@@ -111,6 +116,32 @@
           >
             还没有笔记，先记录一条吧。
           </p>
+
+          <p
+            v-else-if="noteViewMode === 'selected' && !selectedNotesList.length"
+            class="empty-state"
+          >
+            暂无已选笔记。
+          </p>
+          <ul
+            v-else-if="noteViewMode === 'selected'"
+            class="note-list-items"
+          >
+            <li
+              v-for="note in selectedNotesList"
+              :key="`selected-${note.id}`"
+              class="note-list-item"
+            >
+              <NoteCard
+                :note="note"
+                selectable
+                selection-removable
+                selected
+                @toggle-select="toggleNoteSelect(note.id)"
+              />
+            </li>
+          </ul>
+
           <ul
             v-else-if="noteViewMode === 'select'"
             class="note-list-items"
@@ -209,11 +240,16 @@
         </section>
 
         <div
-          v-if="noteViewMode === 'select' && selectedNoteIds.size > 0"
+          v-if="
+            (noteViewMode === 'select' || noteViewMode === 'selected')
+            && selectedNoteIds.size > 0
+          "
           class="note-bulk-bar-wrap"
         >
           <NoteBulkActionBar
             :busy="bulkActionBusy"
+            :selected-count="selectedNoteIds.size"
+            @clear="handleBulkClearSelection"
             @sediment="handleBulkSediment"
             @delete="handleBulkDelete"
           />
@@ -320,6 +356,22 @@ const displayedNotes = computed(() => {
   return assistantStore.visibleNotes
 })
 
+const selectedNotesList = computed(() => {
+  const ids = [...selectedNoteIds.value]
+  if (!ids.length) return []
+  const byId = new Map()
+  for (const note of assistantStore.visibleNotes) {
+    if (note?.id) byId.set(note.id, note)
+  }
+  for (const note of searchState.list) {
+    if (note?.id) byId.set(note.id, note)
+  }
+  for (const note of tagFilterState.list) {
+    if (note?.id) byId.set(note.id, note)
+  }
+  return ids.map((id) => byId.get(id)).filter(Boolean)
+})
+
 const isDisplayedNotesLoading = computed(() => {
   if (tagFilterState.active) return tagFilterState.loading
   if (isSearchActive.value) return searchState.loading
@@ -327,7 +379,7 @@ const isDisplayedNotesLoading = computed(() => {
 })
 
 const showListLoadingMore = computed(() => {
-  if (noteViewMode.value === 'select') return false
+  if (noteViewMode.value === 'select' || noteViewMode.value === 'selected') return false
   if (isSearchActive.value) return searchState.loadingMore
   if (tagFilterState.active) return tagFilterState.loadingMore
   return assistantStore.loadingMoreNotes
@@ -361,13 +413,28 @@ const toggleNoteSelect = (id) => {
 
 const onNoteViewModeChange = (mode) => {
   const prev = noteViewMode.value
-  if (prev === 'select' && mode !== 'select') {
+  if (
+    (prev === 'select' || prev === 'selected')
+    && mode !== 'select'
+    && mode !== 'selected'
+  ) {
     clearNoteSelection()
+  }
+  if (mode === 'selected' && selectedNoteIds.value.size === 0) {
+    noteViewMode.value = 'select'
+    return
   }
   if (prev === 'tags' && mode === 'list') {
     clearTagFilter()
   }
   noteViewMode.value = mode
+}
+
+const handleBulkClearSelection = () => {
+  clearNoteSelection()
+  if (noteViewMode.value === 'selected') {
+    noteViewMode.value = 'select'
+  }
 }
 
 const scrollNoteListToTop = () => {
@@ -465,8 +532,7 @@ const handleBulkSediment = () => {
   const ids = [...selectedNoteIds.value]
   if (!ids.length || bulkActionBusy.value) return
 
-  const idSet = new Set(ids)
-  const notes = displayedNotes.value.filter((note) => idSet.has(note.id))
+  const notes = selectedNotesList.value
   if (!notes.length) return
 
   clearNoteSelection()
@@ -482,7 +548,9 @@ const onNoteListScroll = () => {
   if (
     !el ||
     activeTab.value !== 'home' ||
-    (noteViewMode.value !== 'list' && noteViewMode.value !== 'select')
+    (noteViewMode.value !== 'list'
+      && noteViewMode.value !== 'select'
+      && noteViewMode.value !== 'selected')
   ) {
     return
   }
@@ -754,11 +822,20 @@ const notifyError = (error) => {
 }
 
 watch(noteViewMode, (mode) => {
-  if (mode !== 'list' && mode !== 'select') {
+  if (mode !== 'list' && mode !== 'select' && mode !== 'selected') {
     inputBarCompact.value = false
     lastListScrollTop = 0
   }
 })
+
+watch(
+  () => selectedNoteIds.value.size,
+  (count) => {
+    if (count === 0 && noteViewMode.value === 'selected') {
+      noteViewMode.value = 'select'
+    }
+  },
+)
 
 onMounted(async () => {
   try {

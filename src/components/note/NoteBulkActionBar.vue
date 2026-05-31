@@ -7,6 +7,21 @@
     :animate="presets.reveal.animate"
     :transition="presets.reveal.transition"
   >
+    <div class="note-bulk-meta">
+      <span class="note-bulk-count">已选 {{ selectedCount }} 条</span>
+      <motion.button
+        type="button"
+        class="note-bulk-clear"
+        :disabled="busy"
+        :while-hover="presets.button.hover"
+        :while-tap="presets.button.tap"
+        :transition="presets.button.transition"
+        @click="$emit('clear')"
+      >
+        清空已选
+      </motion.button>
+    </div>
+    <div class="note-bulk-actions">
     <motion.button
       type="button"
       class="note-bulk-btn"
@@ -61,6 +76,7 @@
       </span>
       <span class="note-bulk-btn-label">删除</span>
     </motion.button>
+    </div>
   </motion.div>
 </template>
 
@@ -73,9 +89,13 @@ defineProps({
     type: Boolean,
     default: false,
   },
+  selectedCount: {
+    type: Number,
+    default: 0,
+  },
 })
 
-defineEmits(['sediment', 'delete'])
+defineEmits(['sediment', 'delete', 'clear'])
 
 const { presets } = useMotionPresets()
 </script>
@@ -84,7 +104,7 @@ const { presets } = useMotionPresets()
 .note-bulk-bar {
   display: inline-flex;
   align-items: stretch;
-  gap: 8px;
+  gap: 12px;
   width: fit-content;
   max-width: calc(100vw - 48px);
   padding: 8px 10px;
@@ -93,6 +113,52 @@ const { presets } = useMotionPresets()
   background: var(--color-surface);
   box-shadow: var(--shadow-float);
   box-sizing: border-box;
+}
+
+.note-bulk-meta {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 4px;
+  padding: 4px 8px 4px 4px;
+  border-right: 1px solid var(--color-border);
+  min-width: 0;
+}
+
+.note-bulk-count {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-text);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.note-bulk-clear {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--color-secondary-text);
+  font-size: 11px;
+  font-weight: 500;
+  font-family: inherit;
+  cursor: pointer;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.note-bulk-clear:hover:not(:disabled) {
+  color: var(--color-accent);
+}
+
+.note-bulk-clear:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.note-bulk-actions {
+  display: inline-flex;
+  align-items: stretch;
+  gap: 8px;
 }
 
 .note-bulk-btn {

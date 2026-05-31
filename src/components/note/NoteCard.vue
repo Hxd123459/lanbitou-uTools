@@ -6,7 +6,8 @@
       'is-pinned-top': isPinnedTop,
       'is-pinned-bottom': isPinnedBottom,
       'is-selectable': selectable,
-      'is-selected': selectable && selected,
+      'is-selected': selectable && selected && !selectionRemovable,
+      'is-selection-removable': selectable && selectionRemovable,
     }"
     @click="onSelectableCardClick"
   >
@@ -14,13 +15,30 @@
       v-if="selectable && !note?.isPending"
       type="button"
       class="note-select-control"
-      :aria-pressed="selected"
-      :aria-label="selected ? '取消选中' : '选中笔记'"
+      :aria-pressed="selectionRemovable ? true : selected"
+      :aria-label="selectionRemovable ? '移出已选' : selected ? '取消选中' : '选中笔记'"
       @click.stop="emit('toggle-select')"
     >
-      <span class="note-select-box" aria-hidden="true">
+      <span
+        class="note-select-box"
+        :class="{ 'note-select-box--remove': selectionRemovable }"
+        aria-hidden="true"
+      >
         <svg
-          v-if="selected"
+          v-if="selectionRemovable"
+          viewBox="0 0 24 24"
+          width="11"
+          height="11"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2.4"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M18 6 6 18M6 6l12 12" />
+        </svg>
+        <svg
+          v-else-if="selected"
           viewBox="0 0 24 24"
           width="12"
           height="12"
@@ -440,6 +458,10 @@ const props = defineProps({
     default: false,
   },
   selected: {
+    type: Boolean,
+    default: false,
+  },
+  selectionRemovable: {
     type: Boolean,
     default: false,
   },
@@ -1068,6 +1090,18 @@ function formatTime(dateValue) {
 .note-card.is-selected .note-select-box {
   border-color: var(--color-accent);
   background: var(--color-accent);
+}
+
+.note-select-box--remove {
+  border-color: #18181b;
+  background: #18181b;
+  color: #ffffff;
+}
+
+.note-card.is-selection-removable:hover .note-select-box--remove,
+.note-card.is-selection-removable:focus-within .note-select-box--remove {
+  background: #3f3f46;
+  border-color: #3f3f46;
 }
 
 .note-card-main {
