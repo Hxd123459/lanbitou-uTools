@@ -19,38 +19,55 @@
       :aria-label="selectionRemovable ? '移出已选' : selected ? '取消选中' : '选中笔记'"
       @click.stop="emit('toggle-select')"
     >
-      <span
+      <motion.span
         class="note-select-box"
-        :class="{ 'note-select-box--remove': selectionRemovable }"
+        :class="{
+          'note-select-box--remove': selectionRemovable,
+          'is-checked': selected && !selectionRemovable,
+        }"
         aria-hidden="true"
+        :animate="selectBoxMotion"
+        :transition="presets.fast"
       >
-        <svg
-          v-if="selectionRemovable"
-          viewBox="0 0 24 24"
-          width="11"
-          height="11"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="2.4"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-        >
-          <path d="M18 6 6 18M6 6l12 12" />
-        </svg>
-        <svg
-          v-else-if="selected"
-          viewBox="0 0 24 24"
-          width="12"
-          height="12"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="2.6"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-        >
-          <path d="m5 12 4 4L19 6" />
-        </svg>
-      </span>
+        <AnimatePresence mode="wait" :initial="false">
+          <motion.svg
+            v-if="selectionRemovable"
+            key="remove"
+            viewBox="0 0 24 24"
+            width="11"
+            height="11"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2.4"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            :initial="selectIconMotion.initial"
+            :animate="selectIconMotion.animate"
+            :exit="selectIconMotion.exit"
+            :transition="selectIconMotion.transition"
+          >
+            <path d="M18 6 6 18M6 6l12 12" />
+          </motion.svg>
+          <motion.svg
+            v-else-if="selected"
+            key="check"
+            viewBox="0 0 24 24"
+            width="12"
+            height="12"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2.6"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            :initial="selectIconMotion.initial"
+            :animate="selectIconMotion.animate"
+            :exit="selectIconMotion.exit"
+            :transition="selectIconMotion.transition"
+          >
+            <path d="m5 12 4 4L19 6" />
+          </motion.svg>
+        </AnimatePresence>
+      </motion.span>
     </button>
 
     <div class="note-card-main">
@@ -429,7 +446,7 @@ import {
   ref,
   watch,
 } from 'vue'
-import { motion } from 'motion-v'
+import { AnimatePresence, motion } from 'motion-v'
 import {
   MarkdownRender,
   getMarkdown,
@@ -443,6 +460,22 @@ import NoteImageGallery from './NoteImageGallery.vue'
 import NoteRecallModal from './NoteRecallModal.vue'
 
 const { presets, reduced } = useMotionPresets()
+
+const selectBoxMotion = computed(() => {
+  if (props.selectionRemovable) {
+    return { scale: 1 }
+  }
+  return {
+    scale: props.selected ? 1 : 0.92,
+  }
+})
+
+const selectIconMotion = computed(() => ({
+  initial: { opacity: 0, scale: 0.45 },
+  animate: { opacity: 1, scale: 1 },
+  exit: { opacity: 0, scale: 0.45 },
+  transition: presets.value.fast,
+}))
 
 const props = defineProps({
   note: {
@@ -1060,9 +1093,12 @@ function formatTime(dateValue) {
   cursor: pointer;
 }
 
-.note-card.is-selected {
+.note-card.is-selectable.is-selected {
   background: rgba(24, 24, 27, 0.04);
   border-color: rgba(24, 24, 27, 0.22);
+  transition:
+    background-color 0.18s ease,
+    border-color 0.18s ease;
 }
 
 .note-select-control {
@@ -1085,9 +1121,13 @@ function formatTime(dateValue) {
   background: var(--color-surface);
   color: #ffffff;
   box-sizing: border-box;
+  transform-origin: center;
+  transition:
+    background-color 0.18s ease,
+    border-color 0.18s ease;
 }
 
-.note-card.is-selected .note-select-box {
+.note-select-box.is-checked {
   border-color: #18181b;
   background: #18181b;
 }
@@ -1114,8 +1154,8 @@ function formatTime(dateValue) {
   border-color: rgba(200, 200, 200, 0.45);
 }
 
-.note-card.is-selected:hover,
-.note-card.is-selected:focus-within {
+.note-card.is-selectable.is-selected:hover,
+.note-card.is-selectable.is-selected:focus-within {
   border-color: rgba(24, 24, 27, 0.32);
 }
 

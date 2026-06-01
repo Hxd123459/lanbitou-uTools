@@ -39,7 +39,6 @@
 
       <AppButton
         class="btn btn-primary sediment-create-file"
-        title="新建文件"
         @click="openCreateNoteModal"
       >
         <svg
@@ -58,6 +57,7 @@
           <line x1="12" y1="18" x2="12" y2="12" />
           <line x1="9" y1="15" x2="15" y2="15" />
         </svg>
+        <span>新建文件</span>
       </AppButton>
     </header>
 
@@ -982,9 +982,15 @@ defineExpose({ openCreateNoteModal })
 
 .sediment-create-file {
   flex: 0 0 auto;
-  width: 32px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  width: auto;
   height: 32px;
-  padding: 0;
+  padding: 0 12px;
+  font-size: 13px;
+  font-weight: 500;
+  white-space: nowrap;
 }
 
 .folder-grid-wrap {
