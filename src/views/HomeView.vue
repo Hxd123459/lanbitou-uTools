@@ -28,6 +28,7 @@
             :selecting-active="noteSelectingActive"
             @update:model-value="onNoteViewModeChange"
             @search="onNoteSearch"
+            @search-open="onNoteSearchOpen"
           />
         </div>
 
@@ -413,6 +414,9 @@ const exitNoteSelectingSession = () => {
   clearNoteSelection()
 }
 
+const shouldExitEmptySelecting = () =>
+  noteSelectingActive.value && selectedNoteIds.value.size === 0
+
 const onNoteViewModeChange = (mode) => {
   const prev = noteViewMode.value
   if (mode === 'select') {
@@ -429,7 +433,16 @@ const onNoteViewModeChange = (mode) => {
     noteViewMode.value = noteSelectingActive.value ? 'select' : 'list'
     return
   }
+  if ((mode === 'list' || mode === 'tags') && shouldExitEmptySelecting()) {
+    exitNoteSelectingSession()
+  }
   noteViewMode.value = mode
+}
+
+const onNoteSearchOpen = () => {
+  if (!shouldExitEmptySelecting()) return
+  exitNoteSelectingSession()
+  noteViewMode.value = 'list'
 }
 
 const handleBulkClearSelection = () => {
@@ -517,6 +530,9 @@ const onNoteSearch = (keyword) => {
     resetNoteSearch()
     scrollNoteListToTop()
     return
+  }
+  if (shouldExitEmptySelecting()) {
+    exitNoteSelectingSession()
   }
   noteViewMode.value = 'list'
   clearTagFilter()
