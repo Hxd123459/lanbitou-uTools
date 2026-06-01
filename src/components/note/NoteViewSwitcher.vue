@@ -233,7 +233,7 @@ const props = defineProps({
   },
 })
 
-const emit = defineEmits(['update:modelValue', 'search'])
+const emit = defineEmits(['update:modelValue', 'search', 'search-open'])
 
 const { presets } = useMotionPresets()
 
@@ -295,6 +295,7 @@ const onDraftInput = (event) => {
 }
 
 const openSearch = () => {
+  emit('search-open')
   if (!draftQuery.value && props.searchQuery) {
     draftQuery.value = props.searchQuery
   }

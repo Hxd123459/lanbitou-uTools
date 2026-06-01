@@ -23,6 +23,7 @@ import { Editor } from '@bytemd/vue-next'
 import editorLocale from 'bytemd/locales/zh_Hans.json'
 import { getByteMdEditorPlugins } from '../../composables/useByteMdPlugins'
 import '../../assets/styles/bytemd-slash-menu.css'
+import '../../assets/styles/bytemd-editor-live.css'
 
 const props = defineProps({
   modelValue: {
@@ -47,6 +48,8 @@ const editorPlugins = getByteMdEditorPlugins()
 const editorConfig = computed(() => ({
   readOnly: props.disabled,
   lineWrapping: true,
+  mode: 'gfm',
+  theme: 'default',
 }))
 
 const rootStyle = computed(() => ({

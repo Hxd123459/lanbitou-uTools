@@ -183,6 +183,43 @@ export function slashCommandPlugin() {
         selectedIndex = 0
       }
 
+      const positionMenu = (menu, slash) => {
+        const coords = editor.charCoords(slash.from, 'window')
+        menu.style.visibility = 'hidden'
+        menu.style.left = `${coords.left}px`
+        menu.style.top = `${coords.bottom + 6}px`
+        menu.hidden = false
+
+        requestAnimationFrame(() => {
+          const rect = menu.getBoundingClientRect()
+          const viewportPadding = 8
+          let top = coords.bottom + 6
+          let left = coords.left
+
+          if (rect.bottom > window.innerHeight - viewportPadding) {
+            top = Math.max(
+              viewportPadding,
+              coords.top - rect.height - 6,
+            )
+          }
+
+          if (left + rect.width > window.innerWidth - viewportPadding) {
+            left = Math.max(
+              viewportPadding,
+              window.innerWidth - rect.width - viewportPadding,
+            )
+          }
+
+          if (left < viewportPadding) {
+            left = viewportPadding
+          }
+
+          menu.style.left = `${left}px`
+          menu.style.top = `${top}px`
+          menu.style.visibility = 'visible'
+        })
+      }
+
       const renderMenu = () => {
         const slash = getSlashContext(editor)
         if (!slash) {
@@ -218,10 +255,7 @@ export function slashCommandPlugin() {
           )
           .join('')
 
-        const coords = editor.charCoords(slash.from, 'window')
-        menu.style.left = `${coords.left}px`
-        menu.style.top = `${coords.bottom + 6}px`
-        menu.hidden = false
+        positionMenu(menu, slash)
       }
 
       const removeSlashToken = () => {
