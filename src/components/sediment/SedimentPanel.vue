@@ -420,7 +420,7 @@
     <StructNoteCreateModal
       :visible="createNoteVisible"
       :saving="noteSaving"
-      :initial-path-stack="pathStack"
+      :initial-path-stack="createNoteInitialPathStack"
       :fragment-notes="pendingFragmentNotes"
       @close="closeCreateNoteModal"
       @save="handleCreateNote"
@@ -480,6 +480,7 @@ const draftFolderName = ref('')
 const folderNameInputRef = ref(null)
 
 const createNoteVisible = ref(false)
+const createNoteInitialPathStack = ref([])
 const noteSaving = ref(false)
 const pendingFragmentNotes = ref([])
 
@@ -840,7 +841,11 @@ const onDropToFolder = async (folder) => {
 
 // ---- 新建文件 ----
 const openCreateNoteModal = (fragmentNotes = []) => {
-  pendingFragmentNotes.value = Array.isArray(fragmentNotes) ? fragmentNotes : []
+  const notes = Array.isArray(fragmentNotes) ? fragmentNotes : []
+  pendingFragmentNotes.value = notes
+  createNoteInitialPathStack.value = notes.length > 0
+    ? []
+    : pathStack.value.map((item) => ({ id: item.id, name: item.name }))
   createNoteVisible.value = true
 }
 

@@ -539,7 +539,6 @@ const handleBulkSediment = () => {
 
   exitNoteSelectingSession()
   noteViewMode.value = 'list'
-  activeTab.value = 'sediment'
   nextTick(() => {
     sedimentPanelRef.value?.openCreateNoteModal(notes)
   })

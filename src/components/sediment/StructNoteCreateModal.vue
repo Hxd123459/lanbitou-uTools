@@ -121,6 +121,7 @@
                         :animate="{ opacity: 1, y: 0, scale: 1 }"
                         :exit="{ opacity: 0, y: -8, scale: 0.96 }"
                         :transition="{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }"
+                        @mousedown.stop
                       >
                         <p v-if="folderMenuLoading" class="breadcrumb-folder-state">加载中…</p>
                         <template v-else>
@@ -444,10 +445,12 @@ const toggleFolderMenu = async () => {
   await loadFolderMenuItems()
 }
 
-const enterFolderFromMenu = (folder) => {
+const enterFolderFromMenu = async (folder) => {
   if (folder.type !== 'folder') return
   pathStack.value = [...pathStack.value, { id: folder.id, name: folder.name }]
-  closeFolderMenu()
+  creatingFolder.value = false
+  draftFolderName.value = ''
+  await loadFolderMenuItems()
 }
 
 const startCreateFolder = async () => {
@@ -533,7 +536,10 @@ const onKeydown = (event) => {
 
 const onDocumentPointerdown = (event) => {
   if (!folderMenuOpen.value) return
-  if (currentCrumbRef.value?.contains(event.target)) return
+  const anchor = Array.isArray(currentCrumbRef.value)
+    ? currentCrumbRef.value[0]
+    : currentCrumbRef.value
+  if (anchor?.contains(event.target)) return
   closeFolderMenu()
 }
 
