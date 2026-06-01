@@ -396,21 +396,16 @@
 
     <template v-else>
       <div ref="contentRootRef" class="note-content-root">
-        <MarkdownRender
-          v-if="markdownNodes.length"
-          :nodes="markdownNodes"
-          :typewriter="false"
-          :batch-rendering="false"
-          :defer-nodes-until-visible="false"
-          code-block-light-theme="github-light"
-          code-block-dark-theme="github-light"
-          :themes="codeThemes"
+        <ByteMdPreview
+          v-if="contentText"
+          :content="contentText"
+          :show-fallback="false"
         />
         <p
           v-else-if="!images.length"
           class="note-text-fallback"
         >
-          {{ contentText || '（暂无内容）' }}
+          {{ '（暂无内容）' }}
         </p>
       </div>
 
@@ -430,15 +425,11 @@ import {
   watch,
 } from 'vue'
 import { motion } from 'motion-v'
-import {
-  MarkdownRender,
-  getMarkdown,
-  parseMarkdownToStructure,
-} from 'vue-renderer-markdown'
 import { isImageFileSizeAllowed } from '../../constants/uploadLimits'
 import { useMotionPresets } from '../../composables/useMotionPresets'
 import { useAssistantStore } from '../../stores/assistantStore'
 import AppButton from '../motion/AppButton.vue'
+import ByteMdPreview from '../common/ByteMdPreview.vue'
 import NoteImageGallery from './NoteImageGallery.vue'
 import NoteRecallModal from './NoteRecallModal.vue'
 
@@ -498,10 +489,7 @@ let listScrollEl = null
 let lastListScrollTop = 0
 
 const HIGHLIGHT_CLASS = 'note-highlight'
-const HIGHLIGHT_SKIP_SELECTOR =
-  'pre, code, .monaco-editor, .shiki, .code-action-btn, .copy-button'
-
-const codeThemes = { light: 'github-light', dark: 'github-light' }
+const HIGHLIGHT_SKIP_SELECTOR = 'pre, code, .hljs'
 
 const isEditing = computed(
   () => assistantStore.editingNoteId === props.note?.id,
@@ -592,39 +580,6 @@ const canSave = computed(
       draftTitle.value !== titleText.value ||
       imagesPayloadChanged.value),
 )
-
-const md = getMarkdown('note-card')
-
-/**
- * markdown-it 的 fence 规则会把围栏内容连同最后一个 `\n` 写入 token，
- * 渲染端在 `pre { white-space: pre }` 下会多渲一空行。
- * 这里递归剪掉所有 code_block 节点 `code` 末尾的换行（不影响中间空行）。
- */
-function trimCodeBlockTrailingNewlines(nodes) {
-  if (!Array.isArray(nodes)) return nodes
-  for (const node of nodes) {
-    if (!node || typeof node !== 'object') continue
-    if (node.type === 'code_block' && typeof node.code === 'string') {
-      node.code = node.code.replace(/(?:\r?\n)+$/, '')
-    }
-    if (Array.isArray(node.children)) trimCodeBlockTrailingNewlines(node.children)
-    if (Array.isArray(node.items)) trimCodeBlockTrailingNewlines(node.items)
-    if (Array.isArray(node.rows)) trimCodeBlockTrailingNewlines(node.rows)
-    if (node.header) trimCodeBlockTrailingNewlines([node.header])
-  }
-  return nodes
-}
-
-const markdownNodes = computed(() => {
-  const text = contentText.value
-  if (!text) return []
-  try {
-    return trimCodeBlockTrailingNewlines(parseMarkdownToStructure(text, md))
-  } catch (error) {
-    console.error('[NoteCard] parse markdown failed:', error)
-    return []
-  }
-})
 
 function revokeDraftNewUrls() {
   draftImageItems.value.forEach((item) => {
@@ -1383,49 +1338,17 @@ function formatTime(dateValue) {
   font-size: 13px;
 }
 
-/* === Markdown 代码块：白色主题 + 隐藏工具栏 === */
-.note-card :deep(.code-action-btn),
-.note-card :deep(.copy-button) {
-  display: none !important;
-}
-
-.note-card :deep(.monaco-editor),
-.note-card :deep(.monaco-editor-background),
-.note-card :deep(.monaco-editor .margin),
-.note-card :deep(.monaco-editor .lines-content),
-.note-card :deep(.monaco-editor .view-overlays),
-.note-card :deep(.monaco-editor .overflow-guard),
-.note-card :deep(.monaco-diff-editor),
-.note-card :deep(pre[class*="language-"]),
-.note-card :deep(pre.shiki) {
+/* === Markdown 代码块：白色主题 === */
+.note-card :deep(.markdown-body pre) {
   background: #fafafa !important;
-}
-
-.note-card :deep(pre.shiki),
-.note-card :deep(pre[class*="language-"]) {
   border: 1px solid var(--color-border);
   border-radius: 8px;
   padding: 12px 14px;
   font-size: 13px;
 }
 
-.note-card :deep(pre.shiki *),
-.note-card :deep(pre[class*="language-"] *) {
+.note-card :deep(.markdown-body pre code) {
   background: transparent !important;
-}
-
-/* shiki 在部分版本里仍可能多吐一个空 .line，兜底隐藏 */
-.note-card :deep(pre.shiki code > .line:last-child:empty),
-.note-card :deep(pre[class*="language-"] code > .line:last-child:empty) {
-  display: none;
-}
-.note-card :deep(pre.shiki code),
-.note-card :deep(pre[class*="language-"] code) {
-  display: block;
-}
-
-.note-card :deep(.monaco-editor) {
-  border-radius: 8px;
 }
 
 /* === 编辑器：无装饰原地编辑 === */

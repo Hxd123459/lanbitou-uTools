@@ -19,11 +19,9 @@
 
 <script setup>
 import { computed, nextTick, ref } from 'vue'
-import gfm from '@bytemd/plugin-gfm'
 import { Editor } from '@bytemd/vue-next'
 import editorLocale from 'bytemd/locales/zh_Hans.json'
-import { slashCommandPlugin } from '../../plugins/bytemdSlashCommand'
-import 'bytemd/dist/index.css'
+import { getByteMdEditorPlugins } from '../../composables/useByteMdPlugins'
 import '../../assets/styles/bytemd-slash-menu.css'
 
 const props = defineProps({
@@ -44,7 +42,7 @@ const props = defineProps({
 const emit = defineEmits(['update:modelValue'])
 
 const rootRef = ref(null)
-const editorPlugins = [gfm(), slashCommandPlugin()]
+const editorPlugins = getByteMdEditorPlugins()
 
 const editorConfig = computed(() => ({
   readOnly: props.disabled,

@@ -78,17 +78,10 @@
                   </time>
                   <div class="recall-article-body">
                     <div class="recall-content-root">
-                      <MarkdownRender
-                        v-if="markdownNodes.length"
-                        :nodes="markdownNodes"
-                        :typewriter="false"
-                        :batch-rendering="false"
-                        :defer-nodes-until-visible="false"
-                        code-block-light-theme="github-light"
-                        code-block-dark-theme="github-light"
-                        :themes="codeThemes"
+                      <ByteMdPreview
+                        :content="recall.markdownContent"
+                        fallback-text="暂无正文"
                       />
-                      <p v-else class="recall-content-fallback">暂无正文</p>
                     </div>
                     <NoteImageGallery
                       v-if="recallImages.length"
@@ -130,13 +123,9 @@
 <script setup>
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { AnimatePresence, motion } from 'motion-v'
-import {
-  MarkdownRender,
-  getMarkdown,
-  parseMarkdownToStructure,
-} from 'vue-renderer-markdown'
 import { clickNoteMemory, fetchNoteRecall } from '../../api/noteMemory'
 import { useMotionPresets } from '../../composables/useMotionPresets'
+import ByteMdPreview from '../common/ByteMdPreview.vue'
 import NoteImageGallery from './NoteImageGallery.vue'
 
 const props = defineProps({
@@ -154,8 +143,6 @@ const loadError = ref('')
 const showDetail = ref(false)
 let bodyOverflowBeforeOpen = ''
 
-const codeThemes = { light: 'github-light', dark: 'github-light' }
-const md = getMarkdown('note-recall-modal')
 const modalEase = [0.22, 1, 0.36, 1]
 
 const modalMotion = computed(() => {
@@ -224,37 +211,11 @@ const contentMotion = computed(() => {
   }
 })
 
-function trimCodeBlockTrailingNewlines(nodes) {
-  if (!Array.isArray(nodes)) return nodes
-  for (const node of nodes) {
-    if (!node || typeof node !== 'object') continue
-    if (node.type === 'code_block' && typeof node.code === 'string') {
-      node.code = node.code.replace(/(?:\r?\n)+$/, '')
-    }
-    if (Array.isArray(node.children)) trimCodeBlockTrailingNewlines(node.children)
-    if (Array.isArray(node.items)) trimCodeBlockTrailingNewlines(node.items)
-    if (Array.isArray(node.rows)) trimCodeBlockTrailingNewlines(node.rows)
-    if (node.header) trimCodeBlockTrailingNewlines([node.header])
-  }
-  return nodes
-}
-
 const createTimeText = computed(() => formatTime(recall.value?.createTime))
 const recallSourceText = computed(() => {
   const days = Number(recall.value?.beforeDays)
   if (!Number.isFinite(days) || days <= 0) return ''
   return `来自${days}天前的回响`
-})
-
-const markdownNodes = computed(() => {
-  const text = recall.value?.markdownContent || ''
-  if (!text) return []
-  try {
-    return trimCodeBlockTrailingNewlines(parseMarkdownToStructure(text, md))
-  } catch (error) {
-    console.error('[NoteRecallModal] parse markdown failed:', error)
-    return []
-  }
 })
 
 const recallImages = computed(() =>
@@ -532,8 +493,7 @@ onBeforeUnmount(() => {
   text-align: left;
 }
 
-.recall-content-root :deep(pre),
-.recall-content-root :deep(.monaco-editor) {
+.recall-content-root :deep(pre) {
   margin-left: 0;
   margin-right: 0;
   text-align: left;
@@ -543,35 +503,16 @@ onBeforeUnmount(() => {
   margin-bottom: 0;
 }
 
-.recall-content-root :deep(.code-action-btn),
-.recall-content-root :deep(.copy-button) {
-  display: none !important;
-}
-
-.recall-content-root :deep(.monaco-editor),
-.recall-content-root :deep(.monaco-editor-background),
-.recall-content-root :deep(.monaco-editor .margin),
-.recall-content-root :deep(.monaco-editor .lines-content),
-.recall-content-root :deep(.monaco-editor .view-overlays),
-.recall-content-root :deep(.monaco-editor .overflow-guard),
-.recall-content-root :deep(.monaco-diff-editor),
-.recall-content-root :deep(pre[class*='language-']),
-.recall-content-root :deep(pre.shiki) {
+.recall-content-root :deep(.markdown-body pre) {
   background: rgba(255, 255, 255, 0.85) !important;
-}
-
-.recall-content-root :deep(pre.shiki),
-.recall-content-root :deep(pre[class*='language-']) {
   border: 1px solid var(--color-border);
   border-radius: 8px;
   padding: 12px 14px;
   font-size: 13px;
 }
 
-.recall-content-fallback {
-  margin: 0;
+.recall-content-root :deep(.byte-md-preview-fallback) {
   text-align: center;
-  color: var(--color-secondary-text);
   font-size: 14px;
 }
 
