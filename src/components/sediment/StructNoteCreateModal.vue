@@ -227,13 +227,11 @@
                 spellcheck="false"
                 :disabled="saving"
               />
-              <textarea
-                ref="contentTextareaRef"
+              <StructNoteMarkdownEditor
+                ref="contentEditorRef"
                 v-model="draftContent"
-                class="struct-note-content-textarea"
-                placeholder="开始写作…"
-                spellcheck="false"
                 :disabled="saving"
+                :min-height="240"
               />
             </div>
           </div>
@@ -351,6 +349,7 @@ import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { AnimatePresence, motion } from 'motion-v'
 import { createStructFolder, fetchFolderList } from '../../api/structFolder'
 import { useMotionPresets } from '../../composables/useMotionPresets'
+import StructNoteMarkdownEditor from './StructNoteMarkdownEditor.vue'
 
 const props = defineProps({
   visible: {
@@ -378,7 +377,7 @@ const { presets } = useMotionPresets()
 const draftTitle = ref('')
 const draftContent = ref('')
 const titleInputRef = ref(null)
-const contentTextareaRef = ref(null)
+const contentEditorRef = ref(null)
 const pathStack = ref([])
 const folderMenuOpen = ref(false)
 const folderMenuLoading = ref(false)
@@ -530,7 +529,7 @@ const insertFragment = (note) => {
     ? `${draftContent.value.trim()}\n\n${block}`
     : block
   insertedFragmentIds.value = new Set([...insertedFragmentIds.value, note.id])
-  nextTick(() => contentTextareaRef.value?.focus())
+  nextTick(() => contentEditorRef.value?.focus())
 }
 
 const onKeydown = (event) => {
@@ -1010,26 +1009,6 @@ defineExpose({ resetDraft })
 }
 
 .struct-note-title-input::placeholder {
-  color: #d1d5db;
-}
-
-.struct-note-content-textarea {
-  flex: 1;
-  min-height: 0;
-  width: 100%;
-  border: none;
-  outline: none;
-  background: transparent;
-  font-family: inherit;
-  font-size: 15px;
-  line-height: 1.75;
-  color: var(--color-text);
-  resize: none;
-  padding: 0;
-  caret-color: var(--color-accent);
-}
-
-.struct-note-content-textarea::placeholder {
   color: #d1d5db;
 }
 

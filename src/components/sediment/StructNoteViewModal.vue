@@ -107,16 +107,19 @@
             <div class="note-view-divider" />
 
             <!-- 正文 -->
-            <textarea
+            <StructNoteMarkdownEditor
               v-if="editing"
               v-model="draftContent"
-              class="note-view-textarea"
-              placeholder="开始写作…"
-              spellcheck="false"
+              class="note-view-editor"
               :disabled="saving"
             />
             <div v-else-if="fetching" class="note-view-loading">加载中…</div>
-            <div v-else class="note-view-content">{{ note.content || '暂无内容' }}</div>
+            <StructNoteMarkdownPreview
+              v-else
+              class="note-view-content"
+              :content="note.content"
+              parser-key="struct-note-view-modal"
+            />
           </template>
         </div>
       </motion.div>
@@ -129,6 +132,8 @@ import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { AnimatePresence, motion } from 'motion-v'
 import { getStructNote, updateStructNote } from '../../api/structNote'
 import { useMotionPresets } from '../../composables/useMotionPresets'
+import StructNoteMarkdownEditor from './StructNoteMarkdownEditor.vue'
+import StructNoteMarkdownPreview from './StructNoteMarkdownPreview.vue'
 
 const props = defineProps({
   visible: { type: Boolean, default: false },
@@ -325,33 +330,10 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
   flex: 0 0 auto;
 }
 
-.note-view-content {
+.note-view-content,
+.note-view-editor {
   flex: 1;
-  font-size: 15px;
-  line-height: 1.75;
-  color: var(--color-text);
-  white-space: pre-wrap;
-  word-break: break-word;
-}
-
-.note-view-textarea {
-  flex: 1;
-  min-height: 320px;
-  width: 100%;
-  border: none;
-  outline: none;
-  background: transparent;
-  font-family: inherit;
-  font-size: 15px;
-  line-height: 1.75;
-  color: var(--color-text);
-  resize: none;
-  padding: 0;
-  caret-color: var(--color-accent);
-}
-
-.note-view-textarea::placeholder {
-  color: #d1d5db;
+  min-height: 0;
 }
 
 .note-view-loading,
