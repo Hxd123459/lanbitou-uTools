@@ -5,13 +5,13 @@ import StarterKit from '@tiptap/starter-kit'
 import TaskItem from '@tiptap/extension-task-item'
 import TaskList from '@tiptap/extension-task-list'
 import { common, createLowlight } from 'lowlight'
-import { SlashMenuExtension } from '../extensions/tiptapSlashMenu'
+import { SlashCommandExtension } from '../extensions/tiptapSlashCommand'
 
 const lowlight = createLowlight(common)
 
 export function createTiptapExtensions(options = {}) {
   const {
-    placeholder = "输入 '/' 唤起块类型…",
+    placeholder = '输入 "/" 唤起快捷命令…',
     slashCommand = true,
   } = options
 
@@ -25,9 +25,6 @@ export function createTiptapExtensions(options = {}) {
     CodeBlockLowlight.configure({
       lowlight,
       defaultLanguage: 'plaintext',
-      HTMLAttributes: {
-        class: 'notion-code-block',
-      },
     }),
     TaskList,
     TaskItem.configure({
@@ -41,7 +38,7 @@ export function createTiptapExtensions(options = {}) {
   ]
 
   if (slashCommand) {
-    extensions.push(SlashMenuExtension)
+    extensions.push(SlashCommandExtension)
   }
 
   return extensions
