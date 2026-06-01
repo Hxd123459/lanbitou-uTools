@@ -37,8 +37,16 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  flex: 0 0 16px;
+  flex: 0 0 18px;
+  width: 18px;
+  height: 18px;
   color: var(--color-secondary-text, #71717a);
+}
+
+.struct-note-slash-menu__icon svg {
+  display: block;
+  width: 18px;
+  height: 18px;
 }
 
 .struct-note-slash-menu__label {

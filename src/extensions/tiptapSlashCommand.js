@@ -1,85 +1,72 @@
 import { Extension } from '@tiptap/core'
 import { Plugin, PluginKey } from '@tiptap/pm/state'
+import { slashMenuIcons } from '../constants/slashMenuIcons'
 
 const MENU_CLASS = 'struct-note-slash-menu'
 const pluginKey = new PluginKey('slashCommand')
-
-const ICONS = {
-  paragraph:
-    '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 6h16M4 12h10M4 18h14"/></svg>',
-  h1: '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 4v16M18 4v16M6 12h12M10 8h8M10 16h8"/></svg>',
-  h2: '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 4v16M18 4v16M6 12h12M11 8h6M11 16h6"/></svg>',
-  h3: '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 4v16M18 4v16M6 12h12M12 8h4M12 16h4"/></svg>',
-  ol: '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M8 6h12M8 12h12M8 18h12"/><path d="M4 6h.01M4 12h.01M4 18h.01"/></svg>',
-  ul: '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="5" cy="6" r="1.5" fill="currentColor" stroke="none"/><circle cx="5" cy="12" r="1.5" fill="currentColor" stroke="none"/><circle cx="5" cy="18" r="1.5" fill="currentColor" stroke="none"/><path d="M9 6h10M9 12h10M9 18h10"/></svg>',
-  task: '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="4" y="5" width="14" height="14" rx="2"/><path d="M8 12l2.5 2.5L16 9"/></svg>',
-  quote:
-    '<svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" stroke="none"><path d="M7 7h4v4H7V7zm6 0h4v4h-4V7zM5 11c0 2.2 1.8 4 4 4v2C5.6 17 3 14.4 3 11h2zm10 0c0 2.2 1.8 4 4 4v2c-3.4 0-6-2.6-6-6h2z"/></svg>',
-  code: '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M8 8L4 12l4 4M16 8l4 4-4 4"/></svg>',
-}
 
 const SLASH_COMMANDS = [
   {
     id: 'paragraph',
     label: '正文',
     keywords: ['正文', 'text', 'paragraph', 'p'],
-    icon: ICONS.paragraph,
+    icon: slashMenuIcons.paragraph,
     run: (chain) => chain.setParagraph(),
   },
   {
     id: 'h1',
     label: '标题 1',
     keywords: ['标题1', 'h1', 'heading1'],
-    icon: ICONS.h1,
+    icon: slashMenuIcons.h1,
     run: (chain) => chain.setHeading({ level: 1 }),
   },
   {
     id: 'h2',
     label: '标题 2',
     keywords: ['标题2', 'h2', 'heading2'],
-    icon: ICONS.h2,
+    icon: slashMenuIcons.h2,
     run: (chain) => chain.setHeading({ level: 2 }),
   },
   {
     id: 'h3',
     label: '标题 3',
     keywords: ['标题3', 'h3', 'heading3'],
-    icon: ICONS.h3,
+    icon: slashMenuIcons.h3,
     run: (chain) => chain.setHeading({ level: 3 }),
   },
   {
     id: 'ol',
     label: '有序列表',
     keywords: ['有序', 'ol', 'ordered', 'numbered'],
-    icon: ICONS.ol,
+    icon: slashMenuIcons.ol,
     run: (chain) => chain.toggleOrderedList(),
   },
   {
     id: 'ul',
     label: '无序列表',
     keywords: ['无序', 'ul', 'bullet', 'list'],
-    icon: ICONS.ul,
+    icon: slashMenuIcons.ul,
     run: (chain) => chain.toggleBulletList(),
   },
   {
     id: 'task',
     label: '任务列表',
     keywords: ['任务', 'todo', 'task', 'checkbox'],
-    icon: ICONS.task,
+    icon: slashMenuIcons.task,
     run: (chain) => chain.toggleTaskList(),
   },
   {
     id: 'quote',
     label: '引用',
     keywords: ['引用', 'quote', 'blockquote'],
-    icon: ICONS.quote,
+    icon: slashMenuIcons.quote,
     run: (chain) => chain.toggleBlockquote(),
   },
   {
     id: 'code',
     label: '代码块',
     keywords: ['代码', 'code', 'codeblock'],
-    icon: ICONS.code,
+    icon: slashMenuIcons.code,
     run: (chain) => chain.setCodeBlock(),
   },
 ]
