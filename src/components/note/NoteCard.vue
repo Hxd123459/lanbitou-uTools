@@ -1043,7 +1043,7 @@ function formatTime(dateValue) {
 
 .note-card.is-selectable {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 10px;
   cursor: pointer;
 }
@@ -1058,21 +1058,16 @@ function formatTime(dateValue) {
 
 .note-select-control {
   flex: 0 0 auto;
-  align-self: center;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
+  margin-top: 2px;
   padding: 0;
   border: 0;
   background: transparent;
   cursor: pointer;
-  line-height: 0;
 }
 
 .note-select-box {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
+  display: grid;
+  place-items: center;
   width: 18px;
   height: 18px;
   border: 1.5px solid var(--color-border);
@@ -1088,6 +1083,7 @@ function formatTime(dateValue) {
 
 .note-select-box svg {
   display: block;
+  flex-shrink: 0;
 }
 
 .note-select-box.is-checked {

@@ -9,7 +9,8 @@
       :value="modelValue"
       :plugins="editorPlugins"
       :locale="editorLocale"
-      mode="tab"
+      mode="split"
+      :preview-debounce="80"
       placeholder='输入 "/" 唤起快捷命令…'
       :editor-config="editorConfig"
       @change="onChange"
@@ -23,7 +24,6 @@ import { Editor } from '@bytemd/vue-next'
 import editorLocale from 'bytemd/locales/zh_Hans.json'
 import { getByteMdEditorPlugins } from '../../composables/useByteMdPlugins'
 import '../../assets/styles/bytemd-slash-menu.css'
-import '../../assets/styles/bytemd-editor-live.css'
 
 const props = defineProps({
   modelValue: {
@@ -48,8 +48,7 @@ const editorPlugins = getByteMdEditorPlugins()
 const editorConfig = computed(() => ({
   readOnly: props.disabled,
   lineWrapping: true,
-  mode: 'gfm',
-  theme: 'default',
+  lineNumbers: false,
 }))
 
 const rootStyle = computed(() => ({
@@ -87,32 +86,108 @@ defineExpose({ focus })
 
 .struct-note-md-editor :deep(.bytemd-toolbar),
 .struct-note-md-editor :deep(.bytemd-status),
-.struct-note-md-editor :deep(.bytemd-preview),
 .struct-note-md-editor :deep(.bytemd-sidebar) {
   display: none !important;
 }
 
 .struct-note-md-editor :deep(.bytemd-body) {
+  position: relative;
   height: 100%;
+  min-height: var(--struct-note-md-min-height);
+  overflow: hidden;
 }
 
-.struct-note-md-editor :deep(.bytemd-editor) {
+/* 底层：ByteMD 实时预览（与 ByteMdPreview 同源渲染） */
+.struct-note-md-editor :deep(.bytemd-preview) {
+  display: block !important;
   width: 100% !important;
-  border-right: none !important;
+  height: 100% !important;
+  min-height: var(--struct-note-md-min-height);
+  overflow: auto;
+  border: none !important;
+  background: transparent;
+}
+
+.struct-note-md-editor :deep(.bytemd-preview .markdown-body) {
+  max-width: none;
+  margin: 0;
+  padding: 0;
+  font-size: 15px;
+  line-height: 1.75;
+  color: var(--color-text);
+  word-break: break-word;
+  background: transparent;
+}
+
+.struct-note-md-editor :deep(.bytemd-preview .markdown-body > :first-child) {
+  margin-top: 0;
+}
+
+.struct-note-md-editor :deep(.bytemd-preview .markdown-body > :last-child) {
+  margin-bottom: 0;
+}
+
+.struct-note-md-editor :deep(.bytemd-preview .markdown-body pre) {
+  margin: 0 0 0.75em;
+  background: #fafafa;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  padding: 12px 14px;
+  font-size: 13px;
+  overflow: auto;
+}
+
+.struct-note-md-editor :deep(.bytemd-preview .markdown-body pre code) {
+  background: transparent;
+  padding: 0;
+  font-size: inherit;
+}
+
+/* 顶层：透明输入层，实现所见即所得 */
+.struct-note-md-editor :deep(.bytemd-editor) {
+  position: absolute !important;
+  inset: 0;
+  z-index: 2;
+  width: 100% !important;
+  height: 100% !important;
+  overflow: hidden;
+  border: none !important;
+  background: transparent !important;
 }
 
 .struct-note-md-editor :deep(.CodeMirror) {
   height: 100%;
   min-height: var(--struct-note-md-min-height);
-  background: transparent;
+  background: transparent !important;
   font-family: inherit;
   font-size: 15px;
   line-height: 1.75;
-  color: var(--color-text);
+  color: transparent;
+  caret-color: var(--color-accent);
 }
 
 .struct-note-md-editor :deep(.CodeMirror-scroll) {
   min-height: var(--struct-note-md-min-height);
+}
+
+.struct-note-md-editor :deep(.CodeMirror .CodeMirror-lines) {
+  max-width: none;
+  margin: 0;
+  padding: 0;
+}
+
+.struct-note-md-editor :deep(.CodeMirror pre.CodeMirror-line),
+.struct-note-md-editor :deep(.CodeMirror pre.CodeMirror-line-like) {
+  padding: 0;
+}
+
+.struct-note-md-editor :deep(.CodeMirror-line) {
+  color: transparent !important;
+  -webkit-text-fill-color: transparent;
+}
+
+.struct-note-md-editor :deep(.CodeMirror-selected) {
+  background: rgba(37, 99, 235, 0.12) !important;
 }
 
 .struct-note-md-editor :deep(.CodeMirror-cursor) {
@@ -121,6 +196,7 @@ defineExpose({ focus })
 
 .struct-note-md-editor :deep(.CodeMirror-placeholder) {
   color: #d1d5db;
+  -webkit-text-fill-color: #d1d5db;
 }
 
 .struct-note-md-editor.is-disabled :deep(.CodeMirror) {
