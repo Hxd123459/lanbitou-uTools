@@ -12,7 +12,6 @@
 import { EditorContent, useEditor } from '@tiptap/vue-3'
 import { computed, onBeforeUnmount, watch } from 'vue'
 import { createTiptapExtensions } from '../../composables/useTiptapExtensions'
-import '../../assets/styles/bytemd-slash-menu.css'
 
 const props = defineProps({
   modelValue: {
