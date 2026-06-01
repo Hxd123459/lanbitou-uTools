@@ -1,5 +1,5 @@
 <template>
-  <ByteMdPreview
+  <TiptapPreview
     :content="content"
     :fallback-text="fallbackText"
     :show-fallback="showFallback"
@@ -7,7 +7,7 @@
 </template>
 
 <script setup>
-import ByteMdPreview from '../common/ByteMdPreview.vue'
+import TiptapPreview from '../common/TiptapPreview.vue'
 
 defineProps({
   content: {

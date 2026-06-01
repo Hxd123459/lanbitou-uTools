@@ -1,10 +1,8 @@
 import { createApp } from 'vue'
 import { createPinia } from 'pinia'
-import 'bytemd/dist/index.css'
-import 'highlight.js/styles/github.css'
 import './assets/styles/tokens.css'
 import './assets/styles/buttons.css'
-import './assets/styles/bytemd-preview.css'
+import './assets/styles/tiptap-content.css'
 
 import App from './App.vue'
 import router from './router'

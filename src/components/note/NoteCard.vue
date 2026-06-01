@@ -413,7 +413,7 @@
 
     <template v-else>
       <div ref="contentRootRef" class="note-content-root">
-        <ByteMdPreview
+        <TiptapPreview
           v-if="contentText"
           :content="contentText"
           :show-fallback="false"
@@ -446,7 +446,7 @@ import { isImageFileSizeAllowed } from '../../constants/uploadLimits'
 import { useMotionPresets } from '../../composables/useMotionPresets'
 import { useAssistantStore } from '../../stores/assistantStore'
 import AppButton from '../motion/AppButton.vue'
-import ByteMdPreview from '../common/ByteMdPreview.vue'
+import TiptapPreview from '../common/TiptapPreview.vue'
 import NoteImageGallery from './NoteImageGallery.vue'
 import NoteRecallModal from './NoteRecallModal.vue'
 
@@ -1383,7 +1383,7 @@ function formatTime(dateValue) {
 }
 
 /* === Markdown 代码块：白色主题 === */
-.note-card :deep(.markdown-body pre) {
+.note-card :deep(.ProseMirror pre) {
   background: #fafafa !important;
   border: 1px solid var(--color-border);
   border-radius: 8px;
@@ -1391,7 +1391,7 @@ function formatTime(dateValue) {
   font-size: 13px;
 }
 
-.note-card :deep(.markdown-body pre code) {
+.note-card :deep(.ProseMirror pre code) {
   background: transparent !important;
 }
 

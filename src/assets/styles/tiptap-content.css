@@ -1,0 +1,101 @@
+.tiptap-content .ProseMirror {
+  font-size: 15px;
+  line-height: 1.75;
+  color: var(--color-text);
+  word-break: break-word;
+  background: transparent;
+}
+
+.tiptap-content .ProseMirror > :first-child {
+  margin-top: 0;
+}
+
+.tiptap-content .ProseMirror > :last-child {
+  margin-bottom: 0;
+}
+
+.tiptap-content .ProseMirror p {
+  margin: 0 0 0.75em;
+}
+
+.tiptap-content .ProseMirror h1,
+.tiptap-content .ProseMirror h2,
+.tiptap-content .ProseMirror h3 {
+  margin: 0 0 0.75em;
+  color: var(--color-primary);
+  line-height: 1.3;
+}
+
+.tiptap-content .ProseMirror h1 {
+  font-size: 1.75em;
+  font-weight: 600;
+}
+
+.tiptap-content .ProseMirror h2 {
+  font-size: 1.45em;
+  font-weight: 600;
+}
+
+.tiptap-content .ProseMirror h3 {
+  font-size: 1.2em;
+  font-weight: 600;
+}
+
+.tiptap-content .ProseMirror ul,
+.tiptap-content .ProseMirror ol {
+  margin: 0 0 0.75em;
+  padding-left: 1.25em;
+}
+
+.tiptap-content .ProseMirror ul[data-type='taskList'] {
+  list-style: none;
+  padding-left: 0;
+}
+
+.tiptap-content .ProseMirror ul[data-type='taskList'] li {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.tiptap-content .ProseMirror ul[data-type='taskList'] li label {
+  margin-top: 0.2em;
+}
+
+.tiptap-content .ProseMirror blockquote {
+  margin: 0 0 0.75em;
+  padding-left: 12px;
+  border-left: 3px solid rgba(24, 24, 27, 0.12);
+  color: var(--color-secondary-text);
+}
+
+.tiptap-content .ProseMirror pre {
+  margin: 0 0 0.75em;
+  background: #fafafa;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  padding: 12px 14px;
+  font-size: 13px;
+  overflow: auto;
+}
+
+.tiptap-content .ProseMirror pre code {
+  background: transparent;
+  padding: 0;
+  font-size: inherit;
+}
+
+.tiptap-content .ProseMirror p.is-editor-empty:first-child::before {
+  color: #d1d5db;
+  content: attr(data-placeholder);
+  float: left;
+  height: 0;
+  pointer-events: none;
+}
+
+.tiptap-preview-fallback {
+  margin: 0;
+  font-size: 15px;
+  line-height: 1.75;
+  color: var(--color-secondary-text);
+}

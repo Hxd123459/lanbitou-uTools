@@ -78,7 +78,7 @@
                   </time>
                   <div class="recall-article-body">
                     <div class="recall-content-root">
-                      <ByteMdPreview
+                      <TiptapPreview
                         :content="recall.markdownContent"
                         fallback-text="暂无正文"
                       />
@@ -125,7 +125,7 @@ import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { AnimatePresence, motion } from 'motion-v'
 import { clickNoteMemory, fetchNoteRecall } from '../../api/noteMemory'
 import { useMotionPresets } from '../../composables/useMotionPresets'
-import ByteMdPreview from '../common/ByteMdPreview.vue'
+import TiptapPreview from '../common/TiptapPreview.vue'
 import NoteImageGallery from './NoteImageGallery.vue'
 
 const props = defineProps({
@@ -503,7 +503,7 @@ onBeforeUnmount(() => {
   margin-bottom: 0;
 }
 
-.recall-content-root :deep(.markdown-body pre) {
+.recall-content-root :deep(.ProseMirror pre) {
   background: rgba(255, 255, 255, 0.85) !important;
   border: 1px solid var(--color-border);
   border-radius: 8px;
@@ -511,7 +511,7 @@ onBeforeUnmount(() => {
   font-size: 13px;
 }
 
-.recall-content-root :deep(.byte-md-preview-fallback) {
+.recall-content-root :deep(.tiptap-preview-fallback) {
   text-align: center;
   font-size: 14px;
 }
