@@ -10,32 +10,34 @@
 .struct-note-drag-handle-target.drag-handle {
   position: absolute;
   box-sizing: border-box;
-  width: 24px;
+  width: 40px;
   height: 24px;
   margin: 0;
-  padding: 0;
+  padding: 0 10px 0 0;
   border: 0;
   pointer-events: auto;
   cursor: grab;
   display: flex;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-end;
   border-radius: 6px;
-  color: #a1a1aa;
+  color: #71717a;
   background: transparent;
   transition: color 0.15s ease, background 0.15s ease;
 }
 
 .struct-note-drag-handle-target.drag-handle::before {
   content: '⋮⋮';
-  font-size: 12px;
+  font-size: 16px;
+  font-weight: 800;
   line-height: 1;
-  letter-spacing: -2px;
+  letter-spacing: -1px;
+  -webkit-text-stroke: 0.4px currentColor;
 }
 
 .struct-note-drag-handle-target.drag-handle:hover {
   color: var(--color-primary, #18181b);
-  background: rgba(24, 24, 27, 0.06);
+  background: rgba(24, 24, 27, 0.08);
 }
 
 .struct-note-drag-handle-target.drag-handle.hide {

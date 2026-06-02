@@ -47,7 +47,7 @@ export function createTiptapExtensions(options = {}) {
   if (dragHandle) {
     extensions.push(
       GlobalDragHandle.configure({
-        dragHandleWidth: 24,
+        dragHandleWidth: 40,
         scrollTreshold: 100,
         excludedTags: [],
         dragHandleSelector: '.struct-note-drag-handle-target',

@@ -88,7 +88,7 @@ onBeforeUnmount(() => {
   min-height: 0;
   display: flex;
   flex-direction: column;
-  padding-left: 8px;
+  padding-left: 12px;
 }
 
 .struct-note-md-editor__content {
