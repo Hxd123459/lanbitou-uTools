@@ -299,6 +299,14 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
   overflow-y: auto;
 }
 
+.note-view-body .note-view-title-input,
+.note-view-body .struct-note-md-editor {
+  width: 100%;
+  max-width: 100%;
+  margin-left: 0;
+  padding-left: 0;
+}
+
 .note-view-title {
   margin: 0 0 4px;
   font-size: 28px;

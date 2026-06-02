@@ -860,6 +860,14 @@ defineExpose({ resetDraft })
   overscroll-behavior: contain;
 }
 
+.struct-note-modal-body .struct-note-title-input,
+.struct-note-modal-body .struct-note-md-editor {
+  width: 100%;
+  max-width: 100%;
+  margin-left: 0;
+  padding-left: 0;
+}
+
 .struct-note-fragments {
   flex: 0 0 auto;
   min-height: 0;
