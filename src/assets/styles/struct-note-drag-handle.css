@@ -13,30 +13,39 @@
   width: 40px;
   height: 24px;
   margin: 0;
-  padding: 0 10px 0 0;
+  padding: 0;
   border: 0;
   pointer-events: auto;
   cursor: grab;
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  border-radius: 6px;
   color: #71717a;
   background: transparent;
-  transition: color 0.15s ease, background 0.15s ease;
 }
 
 .struct-note-drag-handle-target.drag-handle::before {
   content: '⋮⋮';
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 3px;
+  border-radius: 6px;
   font-size: 16px;
   font-weight: 800;
   line-height: 1;
   letter-spacing: -1px;
   -webkit-text-stroke: 0.4px currentColor;
+  transition: color 0.15s ease, background 0.15s ease;
 }
 
 .struct-note-drag-handle-target.drag-handle:hover {
   color: var(--color-primary, #18181b);
+}
+
+.struct-note-drag-handle-target.drag-handle:hover::before {
   background: rgba(24, 24, 27, 0.08);
 }
 
