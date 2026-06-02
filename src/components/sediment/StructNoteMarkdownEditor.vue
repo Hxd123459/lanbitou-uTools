@@ -13,6 +13,7 @@ import { EditorContent, useEditor } from '@tiptap/vue-3'
 import { computed, onBeforeUnmount, watch } from 'vue'
 import { createTiptapExtensions } from '../../composables/useTiptapExtensions'
 import '../../assets/styles/tiptap-slash-menu.css'
+import '../../assets/styles/struct-note-drag-handle.css'
 
 const props = defineProps({
   modelValue: {
@@ -39,7 +40,7 @@ const editor = useEditor({
   content: props.modelValue || '',
   contentType: 'markdown',
   editable: !props.disabled,
-  extensions: createTiptapExtensions(),
+  extensions: createTiptapExtensions({ dragHandle: true }),
   editorProps: {
     attributes: {
       class: 'struct-note-md-prosemirror',
@@ -87,6 +88,7 @@ onBeforeUnmount(() => {
   min-height: 0;
   display: flex;
   flex-direction: column;
+  padding-left: 8px;
 }
 
 .struct-note-md-editor__content {

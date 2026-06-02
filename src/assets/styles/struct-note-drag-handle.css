@@ -1,0 +1,44 @@
+/* 与 tiptap-extension-global-drag-handle 在 role=dialog + transform 下的坐标系对齐 */
+[role='dialog'] > .struct-note-drag-handle-mount {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.struct-note-drag-handle-target.drag-handle {
+  position: absolute;
+  box-sizing: border-box;
+  width: 24px;
+  height: 24px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  pointer-events: auto;
+  cursor: grab;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  color: #a1a1aa;
+  background: transparent;
+  transition: color 0.15s ease, background 0.15s ease;
+}
+
+.struct-note-drag-handle-target.drag-handle::before {
+  content: '⋮⋮';
+  font-size: 12px;
+  line-height: 1;
+  letter-spacing: -2px;
+}
+
+.struct-note-drag-handle-target.drag-handle:hover {
+  color: var(--color-primary, #18181b);
+  background: rgba(24, 24, 27, 0.06);
+}
+
+.struct-note-drag-handle-target.drag-handle.hide {
+  opacity: 0;
+  pointer-events: none;
+}
