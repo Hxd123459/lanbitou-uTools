@@ -333,6 +333,11 @@ const reset = () => {
   inputHeight.value = MIN_HEIGHT
 }
 
+const focus = () => {
+  if (props.submitting) return
+  textareaRef.value?.focus()
+}
+
 const onSubmit = () => {
   if (props.submitting) return
   const text = props.modelValue
@@ -387,7 +392,7 @@ onBeforeUnmount(() => {
   images.value.forEach((item) => URL.revokeObjectURL(item.url))
 })
 
-defineExpose({ reset, addImages })
+defineExpose({ reset, addImages, focus })
 </script>
 
 <style scoped>

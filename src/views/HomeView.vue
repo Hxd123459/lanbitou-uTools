@@ -860,6 +860,8 @@ onMounted(async () => {
   } catch (error) {
     notifyError(error)
   }
+  await nextTick()
+  inputBarRef.value?.focus()
 })
 
 onBeforeUnmount(() => {
