@@ -623,12 +623,23 @@ const navigateToCrumb = (index) => {
   loadCurrentList()
 }
 
+const focusFolderNameInput = async () => {
+  await nextTick()
+  requestAnimationFrame(() => {
+    folderNameInputRef.value?.focus()
+    folderNameInputRef.value?.select()
+  })
+}
+
 const startCreateFolder = async () => {
   creatingFolder.value = true
   draftFolderName.value = ''
-  await nextTick()
-  folderNameInputRef.value?.focus()
+  await focusFolderNameInput()
 }
+
+watch(creatingFolder, async (open) => {
+  if (open) await focusFolderNameInput()
+})
 
 const cancelCreateFolder = () => {
   if (folderSaving.value) return

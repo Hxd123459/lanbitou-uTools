@@ -16,11 +16,11 @@
           <div class="struct-note-drag-handle-target" />
         </div>
 
-        <!-- 左上角关闭 -->
         <motion.button
           type="button"
           class="note-view-close"
           aria-label="关闭"
+          :disabled="saving"
           :while-hover="presets.button.hover"
           :while-tap="presets.button.tap"
           :transition="presets.button.transition"
@@ -31,71 +31,107 @@
           </svg>
         </motion.button>
 
-        <!-- 右上角操作区 -->
         <div class="note-view-actions">
-          <AnimatePresence mode="wait">
-            <!-- 编辑模式：保存 + 取消 -->
-            <motion.div
-              v-if="editing"
-              key="edit-actions"
-              class="note-view-action-group"
-              :initial="{ opacity: 0, x: 8 }"
-              :animate="{ opacity: 1, x: 0 }"
-              :exit="{ opacity: 0, x: 8 }"
-              :transition="{ duration: 0.16, ease: 'easeOut' }"
-            >
-              <motion.button
-                type="button"
-                class="btn btn-icon-text note-view-cancel-btn"
-                :disabled="saving"
-                :while-hover="presets.button.hover"
-                :while-tap="presets.button.tap"
-                :transition="presets.button.transition"
-                @click="cancelEdit"
+          <motion.button
+            type="button"
+            class="btn btn-primary note-view-save-btn"
+            :class="{
+              'is-saving': saving,
+              'is-saved': saveStatus === 'saved' && !isDirty,
+            }"
+            :disabled="saveButtonDisabled"
+            :while-hover="saveButtonDisabled ? undefined : presets.button.hover"
+            :while-tap="saveButtonDisabled ? undefined : presets.button.tap"
+            :transition="presets.button.transition"
+            @click="handleSave(false)"
+          >
+            <AnimatePresence mode="wait">
+              <motion.span
+                v-if="saving"
+                key="saving"
+                class="note-view-save-label"
+                :initial="presets.swapLabel.initial"
+                :animate="presets.swapLabel.animate"
+                :exit="presets.swapLabel.exit"
+                :transition="presets.swapLabel.transition"
               >
-                取消
-              </motion.button>
-              <motion.button
-                type="button"
-                class="btn btn-primary"
-                :disabled="saving || !canSave"
-                :while-hover="presets.button.hover"
-                :while-tap="presets.button.tap"
-                :transition="presets.button.transition"
-                @click="handleSave"
+                <svg
+                  class="note-view-save-icon note-view-save-icon--spin"
+                  viewBox="0 0 24 24"
+                  width="16"
+                  height="16"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  aria-hidden="true"
+                >
+                  <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" />
+                </svg>
+                保存中…
+              </motion.span>
+              <motion.span
+                v-else-if="saveStatus === 'saved' && !isDirty"
+                key="saved"
+                class="note-view-save-label"
+                :initial="presets.swapLabel.initial"
+                :animate="presets.swapLabel.animate"
+                :exit="presets.swapLabel.exit"
+                :transition="presets.swapLabel.transition"
               >
-                {{ saving ? '保存中…' : '保存' }}
-              </motion.button>
-            </motion.div>
-
-            <!-- 预览模式：编辑按钮 -->
-            <motion.button
-              v-else
-              key="edit-trigger"
-              type="button"
-              class="btn btn-icon-text"
-              :while-hover="presets.button.hover"
-              :while-tap="presets.button.tap"
-              :transition="presets.button.transition"
-              @click="enterEdit"
-            >
-              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
-                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
-              </svg>
-              编辑
-            </motion.button>
-          </AnimatePresence>
+                <svg
+                  class="note-view-save-icon"
+                  viewBox="0 0 24 24"
+                  width="16"
+                  height="16"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2.2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="M5 12l5 5L20 7" />
+                </svg>
+                已保存
+              </motion.span>
+              <motion.span
+                v-else
+                key="idle"
+                class="note-view-save-label"
+                :initial="presets.swapLabel.initial"
+                :animate="presets.swapLabel.animate"
+                :exit="presets.swapLabel.exit"
+                :transition="presets.swapLabel.transition"
+              >
+                <svg
+                  class="note-view-save-icon"
+                  viewBox="0 0 24 24"
+                  width="16"
+                  height="16"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.8"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" />
+                  <polyline points="17 21 17 13 7 13 7 21" />
+                  <polyline points="7 3 7 8 15 8" />
+                </svg>
+                保存
+              </motion.span>
+            </AnimatePresence>
+          </motion.button>
         </div>
 
-        <!-- 内容区 -->
         <div class="note-view-body">
           <p v-if="loadError" class="note-view-error">加载失败，请稍后重试</p>
+          <p v-else-if="fetching" class="note-view-loading">加载中…</p>
 
           <template v-else>
-            <!-- 标题 -->
             <input
-              v-if="editing"
               ref="titleInputRef"
               v-model="draftTitle"
               class="note-view-title-input"
@@ -103,26 +139,13 @@
               maxlength="80"
               placeholder="请输入标题"
               spellcheck="false"
-              :disabled="saving"
             />
-            <h1 v-else class="note-view-title">{{ note.title || note.name }}</h1>
 
-            <!-- 分隔线 -->
             <div class="note-view-divider" />
 
-            <!-- 正文 -->
             <StructNoteMarkdownEditor
-              v-if="editing"
               v-model="draftContent"
               class="note-view-editor"
-              :disabled="saving"
-            />
-            <div v-else-if="fetching" class="note-view-loading">加载中…</div>
-            <StructNoteMarkdownPreview
-              v-else
-              class="note-view-content"
-              :content="note.content"
-              parser-key="struct-note-view-modal"
             />
           </template>
         </div>
@@ -137,7 +160,8 @@ import { AnimatePresence, motion } from 'motion-v'
 import { getStructNote, updateStructNote } from '../../api/structNote'
 import { useMotionPresets } from '../../composables/useMotionPresets'
 import StructNoteMarkdownEditor from './StructNoteMarkdownEditor.vue'
-import StructNoteMarkdownPreview from './StructNoteMarkdownPreview.vue'
+
+const AUTO_SAVE_DELAY_MS = 1200
 
 const props = defineProps({
   visible: { type: Boolean, default: false },
@@ -151,58 +175,108 @@ const { presets } = useMotionPresets()
 const note = ref({ title: '', name: '', content: '' })
 const fetching = ref(false)
 const loadError = ref(false)
-const editing = ref(false)
 const saving = ref(false)
+const saveStatus = ref('idle')
 const draftTitle = ref('')
 const draftContent = ref('')
+const lastSaved = ref({ title: '', content: '' })
 const titleInputRef = ref(null)
+
+let autoSaveTimer = null
+let loadToken = 0
 
 const canSave = computed(() => draftTitle.value.trim().length > 0)
 
-const fetchDetail = async () => {
-  if (!props.noteItem) return
-  fetching.value = true
-  loadError.value = false
-  try {
-    const data = await getStructNote(props.noteItem.noteId ?? props.noteItem.id)
-    note.value = { ...props.noteItem, ...data }
-  } catch {
-    loadError.value = true
-    note.value = { ...props.noteItem, content: '' }
-  } finally {
-    fetching.value = false
+const isDirty = computed(
+  () =>
+    draftTitle.value.trim() !== lastSaved.value.title
+    || draftContent.value.trim() !== lastSaved.value.content,
+)
+
+const saveButtonDisabled = computed(
+  () => saving.value || !canSave.value || (!isDirty.value && saveStatus.value === 'saved'),
+)
+
+const syncLastSavedFromDraft = () => {
+  lastSaved.value = {
+    title: draftTitle.value.trim(),
+    content: draftContent.value.trim(),
   }
 }
 
-const enterEdit = async () => {
+const applyDraftFromNote = () => {
   draftTitle.value = note.value.title || note.value.name || ''
   draftContent.value = note.value.content || ''
-  editing.value = true
-  await nextTick()
-  titleInputRef.value?.focus()
+  syncLastSavedFromDraft()
+  saveStatus.value = 'saved'
 }
 
-const cancelEdit = () => {
-  if (saving.value) return
-  editing.value = false
+const clearAutoSaveTimer = () => {
+  if (autoSaveTimer != null) {
+    clearTimeout(autoSaveTimer)
+    autoSaveTimer = null
+  }
 }
 
-const handleSave = async () => {
+const scheduleAutoSave = () => {
+  clearAutoSaveTimer()
+  if (!props.visible || fetching.value || loadError.value || !canSave.value || !isDirty.value) {
+    return
+  }
+  autoSaveTimer = window.setTimeout(() => {
+    autoSaveTimer = null
+    handleSave(true)
+  }, AUTO_SAVE_DELAY_MS)
+}
+
+const handleSave = async (isAuto = false) => {
   if (!canSave.value || saving.value) return
+  if (!isDirty.value) return
+
   saving.value = true
+  saveStatus.value = 'saving'
   try {
     await updateStructNote({
       id: props.noteItem.noteId ?? props.noteItem.id,
       title: draftTitle.value.trim(),
       content: draftContent.value.trim(),
     })
-    note.value = { ...note.value, title: draftTitle.value.trim(), name: draftTitle.value.trim(), content: draftContent.value.trim() }
-    editing.value = false
+    const title = draftTitle.value.trim()
+    const content = draftContent.value.trim()
+    note.value = { ...note.value, title, name: title, content }
+    syncLastSavedFromDraft()
+    saveStatus.value = 'saved'
     emit('saved')
   } catch (err) {
     console.error(err)
+    if (!isAuto) {
+      saveStatus.value = 'idle'
+    }
   } finally {
     saving.value = false
+  }
+}
+
+const fetchDetail = async () => {
+  if (!props.noteItem) return
+  const token = ++loadToken
+  fetching.value = true
+  loadError.value = false
+  try {
+    const data = await getStructNote(props.noteItem.noteId ?? props.noteItem.id)
+    if (token !== loadToken) return
+    note.value = { ...props.noteItem, ...data }
+    applyDraftFromNote()
+    await nextTick()
+    titleInputRef.value?.focus()
+  } catch {
+    if (token !== loadToken) return
+    loadError.value = true
+    note.value = { ...props.noteItem, content: '' }
+  } finally {
+    if (token === loadToken) {
+      fetching.value = false
+    }
   }
 }
 
@@ -215,26 +289,46 @@ const onKeydown = (e) => {
   if (!props.visible || saving.value) return
   if (e.key === 'Escape') {
     e.preventDefault()
-    if (editing.value) cancelEdit()
-    else emitClose()
+    emitClose()
+    return
+  }
+  if ((e.metaKey || e.ctrlKey) && e.key === 's') {
+    e.preventDefault()
+    handleSave(false)
   }
 }
+
+watch([draftTitle, draftContent], () => {
+  if (!props.visible || fetching.value || loadError.value) return
+  if (isDirty.value && saveStatus.value === 'saved') {
+    saveStatus.value = 'idle'
+  }
+  scheduleAutoSave()
+})
 
 watch(
   () => props.visible,
   (open) => {
     if (open) {
-      editing.value = false
+      saveStatus.value = 'idle'
       note.value = { ...props.noteItem, content: '' }
+      draftTitle.value = ''
+      draftContent.value = ''
+      lastSaved.value = { title: '', content: '' }
+      clearAutoSaveTimer()
       fetchDetail()
       window.addEventListener('keydown', onKeydown)
     } else {
+      clearAutoSaveTimer()
       window.removeEventListener('keydown', onKeydown)
     }
   },
 )
 
-onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
+onBeforeUnmount(() => {
+  clearAutoSaveTimer()
+  window.removeEventListener('keydown', onKeydown)
+})
 </script>
 
 <style scoped>
@@ -264,8 +358,13 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
   cursor: pointer;
 }
 
-.note-view-close:hover {
+.note-view-close:hover:not(:disabled) {
   background: rgba(24, 24, 27, 0.1);
+}
+
+.note-view-close:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 .note-view-actions {
@@ -277,14 +376,35 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
   align-items: center;
 }
 
-.note-view-action-group {
-  display: flex;
-  align-items: center;
-  gap: 8px;
+.note-view-save-btn {
+  min-width: 108px;
 }
 
-.note-view-cancel-btn {
-  color: var(--color-secondary-text);
+.note-view-save-btn.is-saved:disabled {
+  opacity: var(--btn-disabled-opacity, 0.55);
+  cursor: default;
+  filter: saturate(0.85);
+}
+
+.note-view-save-label {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.note-view-save-icon {
+  flex: 0 0 auto;
+}
+
+.note-view-save-icon--spin {
+  animation: note-view-save-spin 0.85s linear infinite;
+}
+
+@keyframes note-view-save-spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .note-view-body {
@@ -305,15 +425,6 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
   max-width: 100%;
   margin-left: 0;
   padding-left: 0;
-}
-
-.note-view-title {
-  margin: 0 0 4px;
-  font-size: 28px;
-  font-weight: 600;
-  color: var(--color-primary);
-  line-height: 1.25;
-  word-break: break-word;
 }
 
 .note-view-title-input {
@@ -342,7 +453,6 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
   flex: 0 0 auto;
 }
 
-.note-view-content,
 .note-view-editor {
   flex: 1;
   min-height: 0;
