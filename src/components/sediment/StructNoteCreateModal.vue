@@ -834,6 +834,7 @@ defineExpose({ resetDraft })
   min-height: 0;
   display: flex;
   justify-content: center;
+  overflow: hidden;
   transition: justify-content 0.24s ease;
 }
 
@@ -843,13 +844,16 @@ defineExpose({ resetDraft })
 
 .struct-note-modal-body {
   flex: 0 1 auto;
+  align-self: stretch;
   min-width: 0;
   min-height: 0;
   display: flex;
   flex-direction: column;
   width: min(760px, 100%);
-  padding: 24px 24px 0;
+  padding: 24px 24px 32px;
   box-sizing: border-box;
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 .struct-note-fragments {
