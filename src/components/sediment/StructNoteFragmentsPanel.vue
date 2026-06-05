@@ -6,7 +6,7 @@
       class="struct-note-fragments"
       aria-label="已选碎片笔记"
       :initial="{ width: 0, opacity: 0, x: 16 }"
-      :animate="{ width: 300, opacity: 1, x: 0 }"
+      :animate="{ width: FRAGMENTS_PANEL_WIDTH, opacity: 1, x: 0 }"
       :exit="{ width: 0, opacity: 0, x: 16 }"
       :transition="{ duration: 0.24, ease: [0.22, 1, 0.36, 1] }"
     >
@@ -108,21 +108,18 @@
     </motion.aside>
   </AnimatePresence>
 
-  <motion.button
+  <button
     v-if="showExpandButton && !open"
     type="button"
     class="struct-note-fragments-expand"
     aria-label="展开碎片面板"
-    :while-hover="presets.button.hover"
-    :while-tap="presets.button.tap"
-    :transition="presets.button.transition"
     @click="emit('update:open', true)"
   >
     <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
       <path d="M15 6l-6 6 6 6" />
     </svg>
     <span>碎片 {{ fragmentNotes.length }}</span>
-  </motion.button>
+  </button>
 
   <StructNoteFragmentPickerModal
     :visible="pickerVisible"
@@ -151,6 +148,8 @@ const props = defineProps({
 })
 
 const emit = defineEmits(['update:open', 'update:fragmentNotes', 'insert'])
+
+const FRAGMENTS_PANEL_WIDTH = 360
 
 const { presets, reduced } = useMotionPresets()
 const pickerVisible = ref(false)
@@ -183,7 +182,7 @@ const onPickerConfirm = (notes) => {
 }
 
 .struct-note-fragments-inner {
-  width: 300px;
+  width: 360px;
   height: 100%;
   min-height: 0;
   display: flex;
@@ -213,8 +212,7 @@ const onPickerConfirm = (notes) => {
   gap: 4px;
 }
 
-.struct-note-fragments-action,
-.struct-note-fragments-expand {
+.struct-note-fragments-action {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -224,9 +222,6 @@ const onPickerConfirm = (notes) => {
   background: rgba(24, 24, 27, 0.06);
   color: var(--color-secondary-text);
   cursor: pointer;
-}
-
-.struct-note-fragments-action {
   width: 28px;
   height: 28px;
   padding: 0;
@@ -234,12 +229,30 @@ const onPickerConfirm = (notes) => {
 
 .struct-note-fragments-expand {
   position: absolute;
-  top: 0;
-  right: 0;
+  top: 50%;
+  right: -18px;
   z-index: 1;
-  padding: 8px 10px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 10px 12px 10px 14px;
+  border: 0;
+  border-right: 0;
+  border-radius: 8px 0 0 8px;
+  background: rgba(24, 24, 27, 0.06);
+  color: var(--color-secondary-text);
   font-size: 12px;
   font-weight: 600;
+  cursor: pointer;
+  transform: translateY(-50%);
+  box-shadow: -1px 0 0 rgba(24, 24, 27, 0.06);
+  transition: background-color 0.18s ease;
+}
+
+.struct-note-fragments-expand:hover {
+  background: rgba(24, 24, 27, 0.1);
+  color: var(--color-primary);
 }
 
 .struct-note-fragments-empty {
@@ -345,6 +358,9 @@ const onPickerConfirm = (notes) => {
   .struct-note-fragments-expand {
     top: auto;
     bottom: 16px;
+    right: 0;
+    transform: none;
+    border-radius: 8px;
   }
 }
 </style>

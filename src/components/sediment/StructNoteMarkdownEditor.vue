@@ -9,6 +9,7 @@
     :show-expand-button="showExpandButton"
     @insert="emit('insert', $event)"
   >
+    <slot name="prefix" />
     <div
       class="struct-note-md-editor"
       :class="{ 'is-disabled': disabled }"

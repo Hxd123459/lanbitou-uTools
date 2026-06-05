@@ -215,8 +215,19 @@
           </motion.button>
         </header>
 
-        <div class="struct-note-modal-body-wrap">
-          <div class="struct-note-modal-body">
+        <StructNoteMarkdownEditor
+          ref="contentEditorRef"
+          v-model="draftContent"
+          v-model:fragment-notes="localFragmentNotes"
+          v-model:fragments-open="fragmentsOpen"
+          class="struct-note-modal-editor"
+          with-fragments
+          :disabled="saving"
+          :inserted-ids="insertedFragmentIds"
+          :min-height="240"
+          @insert="insertFragment"
+        >
+          <template #prefix>
             <input
               ref="titleInputRef"
               v-model="draftTitle"
@@ -227,19 +238,8 @@
               spellcheck="false"
               :disabled="saving"
             />
-            <StructNoteMarkdownEditor
-              ref="contentEditorRef"
-              v-model="draftContent"
-              v-model:fragment-notes="localFragmentNotes"
-              v-model:fragments-open="fragmentsOpen"
-              with-fragments
-              :disabled="saving"
-              :inserted-ids="insertedFragmentIds"
-              :min-height="240"
-              @insert="insertFragment"
-            />
-          </div>
-        </div>
+          </template>
+        </StructNoteMarkdownEditor>
       </motion.div>
     </AnimatePresence>
   </Teleport>
@@ -705,44 +705,19 @@ defineExpose({ resetDraft })
   gap: 6px;
 }
 
-.struct-note-modal-body-wrap {
+.struct-note-modal-editor {
   flex: 1;
   min-height: 0;
-  display: flex;
-  box-sizing: border-box;
-}
-
-.struct-note-modal-body {
-  flex: 1;
-  min-width: 0;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-  width: min(760px, 100%);
-  margin: 0 auto;
-  padding: 0;
-  box-sizing: border-box;
-  overflow: hidden;
-}
-
-.struct-note-modal-body .struct-note-title-input {
   width: 100%;
-  max-width: 100%;
-  margin-left: 0;
-  padding: 24px 24px 0;
+}
+
+.struct-note-modal-editor :deep(.struct-note-editor-column) {
+  padding: 8px 24px 0;
   box-sizing: border-box;
 }
 
-.struct-note-modal-body :deep(.struct-note-editor-layout) {
-  flex: 1;
-  min-height: 0;
-}
-
-.struct-note-modal-body :deep(.struct-note-md-editor) {
-  padding: 0 24px 32px;
-  box-sizing: border-box;
-  overflow-y: auto;
-  overscroll-behavior: contain;
+.struct-note-modal-editor :deep(.struct-note-md-editor) {
+  padding-bottom: 8px;
 }
 
 .struct-note-title-input {

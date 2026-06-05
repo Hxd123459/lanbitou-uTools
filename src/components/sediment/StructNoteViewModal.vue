@@ -144,35 +144,35 @@
           </div>
         </header>
 
-        <div class="note-view-content">
+        <div class="note-view-content-wrap">
           <p v-if="loadError" class="note-view-error">加载失败，请稍后重试</p>
           <p v-else-if="fetching" class="note-view-loading">加载中…</p>
 
-          <template v-else>
-            <input
-              ref="titleInputRef"
-              v-model="draftTitle"
-              class="note-view-title-input"
-              type="text"
-              maxlength="80"
-              placeholder="请输入标题"
-              spellcheck="false"
-            />
-
-            <div class="note-view-divider" />
-
-            <StructNoteMarkdownEditor
-              ref="contentEditorRef"
-              v-model="draftContent"
-              v-model:fragment-notes="localFragmentNotes"
-              v-model:fragments-open="fragmentsOpen"
-              with-fragments
-              :inserted-ids="insertedFragmentIds"
-              :show-expand-button="false"
-              class="note-view-editor"
-              @insert="insertFragment"
-            />
-          </template>
+          <StructNoteMarkdownEditor
+            v-else
+            ref="contentEditorRef"
+            v-model="draftContent"
+            v-model:fragment-notes="localFragmentNotes"
+            v-model:fragments-open="fragmentsOpen"
+            with-fragments
+            :inserted-ids="insertedFragmentIds"
+            :show-expand-button="false"
+            class="note-view-editor"
+            @insert="insertFragment"
+          >
+            <template #prefix>
+              <input
+                ref="titleInputRef"
+                v-model="draftTitle"
+                class="note-view-title-input"
+                type="text"
+                maxlength="80"
+                placeholder="请输入标题"
+                spellcheck="false"
+              />
+              <div class="note-view-divider" />
+            </template>
+          </StructNoteMarkdownEditor>
         </div>
       </motion.div>
     </AnimatePresence>
@@ -473,41 +473,35 @@ onBeforeUnmount(() => {
   }
 }
 
-.note-view-content {
+.note-view-content-wrap {
   flex: 1;
   min-height: 0;
   display: flex;
   flex-direction: column;
-  width: min(760px, 100%);
-  margin: 0 auto;
-  padding: 16px 24px 0;
-  box-sizing: border-box;
   overflow: hidden;
 }
 
-.note-view-content .note-view-title-input,
-.note-view-content .note-view-divider {
-  flex: 0 0 auto;
-}
-
-.note-view-content .note-view-title-input {
-  width: 100%;
-  max-width: 100%;
-  margin-left: 0;
-  padding-left: 0;
-}
-
-.note-view-content :deep(.struct-note-editor-layout) {
-  flex: 1;
-  min-height: 0;
-  padding-inline: 0;
-  padding-bottom: 32px;
+.note-view-content-wrap .note-view-loading,
+.note-view-content-wrap .note-view-error {
+  width: min(760px, 100%);
+  margin: 16px auto 0;
+  padding: 0 24px;
+  box-sizing: border-box;
 }
 
 .note-view-editor {
   flex: 1;
   min-height: 0;
   width: 100%;
+}
+
+.note-view-editor :deep(.struct-note-editor-layout) {
+  padding-bottom: 32px;
+}
+
+.note-view-editor :deep(.struct-note-editor-column) {
+  padding: 0 24px;
+  box-sizing: border-box;
 }
 
 .note-view-title-input {

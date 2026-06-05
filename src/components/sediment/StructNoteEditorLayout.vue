@@ -4,7 +4,9 @@
     :class="{ 'is-fragments-open': fragmentsOpen }"
   >
     <div class="struct-note-editor-zone">
-      <slot />
+      <div class="struct-note-editor-column">
+        <slot />
+      </div>
     </div>
 
     <StructNoteFragmentsPanel
@@ -41,6 +43,8 @@ const fragmentsOpen = computed({
 
 <style scoped>
 .struct-note-editor-layout {
+  --struct-note-content-width: min(760px, 100%);
+  --struct-note-fragments-width: 360px;
   position: relative;
   flex: 1;
   min-height: 0;
@@ -56,11 +60,18 @@ const fragmentsOpen = computed({
   display: flex;
   justify-content: center;
   overflow: hidden;
-  transition: justify-content 0.24s ease;
 }
 
-.struct-note-editor-layout.is-fragments-open .struct-note-editor-zone {
-  justify-content: center;
+.struct-note-editor-column {
+  width: var(--struct-note-content-width);
+  max-width: 100%;
+  height: 100%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  flex: 0 1 auto;
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 @media (max-width: 900px) {
