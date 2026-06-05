@@ -8,7 +8,7 @@ export const BASE_URL =
  */
 export function resolveResourceUrl(path) {
   if (!path) return ''
-  if (/^https?:\/\//i.test(path)) return path
+  if (/^(https?:|blob:)/i.test(path)) return path
   return `${BASE_URL}${path}`
 }
 

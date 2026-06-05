@@ -1,12 +1,19 @@
+import { isUtoolsMode } from '../storage/env'
+import * as utoolsNote from '../storage/utools/noteRepository'
 import { post } from './http'
 
 export const DEFAULT_MIN_SIMILARITY = '0.75'
 
-/**
- * 语义检索碎片笔记
- * @param {{ query: string, minSimilarity?: string }} params
- */
 export async function semanticTextSearch({ query, minSimilarity = DEFAULT_MIN_SIMILARITY }) {
+  if (isUtoolsMode()) {
+    const list = await utoolsNote.localSemanticSearch(query)
+    const threshold = Number(minSimilarity)
+    const filtered = Number.isFinite(threshold)
+      ? list.filter((item) => item.similarity == null || item.similarity >= threshold)
+      : list
+    return filtered.map(mapSemanticNote)
+  }
+
   const data = await post('/api/semantic/text', {
     query: query.trim(),
     minSimilarity,

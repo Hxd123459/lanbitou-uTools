@@ -1,3 +1,5 @@
+import { isUtoolsMode } from '../storage/env'
+import * as utoolsNote from '../storage/utools/noteRepository'
 import { post, get, postForm, resolveResourceUrl } from './http'
 
 export function formatDateParam(date) {
@@ -56,10 +58,6 @@ function normalizePageSize(pageSize) {
   )
 }
 
-/**
- * 解析 listByDay 分页响应（http 层已解包为 data 对象）：
- * { records, total, size, current, pages }
- */
 function parseBlockListPage(data, pageNo, pageSize) {
   let rawList = []
   let total = null
@@ -119,6 +117,16 @@ export async function fetchBlockListByDate(
   const safePageNo = normalizePageNo(pageNo)
   const safePageSize = normalizePageSize(pageSize)
 
+  if (isUtoolsMode()) {
+    const data = await utoolsNote.listByDay({
+      date: tagId != null && tagId !== '' ? undefined : date,
+      tagId,
+      pageNo: safePageNo,
+      pageSize: safePageSize,
+    })
+    return parseBlockListPage(data, safePageNo, safePageSize)
+  }
+
   const body = {
     date,
     tagId:
@@ -133,6 +141,10 @@ export async function fetchBlockListByDate(
 }
 
 export async function createBlock(content, images = [], onProgress) {
+  if (isUtoolsMode()) {
+    return utoolsNote.insertNote(content, images, onProgress)
+  }
+
   if (!images || images.length === 0) {
     const data = await post('/api/note/insert', { rawContent: content })
     return data
@@ -148,17 +160,20 @@ export async function createBlock(content, images = [], onProgress) {
   return postForm('/api/note/insert', form, { onProgress })
 }
 
-/**
- * 更新笔记。无图片变更时走 JSON；有图片变更时：
- * - 仅调整/删除已有图：JSON 带 retainedImageIds
- * - 含新上传文件：multipart，字段 id、title、content、retainedImageIds（JSON 字符串）、images（文件，与 insert 一致）
- */
 export async function updateBlock(
   id,
   title,
   content,
   { retainedImageIds, newImages = [], onProgress } = {},
 ) {
+  if (isUtoolsMode()) {
+    return utoolsNote.updateNote(id, title, content, {
+      retainedImageIds,
+      newImages,
+      onProgress,
+    })
+  }
+
   const files = Array.isArray(newImages) ? newImages.filter(Boolean) : []
   const hasImageMutation =
     Array.isArray(retainedImageIds) || files.length > 0
@@ -196,17 +211,25 @@ export async function updateBlock(
 }
 
 export async function deleteBlock(id) {
+  if (isUtoolsMode()) {
+    return utoolsNote.deleteNoteToRecycle(id)
+  }
   return get('/api/note/delete', { id })
 }
 
-/** 将碎片笔记批量移入沉淀（根目录） */
 export async function moveBlocksToSediment(ids, parentId = 0) {
   const idList = (Array.isArray(ids) ? ids : [ids]).filter((id) => id != null)
   if (!idList.length) return null
+  if (isUtoolsMode()) {
+    return utoolsNote.moveToSediment(idList, parentId)
+  }
   return post('/api/note/moveToSediment', { ids: idList, parentId })
 }
 
 export async function setPinBlock(id, pinWeightValue) {
+  if (isUtoolsMode()) {
+    return utoolsNote.setPin(id, pinWeightValue)
+  }
   const data = await post('/api/note/setPin', { id, pinWeightValue })
   return data
 }
@@ -218,6 +241,12 @@ export async function searchNotes({
 } = {}) {
   const safePage = normalizePageNo(page)
   const safeSize = normalizePageSize(pageSize)
+
+  if (isUtoolsMode()) {
+    const data = await utoolsNote.search(keyword, safePage, safeSize)
+    return parseBlockListPage(data, safePage, safeSize)
+  }
+
   const data = await get('/api/note/search', {
     keyword: (keyword ?? '').trim(),
     page: safePage,
@@ -227,21 +256,34 @@ export async function searchNotes({
 }
 
 export async function fetchRecycleList() {
+  if (isUtoolsMode()) {
+    const data = await utoolsNote.listRecycle()
+    return Array.isArray(data) ? data.map(mapBlockToNote) : []
+  }
   const data = await get('/api/note/recycle/list')
   return Array.isArray(data) ? data.map(mapBlockToNote) : []
 }
 
 export async function restoreRecycleNote(id) {
+  if (isUtoolsMode()) {
+    return utoolsNote.restoreRecycle(id)
+  }
   return get('/api/note/recycle/restore', { id })
 }
 
 export async function deleteRecycleForever(ids) {
   const idList = (Array.isArray(ids) ? ids : [ids]).filter((id) => id != null)
   if (!idList.length) return null
+  if (isUtoolsMode()) {
+    return utoolsNote.deleteForever(idList)
+  }
   return get('/api/note/recycle/deleteForever', { ids: idList.join(',') })
 }
 
 export async function fetchAllTags() {
+  if (isUtoolsMode()) {
+    return utoolsNote.allTags()
+  }
   const data = await get('/api/note/allTags')
   return Array.isArray(data) ? data : []
 }

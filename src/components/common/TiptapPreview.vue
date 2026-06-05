@@ -33,6 +33,7 @@ const editor = useEditor({
   content: props.content || '',
   contentType: 'markdown',
   editable: false,
+  immediatelyRender: false,
   extensions: createTiptapExtensions({
     placeholder: '',
     slashCommand: false,

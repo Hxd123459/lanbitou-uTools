@@ -40,6 +40,7 @@ const editor = useEditor({
   content: props.modelValue || '',
   contentType: 'markdown',
   editable: !props.disabled,
+  immediatelyRender: false,
   extensions: createTiptapExtensions({ dragHandle: true }),
   editorProps: {
     attributes: {
