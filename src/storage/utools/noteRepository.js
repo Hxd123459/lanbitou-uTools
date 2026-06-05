@@ -1,4 +1,3 @@
-import { generateNoteTitle } from '../../ai/aiService'
 import { NOTE_PREFIX } from './constants'
 import { createNoteInFolder } from './structRepository'
 import {
@@ -13,12 +12,7 @@ import {
   saveImageFiles,
 } from './attachment'
 import { pinTypeToWeight, pinWeightToType } from './pin'
-import {
-  autoTitleFromContent,
-  createId,
-  datePartFromDateTime,
-  formatDateTime,
-} from './utils'
+import { createId, datePartFromDateTime, formatDateTime } from './utils'
 
 const NOTE_LIST_PAGE_SIZE = 20
 
@@ -116,31 +110,29 @@ function countNotesByTagId(notes = []) {
   return map
 }
 
-async function resolveNoteTitle(rawContent) {
-  const text = String(rawContent ?? '').trim()
-  if (!text) return ''
-
-  const aiTitle = await generateNoteTitle(text)
-  if (aiTitle) return aiTitle.slice(0, 5)
-
-  return autoTitleFromContent(text).slice(0, 5)
-}
-
-async function createNoteDoc(rawContent, images = [], { onProgress } = {}) {
+async function createNoteDoc(
+  rawContent,
+  images = [],
+  { onProgress, tagId: inputTagId = null, tagName: inputTagName = '' } = {},
+) {
   const id = createId()
   const now = formatDateTime()
   const text = String(rawContent ?? '')
-  const hasText = Boolean(text.trim())
-  const title = hasText ? await resolveNoteTitle(text) : ''
-  const { tagId, tagName } = title
-    ? await resolveTagForTitle(title)
-    : { tagId: null, tagName: '' }
+
+  let tagId = inputTagId || null
+  let tagName = String(inputTagName ?? '').trim()
+
+  if (!tagId && tagName) {
+    const tag = await resolveTagForTitle(tagName)
+    tagId = tag.tagId
+    tagName = tag.tagName
+  }
 
   const doc = {
     id,
     rawContent: text,
     markdownContent: text,
-    title: tagName || title,
+    title: tagName,
     fineTitle: '',
     summary: '',
     createTime: now,
@@ -184,8 +176,8 @@ export async function listByDay({ date, tagId = null, pageNo = 1, pageSize = NOT
   }
 }
 
-export async function insertNote(rawContent, images = [], onProgress) {
-  const doc = await createNoteDoc(rawContent, images, { onProgress })
+export async function insertNote(rawContent, images = [], onProgress, options = {}) {
+  const doc = await createNoteDoc(rawContent, images, { onProgress, ...options })
   return buildInsertResponse(doc)
 }
 

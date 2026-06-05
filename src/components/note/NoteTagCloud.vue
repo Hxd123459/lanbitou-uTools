@@ -261,10 +261,10 @@ defineExpose({ reload: loadTags })
 }
 
 .tag-cloud-add-btn {
-  width: 32px;
-  height: 32px;
-  min-width: 32px;
-  padding: 0;
+  width: auto;
+  min-width: 44px;
+  height: 28px;
+  padding: 0 14px;
   border-radius: 999px;
   border: 0;
 }

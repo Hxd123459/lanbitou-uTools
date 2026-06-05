@@ -731,14 +731,14 @@ const {
 
 const deleteTimers = new Map()
 
-const handleSubmit = async ({ text, images }) => {
+const handleSubmit = async ({ text, images, tagId, tagName }) => {
   if (noteSubmitting.value) return
   noteSubmitting.value = true
   uploadProgress.value = 0
   try {
     await assistantStore.addNote(text, images, (p) => {
       uploadProgress.value = p
-    })
+    }, { tagId, tagName })
     inputValue.value = ''
     inputBarRef.value?.reset()
   } catch (error) {

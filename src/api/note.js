@@ -140,18 +140,25 @@ export async function fetchBlockListByDate(
   return parseBlockListPage(data, safePageNo, safePageSize)
 }
 
-export async function createBlock(content, images = [], onProgress) {
+export async function createBlock(content, images = [], onProgress, options = {}) {
   if (isUtoolsMode()) {
-    return utoolsNote.insertNote(content, images, onProgress)
+    return utoolsNote.insertNote(content, images, onProgress, options)
   }
 
+  const { tagId, tagName } = options
+  const payload = { rawContent: content }
+  if (tagId != null) payload.tagId = tagId
+  if (tagName) payload.tagName = tagName
+
   if (!images || images.length === 0) {
-    const data = await post('/api/note/insert', { rawContent: content })
+    const data = await post('/api/note/insert', payload)
     return data
   }
 
   const form = new FormData()
   form.append('rawContent', content ?? '')
+  if (tagId != null) form.append('tagId', String(tagId))
+  if (tagName) form.append('tagName', tagName)
   images.forEach((file, index) => {
     const filename = file.name || `image_${index}.png`
     form.append('images', file, filename)

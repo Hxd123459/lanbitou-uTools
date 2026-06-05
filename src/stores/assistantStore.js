@@ -105,11 +105,11 @@ export const useAssistantStore = defineStore('assistant', () => {
     await loadNotesByDate(currentListDate.value, { reset: false })
   }
 
-  const addNote = async (text, images = [], onProgress) => {
+  const addNote = async (text, images = [], onProgress, { tagId, tagName } = {}) => {
     const pendingId = `pending_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
     const pendingNote = {
       id: pendingId,
-      title: '',
+      title: tagName || '',
       fineTitle: '',
       text,
       markdownContent: text,
@@ -122,7 +122,7 @@ export const useAssistantStore = defineStore('assistant', () => {
     notes.value.unshift(pendingNote)
 
     try {
-      const result = await createBlock(text, images, onProgress)
+      const result = await createBlock(text, images, onProgress, { tagId, tagName })
       const target = notes.value.find((item) => item.id === pendingId)
       if (!target) return result
       const data =

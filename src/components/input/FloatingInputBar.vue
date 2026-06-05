@@ -15,6 +15,8 @@
           @blur="onBlur"
           @keydown="onKeydown"
           @paste="onPaste"
+          @click="onCaretChange"
+          @keyup="onCaretChange"
         />
 
         <div v-if="images.length" class="thumb-strip">
@@ -86,6 +88,40 @@
 
       <div class="input-footer">
         <div class="footer-left">
+          <AnimatePresence>
+            <motion.span
+              v-if="selectedTag"
+              :key="selectedTag.tagId"
+              class="tag-chip"
+              :initial="presets.reveal.initial"
+              :animate="presets.reveal.animate"
+              :exit="presets.reveal.exit"
+              :transition="presets.reveal.transition"
+            >
+              <span class="tag-chip-label">#{{ selectedTag.tagName }}</span>
+              <motion.button
+                type="button"
+                class="tag-chip-remove"
+                :disabled="submitting"
+                aria-label="移除标签"
+                :while-hover="presets.button.hover"
+                :while-tap="presets.button.tap"
+                :transition="presets.button.transition"
+                @click="clearSelectedTag"
+              >
+                <svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true">
+                  <path
+                    d="M6 6l12 12M18 6L6 18"
+                    stroke="currentColor"
+                    stroke-width="2.2"
+                    stroke-linecap="round"
+                    fill="none"
+                  />
+                </svg>
+              </motion.button>
+            </motion.span>
+          </AnimatePresence>
+
           <AppButton
             class="btn btn-icon"
             :disabled="submitting || images.length >= MAX_IMAGES"
@@ -156,15 +192,61 @@
         @change="onFilePicked"
       />
     </div>
+
+    <Teleport to="body">
+      <div
+        v-if="tagMenuOpen"
+        class="struct-note-slash-menu"
+        data-tag-hash-menu
+        role="listbox"
+        aria-label="选择标签"
+        :style="tagMenuStyle"
+        @mousedown="onTagMenuMouseDown"
+      >
+        <p v-if="tagMenuLoading" class="tag-hash-menu-state">加载标签中…</p>
+        <p v-else-if="!tagMenuItems.length" class="tag-hash-menu-state">
+          输入标签名，最多 5 个字
+        </p>
+        <button
+          v-for="(item, index) in tagMenuItems"
+          :key="`${item.type}-${item.tagName}`"
+          type="button"
+          class="struct-note-slash-menu__item"
+          :class="{ 'struct-note-slash-menu__item--active': index === tagMenuIndex }"
+          role="option"
+          :aria-selected="index === tagMenuIndex"
+          @click="applyTagMenuItem(item)"
+        >
+          <span class="struct-note-slash-menu__icon" aria-hidden="true">
+            <svg
+              v-if="item.type === 'create'"
+              viewBox="0 0 24 24"
+              width="18"
+              height="18"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.8"
+              stroke-linecap="round"
+            >
+              <path d="M12 5v14M5 12h14" />
+            </svg>
+            <span v-else class="tag-hash-menu-hash">#</span>
+          </span>
+          <span class="struct-note-slash-menu__label">{{ item.label }}</span>
+        </button>
+      </div>
+    </Teleport>
   </div>
 </template>
 
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { motion } from 'motion-v'
+import { AnimatePresence, motion } from 'motion-v'
 import { isImageFileSizeAllowed } from '../../constants/uploadLimits'
 import { useMotionPresets } from '../../composables/useMotionPresets'
+import { useTagHashPicker } from '../../composables/useTagHashPicker'
 import AppButton from '../motion/AppButton.vue'
+import '../../assets/styles/tiptap-slash-menu.css'
 
 const props = defineProps({
   modelValue: {
@@ -210,6 +292,29 @@ const inputHeight = ref(MIN_HEIGHT)
 const initialHeight = ref(MIN_HEIGHT)
 const savedHeight = ref(null)
 const isFocused = ref(false)
+const selectedTag = ref(null)
+
+const {
+  menuOpen: tagMenuOpen,
+  menuStyle: tagMenuStyle,
+  selectedIndex: tagMenuIndex,
+  filteredItems: tagMenuItems,
+  tagsLoading: tagMenuLoading,
+  loadTags,
+  syncMenu: syncTagMenu,
+  closeMenu: closeTagMenu,
+  applyItem: applyTagMenuItem,
+  handleKeyDown: handleTagMenuKeyDown,
+  onMenuMouseDown: onTagMenuMouseDown,
+  onTextareaBlur: onTagTextareaBlur,
+} = useTagHashPicker({
+  getText: () => props.modelValue,
+  setText: (value) => emit('update:modelValue', value),
+  getTextarea: () => textareaRef.value,
+  onTagSelected: (tag) => {
+    selectedTag.value = tag
+  },
+})
 
 const shortcutLabel = computed(() => (isMac.value ? '⌘' : 'Ctrl'))
 const progressPercent = computed(() =>
@@ -248,6 +353,7 @@ const onFocus = () => {
 
 const onBlur = () => {
   isFocused.value = false
+  onTagTextareaBlur()
   nextTick(async () => {
     if (!props.modelValue.trim() && !images.value.length) {
       inputHeight.value = MIN_HEIGHT
@@ -257,13 +363,25 @@ const onBlur = () => {
   })
 }
 
+const onCaretChange = () => {
+  nextTick(() => syncTagMenu())
+}
+
 const onInput = (event) => {
   emit('update:modelValue', event.target.value)
-  nextTick(adjustHeight)
+  nextTick(async () => {
+    await adjustHeight()
+    await syncTagMenu()
+  })
+}
+
+const clearSelectedTag = () => {
+  selectedTag.value = null
 }
 
 const onKeydown = (event) => {
   if (event.isComposing) return
+  if (handleTagMenuKeyDown(event)) return
   if (event.key !== 'Enter') return
   const modifierPressed = isMac.value ? event.metaKey : event.ctrlKey
   if (!modifierPressed) return
@@ -330,6 +448,8 @@ const removeImage = (id) => {
 const reset = () => {
   images.value.forEach((item) => URL.revokeObjectURL(item.url))
   images.value = []
+  selectedTag.value = null
+  closeTagMenu()
   inputHeight.value = MIN_HEIGHT
 }
 
@@ -345,6 +465,8 @@ const onSubmit = () => {
   emit('submit', {
     text,
     images: images.value.map((item) => item.file),
+    tagId: selectedTag.value?.tagId ?? null,
+    tagName: selectedTag.value?.tagName ?? '',
   })
 }
 
@@ -382,6 +504,7 @@ onMounted(() => {
       (navigator.userAgentData?.platform || navigator.platform || '')) ||
     ''
   isMac.value = /Mac|iPhone|iPad|iPod/i.test(platform)
+  loadTags()
   nextTick(async () => {
     await adjustHeight()
     initialHeight.value = inputHeight.value
@@ -451,6 +574,58 @@ defineExpose({ reset, addImages, focus })
 
 .main-input::placeholder {
   color: #a1a1aa;
+}
+
+.tag-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex: 0 0 auto;
+  min-height: 28px;
+  padding: 4px 8px 4px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-accent);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.tag-chip-label {
+  font-weight: 600;
+}
+
+.tag-chip-remove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--color-secondary-text);
+  cursor: pointer;
+}
+
+.tag-chip-remove:hover:not(:disabled) {
+  color: var(--color-accent);
+  background: rgba(37, 99, 235, 0.08);
+}
+
+.tag-hash-menu-state {
+  margin: 0;
+  padding: 8px 10px;
+  font-size: 13px;
+  color: var(--color-secondary-text);
+}
+
+.tag-hash-menu-hash {
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1;
 }
 
 .main-input:disabled {
@@ -543,7 +718,7 @@ defineExpose({ reset, addImages, focus })
 .footer-left {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
   min-height: 30px;
 }
 
