@@ -204,7 +204,6 @@ const isCompactSidebar = useUtoolsCompactSidebar()
 const navItems = [
   { id: 'home', label: '碎片' },
   { id: 'sediment', label: '沉淀' },
-  { id: 'echo', label: '热力图' },
   { id: 'trash', label: '回收站' },
 ]
 

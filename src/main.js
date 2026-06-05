@@ -1,5 +1,6 @@
 import { createApp } from 'vue'
 import { createPinia } from 'pinia'
+import './assets/styles/fonts.css'
 import './assets/styles/tokens.css'
 import './assets/styles/buttons.css'
 import './assets/styles/tiptap-content.css'

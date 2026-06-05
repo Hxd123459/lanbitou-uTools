@@ -10,19 +10,26 @@ function stripCrossorigin(html) {
   return html.replace(/\s+crossorigin(="[^"]*")?/g, '')
 }
 
+/** uTools 应用市场禁止引入网络 js/css */
+function stripExternalAssets(html) {
+  return html
+    .replace(/<link[^>]+href=["']https?:\/\/[^"']+["'][^>]*>\s*/gi, '')
+    .replace(/<script[^>]+src=["']https?:\/\/[^"']+["'][^>]*>\s*<\/script>\s*/gi, '')
+}
+
 /** uTools 以 file:// 加载 dist，crossorigin / modulepreload 会导致脚本静默失败白屏 */
 function utoolsBuildPlugin() {
   return {
     name: 'utools-build',
     transformIndexHtml(html) {
-      return stripCrossorigin(html)
+      return stripExternalAssets(stripCrossorigin(html))
     },
     closeBundle() {
       const distDir = path.resolve('dist')
       const indexPath = path.join(distDir, 'index.html')
       if (fs.existsSync(indexPath)) {
         const html = fs.readFileSync(indexPath, 'utf-8')
-        fs.writeFileSync(indexPath, stripCrossorigin(html))
+        fs.writeFileSync(indexPath, stripExternalAssets(stripCrossorigin(html)))
       }
 
       const pluginPath = path.join(distDir, 'plugin.json')
