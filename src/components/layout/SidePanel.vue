@@ -4,10 +4,11 @@
     :animate="sidebarMotion.animate"
     :transition="sidebarMotion.transition"
     class="app-sidebar"
+    :class="{ 'is-compact': isCompactSidebar }"
     aria-label="主导航"
   >
     <div class="sidebar-brand">
-      <BrandArea variant="sidebar" />
+      <BrandArea variant="sidebar" :compact="isCompactSidebar" />
     </div>
 
     <div class="sidebar-search">
@@ -45,6 +46,7 @@
         class="nav-item"
         :class="{ 'is-active': activeTab === item.id }"
         :aria-current="activeTab === item.id ? 'page' : undefined"
+        :title="isCompactSidebar ? item.label : undefined"
         :while-hover="navMotion.hover"
         :while-tap="navMotion.tap"
         @click="$emit('tab-change', item.id)"
@@ -135,6 +137,7 @@
         class="nav-item"
         :class="{ 'is-active': activeTab === 'settings' }"
         :aria-current="activeTab === 'settings' ? 'page' : undefined"
+        :title="isCompactSidebar ? '设置' : undefined"
         :while-hover="navMotion.hover"
         :while-tap="navMotion.tap"
         @click="$emit('tab-change', 'settings')"
@@ -172,6 +175,7 @@ import { computed, ref } from 'vue'
 import { motion } from 'motion-v'
 import { useMotionPresets } from '../../composables/useMotionPresets'
 import { isUtoolsMode } from '../../storage/env'
+import { useUtoolsCompactSidebar } from '../../composables/useUtoolsWindow'
 import BrandArea from '../brand/BrandArea.vue'
 import SemanticSearchModal from '../search/SemanticSearchModal.vue'
 
@@ -195,6 +199,7 @@ const onSemanticNoteSelect = (note) => {
 }
 
 const showSettingsNav = isUtoolsMode()
+const isCompactSidebar = useUtoolsCompactSidebar()
 
 const navItems = [
   { id: 'home', label: '碎片' },
@@ -397,5 +402,38 @@ const navMotion = computed(() => ({
     justify-content: center;
     padding: 10px;
   }
+}
+
+/* uTools 主窗口：与窄屏相同的图标侧栏 */
+.app-sidebar.is-compact {
+  flex: 0 0 72px;
+  width: 72px;
+  padding: 16px 8px 20px;
+}
+
+.app-sidebar.is-compact .sidebar-search {
+  padding: 0 0 14px;
+}
+
+.app-sidebar.is-compact .sidebar-search-field {
+  justify-content: center;
+  padding: 10px;
+}
+
+.app-sidebar.is-compact .sidebar-search-input {
+  display: none;
+}
+
+.app-sidebar.is-compact .sidebar-brand {
+  padding: 0 4px 14px;
+}
+
+.app-sidebar.is-compact .nav-item-label {
+  display: none;
+}
+
+.app-sidebar.is-compact .nav-item {
+  justify-content: center;
+  padding: 10px;
 }
 </style>

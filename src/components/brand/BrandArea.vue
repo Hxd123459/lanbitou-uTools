@@ -1,5 +1,11 @@
 <template>
-  <div class="brand-area" :class="{ 'brand-area--sidebar': variant === 'sidebar' }">
+  <div
+    class="brand-area"
+    :class="{
+      'brand-area--sidebar': variant === 'sidebar',
+      'is-compact': compact,
+    }"
+  >
     <div class="logo-wrap" aria-hidden="true">
       <img class="logo-img" src="/logo.png" alt="烂笔头" />
     </div>
@@ -20,6 +26,10 @@ defineProps({
     type: String,
     default: 'default',
     validator: (v) => ['default', 'sidebar'].includes(v),
+  },
+  compact: {
+    type: Boolean,
+    default: false,
   },
 })
 
@@ -172,7 +182,17 @@ const envLabel = (import.meta.env.VITE_APP_ENV || 'dev').toUpperCase()
   .brand-area--sidebar {
     --sidebar-brand-block: 40px;
   }
+}
 
+.brand-area--sidebar.is-compact .brand-text {
+  display: none;
+}
+
+.brand-area--sidebar.is-compact {
+  --sidebar-brand-block: 40px;
+}
+
+@media (max-width: 720px) {
   .brand-area:not(.brand-area--sidebar) .brand-slogan {
     display: none;
   }
