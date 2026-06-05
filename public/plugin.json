@@ -1,0 +1,18 @@
+{
+  "main": "index.html",
+  "logo": "logo.png",
+  "development": {
+    "main": "http://localhost:5173"
+  },
+  "features": [
+    {
+      "code": "main",
+      "explain": "烂笔头 · AI 笔记与助理",
+      "cmds": [
+        "烂笔头",
+        "笔记",
+        "lanbitou"
+      ]
+    }
+  ]
+}

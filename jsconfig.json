@@ -1,5 +1,6 @@
 {
   "compilerOptions": {
+    "types": ["utools-api-types"],
     "paths": {
       "@/*": ["./src/*"]
     }
