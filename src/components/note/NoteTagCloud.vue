@@ -4,9 +4,10 @@
     <p v-else-if="error" class="tag-cloud-status tag-cloud-status--error">
       {{ error }}
     </p>
-    <p v-else-if="!tags.length" class="tag-cloud-status">暂无标签</p>
 
     <div v-else class="tag-cloud" role="list">
+      <p v-if="!tags.length && !adding" class="tag-cloud-empty">暂无标签，点击 + 添加</p>
+
       <motion.button
         v-for="(tag, index) in tags"
         :key="tag.tagId"
@@ -22,16 +23,48 @@
         <span class="tag-cloud-name">{{ tag.tagName }}</span>
         <span class="tag-cloud-count">{{ tag.noteCount }}</span>
       </motion.button>
+
+      <div v-if="adding" class="tag-cloud-add-chip" role="listitem">
+        <input
+          ref="addInputRef"
+          v-model="draftTag"
+          type="text"
+          class="tag-cloud-add-input"
+          maxlength="5"
+          placeholder="标签"
+          aria-label="新标签名称"
+          :disabled="creating"
+          @keydown.enter.prevent="submitTag"
+          @keydown.esc.prevent="cancelAdd"
+          @blur="onAddBlur"
+        />
+      </div>
+
+      <AppButton
+        v-else-if="canAddTag"
+        type="button"
+        class="btn btn-primary tag-cloud-add-btn"
+        aria-label="添加标签"
+        @click="startAdd"
+      >
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+          <path d="M12 5v14M5 12h14" />
+        </svg>
+      </AppButton>
     </div>
+
+    <p v-if="createError" class="tag-cloud-inline-error">{{ createError }}</p>
   </section>
 </template>
 
 <script setup>
-import { onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { motion } from 'motion-v'
 import { ApiError } from '../../api/http'
-import { fetchAllTags } from '../../api/note'
+import { createTag, fetchAllTags } from '../../api/note'
+import { isUtoolsMode } from '../../storage/env'
 import { useMotionPresets } from '../../composables/useMotionPresets'
+import AppButton from '../motion/AppButton.vue'
 
 const props = defineProps({
   active: {
@@ -46,8 +79,16 @@ const { presets } = useMotionPresets()
 
 const loading = ref(false)
 const error = ref('')
+const createError = ref('')
+const creating = ref(false)
+const adding = ref(false)
+const draftTag = ref('')
 const tags = ref([])
+const addInputRef = ref(null)
 let loadToken = 0
+let blurTimer = 0
+
+const canAddTag = computed(() => isUtoolsMode())
 
 const loadTags = async () => {
   const token = ++loadToken
@@ -74,16 +115,67 @@ const loadTags = async () => {
   }
 }
 
+const startAdd = async () => {
+  createError.value = ''
+  adding.value = true
+  draftTag.value = ''
+  await nextTick()
+  addInputRef.value?.focus()
+}
+
+const cancelAdd = () => {
+  window.clearTimeout(blurTimer)
+  adding.value = false
+  draftTag.value = ''
+  createError.value = ''
+}
+
+const onAddBlur = () => {
+  window.clearTimeout(blurTimer)
+  blurTimer = window.setTimeout(() => {
+    if (!draftTag.value.trim()) cancelAdd()
+  }, 120)
+}
+
+const submitTag = async () => {
+  const name = draftTag.value.trim()
+  if (!name || creating.value) {
+    if (!name) cancelAdd()
+    return
+  }
+
+  creating.value = true
+  createError.value = ''
+  try {
+    await createTag(name)
+    cancelAdd()
+    await loadTags()
+  } catch (err) {
+    if (err instanceof ApiError) {
+      createError.value = `[${err.code}] ${err.msg}`
+    } else {
+      createError.value = err?.message || '添加失败'
+    }
+    await nextTick()
+    addInputRef.value?.focus()
+  } finally {
+    creating.value = false
+  }
+}
+
 watch(
   () => props.active,
   (on) => {
     if (on) loadTags()
+    else cancelAdd()
   },
 )
 
 onMounted(() => {
   if (props.active) loadTags()
 })
+
+defineExpose({ reload: loadTags })
 </script>
 
 <style scoped>
@@ -119,6 +211,19 @@ onMounted(() => {
   min-height: 120px;
 }
 
+.tag-cloud-empty {
+  width: 100%;
+  margin: 0 0 4px;
+  font-size: 13px;
+  color: var(--color-secondary-text);
+}
+
+.tag-cloud-item,
+.tag-cloud-add-chip,
+.tag-cloud-add-btn {
+  flex: 0 0 auto;
+}
+
 .tag-cloud-item {
   display: inline-flex;
   align-items: center;
@@ -136,8 +241,8 @@ onMounted(() => {
 }
 
 .tag-cloud-item:hover {
-  border-color: rgba(37, 99, 235, 0.35);
-  color: var(--color-accent);
+  border-color: rgba(24, 24, 27, 0.22);
+  color: var(--color-primary);
 }
 
 .tag-cloud-count {
@@ -151,7 +256,55 @@ onMounted(() => {
 }
 
 .tag-cloud-item:hover .tag-cloud-count {
-  color: var(--color-accent);
-  background: rgba(37, 99, 235, 0.12);
+  color: var(--color-primary);
+  background: rgba(24, 24, 27, 0.1);
+}
+
+.tag-cloud-add-btn {
+  width: 32px;
+  height: 32px;
+  min-width: 32px;
+  padding: 0;
+  border-radius: 999px;
+  border: 0;
+}
+
+.tag-cloud-add-chip {
+  display: inline-flex;
+  align-items: center;
+  min-width: 72px;
+  height: 32px;
+  padding: 0 10px;
+  border: 1px dashed var(--btn-dashed-border);
+  border-radius: 999px;
+  background: var(--color-surface);
+}
+
+.tag-cloud-add-chip:focus-within {
+  border-color: var(--btn-dashed-border-focus);
+  box-shadow: var(--focus-ring);
+}
+
+.tag-cloud-add-input {
+  width: 64px;
+  border: 0;
+  background: transparent;
+  padding: 0;
+  color: var(--color-text);
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  outline: none;
+}
+
+.tag-cloud-add-input::placeholder {
+  color: #a1a1aa;
+  font-weight: 400;
+}
+
+.tag-cloud-inline-error {
+  margin: 8px 0 0;
+  font-size: 12px;
+  color: var(--color-error);
 }
 </style>

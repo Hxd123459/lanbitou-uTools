@@ -128,6 +128,42 @@
         <span class="nav-item-label">{{ item.label }}</span>
       </motion.button>
     </nav>
+
+    <nav v-if="showSettingsNav" class="sidebar-nav sidebar-nav--footer" aria-label="设置">
+      <motion.button
+        type="button"
+        class="nav-item"
+        :class="{ 'is-active': activeTab === 'settings' }"
+        :aria-current="activeTab === 'settings' ? 'page' : undefined"
+        :while-hover="navMotion.hover"
+        :while-tap="navMotion.tap"
+        @click="$emit('tab-change', 'settings')"
+      >
+        <motion.div
+          v-if="activeTab === 'settings'"
+          layout-id="sidebarActiveNav"
+          class="nav-item-active-bg"
+          :transition="navMotion.layout"
+        />
+
+        <span class="nav-item-icon" aria-hidden="true">
+          <svg
+            viewBox="0 0 24 24"
+            width="18"
+            height="18"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.8"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <circle cx="12" cy="12" r="3" />
+            <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41" />
+          </svg>
+        </span>
+        <span class="nav-item-label">设置</span>
+      </motion.button>
+    </nav>
   </motion.aside>
 </template>
 
@@ -135,6 +171,7 @@
 import { computed, ref } from 'vue'
 import { motion } from 'motion-v'
 import { useMotionPresets } from '../../composables/useMotionPresets'
+import { isUtoolsMode } from '../../storage/env'
 import BrandArea from '../brand/BrandArea.vue'
 import SemanticSearchModal from '../search/SemanticSearchModal.vue'
 
@@ -156,6 +193,8 @@ const openSemanticSearch = () => {
 const onSemanticNoteSelect = (note) => {
   emit('semantic-note-select', note)
 }
+
+const showSettingsNav = isUtoolsMode()
 
 const navItems = [
   { id: 'home', label: '碎片' },
@@ -281,11 +320,11 @@ const navMotion = computed(() => ({
 }
 
 .nav-item.is-active {
-  color: var(--color-accent);
+  color: var(--color-primary);
 }
 
 .nav-item.is-active .nav-item-icon {
-  color: var(--color-accent);
+  color: var(--color-primary);
 }
 
 .nav-item:focus-visible {
@@ -297,9 +336,16 @@ const navMotion = computed(() => ({
   position: absolute;
   inset: 0;
   border-radius: var(--radius-md);
-  background: rgba(255, 255, 255, 0.85);
+  background: var(--color-surface);
   box-shadow: 0 1px 3px rgba(24, 24, 27, 0.06);
   z-index: 0;
+}
+
+.sidebar-nav--footer {
+  flex: 0 0 auto;
+  margin-top: auto;
+  padding-top: 10px;
+  border-top: 1px solid var(--color-border);
 }
 
 .nav-item-icon {

@@ -1,6 +1,6 @@
 import { isUtoolsMode } from '../storage/env'
 import * as utoolsNote from '../storage/utools/noteRepository'
-import { post, get, postForm, resolveResourceUrl } from './http'
+import { ApiError, post, get, postForm, resolveResourceUrl } from './http'
 
 export function formatDateParam(date) {
   const year = date.getFullYear()
@@ -286,6 +286,13 @@ export async function fetchAllTags() {
   }
   const data = await get('/api/note/allTags')
   return Array.isArray(data) ? data : []
+}
+
+export async function createTag(tagName) {
+  if (isUtoolsMode()) {
+    return utoolsNote.createTag(tagName)
+  }
+  throw new ApiError('NOT_SUPPORTED', '当前环境请通过记录笔记自动生成标签')
 }
 
 export async function fetchNotesByTag(tagId, pagination = {}) {

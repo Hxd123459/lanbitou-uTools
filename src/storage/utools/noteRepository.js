@@ -1,5 +1,10 @@
+import { generateNoteTitle } from '../../ai/aiService'
 import { NOTE_PREFIX } from './constants'
 import { createNoteInFolder } from './structRepository'
+import {
+  listTagsWithCounts,
+  resolveTagForTitle,
+} from './tagRepository'
 import { dbAllDocs, dbGet, dbPut, dbRemove } from './dbClient'
 import {
   imagesToBlocks,
@@ -101,24 +106,41 @@ async function saveNoteDoc(doc) {
   return doc
 }
 
-function deriveTag(doc) {
-  const tagName = (doc.title || '').trim() || '未分类'
-  const tagId = doc.tagId || `tag_${tagName}`
-  return { tagId, tagName }
+function countNotesByTagId(notes = []) {
+  const map = new Map()
+  notes.forEach((doc) => {
+    if (!doc?.tagId) return
+    const key = String(doc.tagId)
+    map.set(key, (map.get(key) || 0) + 1)
+  })
+  return map
+}
+
+async function resolveNoteTitle(rawContent) {
+  const text = String(rawContent ?? '').trim()
+  if (!text) return ''
+
+  const aiTitle = await generateNoteTitle(text)
+  if (aiTitle) return aiTitle.slice(0, 5)
+
+  return autoTitleFromContent(text).slice(0, 5)
 }
 
 async function createNoteDoc(rawContent, images = [], { onProgress } = {}) {
   const id = createId()
   const now = formatDateTime()
   const text = String(rawContent ?? '')
-  const title = autoTitleFromContent(text)
-  const { tagId } = deriveTag({ title })
+  const hasText = Boolean(text.trim())
+  const title = hasText ? await resolveNoteTitle(text) : ''
+  const { tagId, tagName } = title
+    ? await resolveTagForTitle(title)
+    : { tagId: null, tagName: '' }
 
   const doc = {
     id,
     rawContent: text,
     markdownContent: text,
-    title,
+    title: tagName || title,
     fineTitle: '',
     summary: '',
     createTime: now,
@@ -201,7 +223,9 @@ export async function updateNote(id, title, content, { retainedImageIds, newImag
   doc.summary = doc.summary || ''
   doc.updateTime = formatDateTime()
   doc.images = images
-  doc.tagId = deriveTag(doc).tagId
+  const tag = await resolveTagForTitle(nextTitle)
+  doc.tagId = tag.tagId
+  doc.title = tag.tagName || nextTitle
 
   await saveNoteDoc(doc)
   return buildInsertResponse(doc)
@@ -285,21 +309,15 @@ export async function deleteForever(ids) {
 
 export async function allTags() {
   const docs = await loadAllNoteDocs()
-  const map = new Map()
+  const nameByTagId = new Map()
   docs.forEach((doc) => {
-    const { tagId, tagName } = deriveTag(doc)
-    const current = map.get(tagId) || { tagId, tagName, noteCount: 0 }
-    current.noteCount += 1
-    map.set(tagId, current)
+    if (!doc?.tagId || !doc?.title) return
+    nameByTagId.set(String(doc.tagId), doc.title)
   })
-  return [...map.values()]
-    .sort((a, b) => b.noteCount - a.noteCount || a.tagName.localeCompare(b.tagName, 'zh-CN'))
-    .map((item) => ({
-      tagId: item.tagId,
-      tagName: item.tagName,
-      noteCount: String(item.noteCount),
-    }))
+  return listTagsWithCounts(countNotesByTagId(docs), nameByTagId)
 }
+
+export { createTag } from './tagRepository'
 
 export async function localSemanticSearch(query) {
   const q = String(query ?? '').trim().toLowerCase()

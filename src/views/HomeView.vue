@@ -272,6 +272,12 @@
         @restored="handleRecycleRestored"
         @error="notifyError"
       />
+
+      <!-- 设置 -->
+      <AiSettingsPanel
+        v-show="activeTab === 'settings'"
+        :active="activeTab === 'settings'"
+      />
     </template>
   </MainFrame>
 
@@ -294,6 +300,7 @@ import MainFrame from '../components/layout/MainFrame.vue'
 import SedimentPanel from '../components/sediment/SedimentPanel.vue'
 import HeatmapPanel from '../components/heatmap/HeatmapPanel.vue'
 import TrashPanel from '../components/trash/TrashPanel.vue'
+import AiSettingsPanel from '../components/settings/AiSettingsPanel.vue'
 import SidePanel from '../components/layout/SidePanel.vue'
 import NoteBulkActionBar from '../components/note/NoteBulkActionBar.vue'
 import NoteCard from '../components/note/NoteCard.vue'
