@@ -259,7 +259,7 @@ const props = defineProps({
   },
   placeholder: {
     type: String,
-    default: '记录此刻想法 ，使用#使用或者添加标签',
+    default: '记录此刻想法 ，使用#用或者加标签',
   },
   uploadProgress: {
     type: Number,
