@@ -126,29 +126,37 @@
           </motion.button>
         </div>
 
-        <div class="note-view-body">
-          <p v-if="loadError" class="note-view-error">加载失败，请稍后重试</p>
-          <p v-else-if="fetching" class="note-view-loading">加载中…</p>
+        <StructNoteEditorLayout
+          v-model:fragment-notes="localFragmentNotes"
+          :inserted-ids="insertedFragmentIds"
+          :default-fragments-open="false"
+          @insert="insertFragment"
+        >
+          <div class="note-view-body">
+            <p v-if="loadError" class="note-view-error">加载失败，请稍后重试</p>
+            <p v-else-if="fetching" class="note-view-loading">加载中…</p>
 
-          <template v-else>
-            <input
-              ref="titleInputRef"
-              v-model="draftTitle"
-              class="note-view-title-input"
-              type="text"
-              maxlength="80"
-              placeholder="请输入标题"
-              spellcheck="false"
-            />
+            <template v-else>
+              <input
+                ref="titleInputRef"
+                v-model="draftTitle"
+                class="note-view-title-input"
+                type="text"
+                maxlength="80"
+                placeholder="请输入标题"
+                spellcheck="false"
+              />
 
-            <div class="note-view-divider" />
+              <div class="note-view-divider" />
 
-            <StructNoteMarkdownEditor
-              v-model="draftContent"
-              class="note-view-editor"
-            />
-          </template>
-        </div>
+              <StructNoteMarkdownEditor
+                ref="contentEditorRef"
+                v-model="draftContent"
+                class="note-view-editor"
+              />
+            </template>
+          </div>
+        </StructNoteEditorLayout>
       </motion.div>
     </AnimatePresence>
   </Teleport>
@@ -158,7 +166,9 @@
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { AnimatePresence, motion } from 'motion-v'
 import { getStructNote, updateStructNote } from '../../api/structNote'
+import { appendFragmentToContent } from '../../composables/useStructNoteFragments'
 import { useMotionPresets } from '../../composables/useMotionPresets'
+import StructNoteEditorLayout from './StructNoteEditorLayout.vue'
 import StructNoteMarkdownEditor from './StructNoteMarkdownEditor.vue'
 
 const AUTO_SAVE_DELAY_MS = 1200
@@ -181,6 +191,9 @@ const draftTitle = ref('')
 const draftContent = ref('')
 const lastSaved = ref({ title: '', content: '' })
 const titleInputRef = ref(null)
+const contentEditorRef = ref(null)
+const localFragmentNotes = ref([])
+const insertedFragmentIds = ref(new Set())
 
 let autoSaveTimer = null
 let loadToken = 0
@@ -209,6 +222,13 @@ const applyDraftFromNote = () => {
   draftContent.value = note.value.content || ''
   syncLastSavedFromDraft()
   saveStatus.value = 'saved'
+}
+
+const insertFragment = (fragmentNote) => {
+  if (insertedFragmentIds.value.has(fragmentNote.id)) return
+  draftContent.value = appendFragmentToContent(draftContent.value, fragmentNote)
+  insertedFragmentIds.value = new Set([...insertedFragmentIds.value, fragmentNote.id])
+  nextTick(() => contentEditorRef.value?.focus())
 }
 
 const clearAutoSaveTimer = () => {
@@ -315,6 +335,8 @@ watch(
       draftTitle.value = ''
       draftContent.value = ''
       lastSaved.value = { title: '', content: '' }
+      localFragmentNotes.value = []
+      insertedFragmentIds.value = new Set()
       clearAutoSaveTimer()
       fetchDetail()
       window.addEventListener('keydown', onKeydown)
@@ -414,7 +436,7 @@ onBeforeUnmount(() => {
   flex-direction: column;
   width: min(760px, 100%);
   margin: 0 auto;
-  padding: 80px 24px 32px;
+  padding: 64px 24px 32px;
   box-sizing: border-box;
   overflow-y: auto;
 }
@@ -467,5 +489,10 @@ onBeforeUnmount(() => {
 
 .note-view-error {
   color: #ef4444;
+}
+
+:deep(.struct-note-editor-layout) {
+  flex: 1;
+  min-height: 0;
 }
 </style>
