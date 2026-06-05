@@ -1,5 +1,25 @@
 <template>
+  <StructNoteEditorLayout
+    v-if="withFragments"
+    class="struct-note-md-editor-layout"
+    v-model:fragment-notes="fragmentNotesModel"
+    v-model:open="fragmentsOpenModel"
+    :inserted-ids="insertedIds"
+    :disabled="disabled"
+    :show-expand-button="showExpandButton"
+    @insert="emit('insert', $event)"
+  >
+    <div
+      class="struct-note-md-editor"
+      :class="{ 'is-disabled': disabled }"
+      :style="rootStyle"
+    >
+      <EditorContent :editor="editor" class="struct-note-md-editor__content tiptap-content" />
+    </div>
+  </StructNoteEditorLayout>
+
   <div
+    v-else
     class="struct-note-md-editor"
     :class="{ 'is-disabled': disabled }"
     :style="rootStyle"
@@ -14,6 +34,7 @@ import { computed, onBeforeUnmount, watch } from 'vue'
 import { createTiptapExtensions } from '../../composables/useTiptapExtensions'
 import '../../assets/styles/tiptap-slash-menu.css'
 import '../../assets/styles/struct-note-drag-handle.css'
+import StructNoteEditorLayout from './StructNoteEditorLayout.vue'
 
 const props = defineProps({
   modelValue: {
@@ -28,9 +49,44 @@ const props = defineProps({
     type: [Number, String],
     default: 320,
   },
+  withFragments: {
+    type: Boolean,
+    default: false,
+  },
+  fragmentNotes: {
+    type: Array,
+    default: () => [],
+  },
+  insertedIds: {
+    type: Object,
+    default: () => new Set(),
+  },
+  fragmentsOpen: {
+    type: Boolean,
+    default: true,
+  },
+  showExpandButton: {
+    type: Boolean,
+    default: true,
+  },
 })
 
-const emit = defineEmits(['update:modelValue'])
+const emit = defineEmits([
+  'update:modelValue',
+  'update:fragmentNotes',
+  'update:fragmentsOpen',
+  'insert',
+])
+
+const fragmentNotesModel = computed({
+  get: () => props.fragmentNotes,
+  set: (value) => emit('update:fragmentNotes', value),
+})
+
+const fragmentsOpenModel = computed({
+  get: () => props.fragmentsOpen,
+  set: (value) => emit('update:fragmentsOpen', value),
+})
 
 const rootStyle = computed(() => ({
   '--struct-note-md-min-height': `${Number(props.minHeight) || 320}px`,
@@ -84,11 +140,18 @@ onBeforeUnmount(() => {
 </script>
 
 <style scoped>
+.struct-note-md-editor-layout {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+}
+
 .struct-note-md-editor {
   flex: 1;
   min-height: 0;
   display: flex;
   flex-direction: column;
+  width: 100%;
 }
 
 .struct-note-md-editor__content {

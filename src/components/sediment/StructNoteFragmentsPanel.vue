@@ -109,7 +109,7 @@
   </AnimatePresence>
 
   <motion.button
-    v-if="!open"
+    v-if="showExpandButton && !open"
     type="button"
     class="struct-note-fragments-expand"
     aria-label="展开碎片面板"
@@ -147,6 +147,7 @@ const props = defineProps({
   insertedIds: { type: Object, default: () => new Set() },
   disabled: { type: Boolean, default: false },
   open: { type: Boolean, default: true },
+  showExpandButton: { type: Boolean, default: true },
 })
 
 const emit = defineEmits(['update:open', 'update:fragmentNotes', 'insert'])
@@ -233,9 +234,9 @@ const onPickerConfirm = (notes) => {
 
 .struct-note-fragments-expand {
   position: absolute;
-  top: 24px;
-  right: 18px;
-  z-index: 3;
+  top: 0;
+  right: 0;
+  z-index: 1;
   padding: 8px 10px;
   font-size: 12px;
   font-weight: 600;

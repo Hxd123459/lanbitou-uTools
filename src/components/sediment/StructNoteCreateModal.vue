@@ -215,13 +215,7 @@
           </motion.button>
         </header>
 
-        <StructNoteEditorLayout
-          v-model:fragment-notes="localFragmentNotes"
-          :inserted-ids="insertedFragmentIds"
-          :disabled="saving"
-          :default-fragments-open="defaultFragmentsOpen"
-          @insert="insertFragment"
-        >
+        <div class="struct-note-modal-body-wrap">
           <div class="struct-note-modal-body">
             <input
               ref="titleInputRef"
@@ -236,11 +230,16 @@
             <StructNoteMarkdownEditor
               ref="contentEditorRef"
               v-model="draftContent"
+              v-model:fragment-notes="localFragmentNotes"
+              v-model:fragments-open="fragmentsOpen"
+              with-fragments
               :disabled="saving"
+              :inserted-ids="insertedFragmentIds"
               :min-height="240"
+              @insert="insertFragment"
             />
           </div>
-        </StructNoteEditorLayout>
+        </div>
       </motion.div>
     </AnimatePresence>
   </Teleport>
@@ -252,7 +251,6 @@ import { AnimatePresence, motion } from 'motion-v'
 import { createStructFolder, fetchFolderList } from '../../api/structFolder'
 import { useMotionPresets } from '../../composables/useMotionPresets'
 import { appendFragmentToContent } from '../../composables/useStructNoteFragments'
-import StructNoteEditorLayout from './StructNoteEditorLayout.vue'
 import StructNoteMarkdownEditor from './StructNoteMarkdownEditor.vue'
 
 const props = defineProps({
@@ -288,8 +286,8 @@ const folderMenuLoading = ref(false)
 const folderMenuItems = ref([])
 const insertedFragmentIds = ref(new Set())
 const localFragmentNotes = ref([])
+const fragmentsOpen = ref(true)
 const currentCrumbRef = ref(null)
-const defaultFragmentsOpen = ref(true)
 const creatingFolder = ref(false)
 const draftFolderName = ref('')
 const folderCreating = ref(false)
@@ -312,7 +310,7 @@ const resetDraft = () => {
   draftContent.value = ''
   insertedFragmentIds.value = new Set()
   localFragmentNotes.value = props.fragmentNotes.map((note) => ({ ...note }))
-  defaultFragmentsOpen.value = props.fragmentNotes.length > 0
+  fragmentsOpen.value = props.fragmentNotes.length > 0
   creatingFolder.value = false
   draftFolderName.value = ''
 }
@@ -707,26 +705,44 @@ defineExpose({ resetDraft })
   gap: 6px;
 }
 
+.struct-note-modal-body-wrap {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  box-sizing: border-box;
+}
+
 .struct-note-modal-body {
-  flex: 0 1 auto;
-  align-self: stretch;
+  flex: 1;
   min-width: 0;
   min-height: 0;
   display: flex;
   flex-direction: column;
   width: min(760px, 100%);
-  padding: 24px 24px 32px;
+  margin: 0 auto;
+  padding: 0;
   box-sizing: border-box;
-  overflow-y: auto;
-  overscroll-behavior: contain;
+  overflow: hidden;
 }
 
-.struct-note-modal-body .struct-note-title-input,
-.struct-note-modal-body .struct-note-md-editor {
+.struct-note-modal-body .struct-note-title-input {
   width: 100%;
   max-width: 100%;
   margin-left: 0;
-  padding-left: 0;
+  padding: 24px 24px 0;
+  box-sizing: border-box;
+}
+
+.struct-note-modal-body :deep(.struct-note-editor-layout) {
+  flex: 1;
+  min-height: 0;
+}
+
+.struct-note-modal-body :deep(.struct-note-md-editor) {
+  padding: 0 24px 32px;
+  box-sizing: border-box;
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 .struct-note-title-input {
@@ -746,10 +762,5 @@ defineExpose({ resetDraft })
 
 .struct-note-title-input::placeholder {
   color: #d1d5db;
-}
-
-:deep(.struct-note-editor-layout) {
-  flex: 1;
-  min-height: 0;
 }
 </style>

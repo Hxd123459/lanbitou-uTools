@@ -12,6 +12,7 @@
       :fragment-notes="fragmentNotes"
       :inserted-ids="insertedIds"
       :disabled="disabled"
+      :show-expand-button="showExpandButton"
       @update:fragment-notes="emit('update:fragmentNotes', $event)"
       @insert="emit('insert', $event)"
     />
@@ -19,28 +20,23 @@
 </template>
 
 <script setup>
-import { ref, watch } from 'vue'
+import { computed } from 'vue'
 import StructNoteFragmentsPanel from './StructNoteFragmentsPanel.vue'
 
 const props = defineProps({
   fragmentNotes: { type: Array, default: () => [] },
   insertedIds: { type: Object, default: () => new Set() },
   disabled: { type: Boolean, default: false },
-  defaultFragmentsOpen: { type: Boolean, default: true },
+  open: { type: Boolean, default: true },
+  showExpandButton: { type: Boolean, default: true },
 })
 
-const emit = defineEmits(['update:fragmentNotes', 'insert'])
+const emit = defineEmits(['update:fragmentNotes', 'update:open', 'insert'])
 
-const fragmentsOpen = ref(props.defaultFragmentsOpen)
-
-watch(
-  () => props.defaultFragmentsOpen,
-  (open) => {
-    fragmentsOpen.value = open
-  },
-)
-
-defineExpose({ fragmentsOpen })
+const fragmentsOpen = computed({
+  get: () => props.open,
+  set: (value) => emit('update:open', value),
+})
 </script>
 
 <style scoped>
