@@ -14,10 +14,38 @@ function wrapResult(result, action) {
   return result
 }
 
+function isConflictResult(result) {
+  const text = `${result?.name || ''} ${result?.message || ''}`.toLowerCase()
+  return result?.error && text.includes('conflict')
+}
+
+/**
+ * uTools 更新文档必须带最新 _rev，否则报 Document update conflict。
+ * 保存前始终从库中读取 _rev；冲突时重试一次。
+ */
 export async function dbPut(doc) {
   const db = getDb()
   const run = db.promises?.put ?? ((d) => Promise.resolve(db.put(d)))
-  return wrapResult(await run(doc), '保存')
+
+  if (!doc?._id) {
+    throw new ApiError('DB_ERROR', '文档缺少 _id')
+  }
+
+  const attempt = async () => {
+    const payload = { ...doc }
+    const existing = await dbGet(payload._id)
+    if (existing?._rev) {
+      payload._rev = existing._rev
+    }
+    return run(payload)
+  }
+
+  let result = await attempt()
+  if (isConflictResult(result)) {
+    result = await attempt()
+  }
+
+  return wrapResult(result, '保存')
 }
 
 export async function dbGet(id) {
