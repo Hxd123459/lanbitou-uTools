@@ -1,5 +1,6 @@
-import { computed, nextTick, onBeforeUnmount, ref, shallowRef } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef } from 'vue'
 import { createTag, fetchAllTags } from '../api/note'
+import { invalidateTagList, subscribeTagListInvalidate } from './tagListSync'
 import { getTextareaCaretCoords } from '../utils/textareaCaret'
 
 const MENU_CLASS = 'struct-note-slash-menu'
@@ -141,8 +142,12 @@ export function useTagHashPicker({
       return
     }
 
+    const opening = !menuOpen.value
     hashState.value = state
     menuOpen.value = true
+    if (opening) {
+      await loadTags()
+    }
     if (state.query !== lastQuery) {
       selectedIndex.value = 0
       lastQuery = state.query
@@ -180,6 +185,7 @@ export function useTagHashPicker({
         tagId = String(created.tagId ?? '')
         tagName = created.tagName || item.tagName
         await loadTags()
+        invalidateTagList()
       } catch {
         return
       }
@@ -247,7 +253,18 @@ export function useTagHashPicker({
     return false
   }
 
-  onBeforeUnmount(closeMenu)
+  let unsubscribeInvalidate = null
+
+  onMounted(() => {
+    unsubscribeInvalidate = subscribeTagListInvalidate(() => {
+      loadTags()
+    })
+  })
+
+  onBeforeUnmount(() => {
+    unsubscribeInvalidate?.()
+    closeMenu()
+  })
 
   return {
     tagsLoading,

@@ -302,6 +302,20 @@ export async function createTag(tagName) {
   throw new ApiError('NOT_SUPPORTED', '当前环境请通过记录笔记自动生成标签')
 }
 
+export async function updateTag(tagId, tagName) {
+  if (isUtoolsMode()) {
+    return utoolsNote.updateTag(tagId, tagName)
+  }
+  throw new ApiError('NOT_SUPPORTED', '当前环境不支持修改标签')
+}
+
+export async function deleteTag(tagId) {
+  if (isUtoolsMode()) {
+    return utoolsNote.deleteTag(tagId)
+  }
+  throw new ApiError('NOT_SUPPORTED', '当前环境不支持删除标签')
+}
+
 export async function fetchNotesByTag(tagId, pagination = {}) {
   return fetchBlockListByDate(undefined, tagId, pagination)
 }

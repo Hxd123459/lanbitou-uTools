@@ -1,8 +1,12 @@
 import { NOTE_PREFIX } from './constants'
 import { createNoteInFolder } from './structRepository'
 import {
+  findTagByName,
+  getTagById,
   listTagsWithCounts,
+  removeTagDoc,
   resolveTagForTitle,
+  updateTagDoc,
 } from './tagRepository'
 import { dbAllDocs, dbGet, dbPut, dbRemove } from './dbClient'
 import {
@@ -310,6 +314,70 @@ export async function allTags() {
 }
 
 export { createTag } from './tagRepository'
+
+export async function updateTag(tagId, tagName) {
+  const id = String(tagId ?? '').trim()
+  if (!id) throw new Error('标签不存在')
+
+  const notes = await loadAllNoteDocs({ includeDeleted: true })
+  const matched = notes.filter((note) => String(note.tagId) === id)
+
+  let tag
+  const existing = await getTagById(id)
+  if (existing) {
+    tag = await updateTagDoc(id, tagName)
+  } else if (matched.length) {
+    const name = String(tagName ?? '').trim()
+    if (!name) throw new Error('标签名称不能为空')
+    if (name.length > 5) throw new Error('标签名称不能超过 5 个字')
+    const duplicate = await findTagByName(name)
+    if (duplicate && String(duplicate.id) !== id) {
+      throw new Error('标签名称已存在')
+    }
+    tag = { id, tagName: name }
+  } else {
+    throw new Error('标签不存在')
+  }
+
+  const now = formatDateTime()
+  await Promise.all(
+    matched.map(async (note) => {
+      note.title = tag.tagName
+      note.updateTime = now
+      await saveNoteDoc(note)
+    }),
+  )
+  return {
+    tagId: tag.id,
+    tagName: tag.tagName,
+  }
+}
+
+export async function deleteTag(tagId) {
+  const id = String(tagId ?? '').trim()
+  if (!id) throw new Error('标签不存在')
+
+  const notes = await loadAllNoteDocs({ includeDeleted: true })
+  const matched = notes.filter((note) => String(note.tagId) === id)
+
+  const existing = await getTagById(id)
+  if (existing) {
+    await removeTagDoc(id)
+  } else if (!matched.length) {
+    throw new Error('标签不存在')
+  }
+
+  const now = formatDateTime()
+  await Promise.all(
+    matched.map(async (note) => {
+      note.tagId = null
+      note.title = ''
+      note.updateTime = now
+      await saveNoteDoc(note)
+    }),
+  )
+  return true
+}
 
 export async function localSemanticSearch(query) {
   const q = String(query ?? '').trim().toLowerCase()

@@ -248,6 +248,8 @@
           v-show="noteViewMode === 'tags'"
           :active="activeTab === 'home' && noteViewMode === 'tags'"
           @select="handleTagSelect"
+          @deleted="handleTagDeleted"
+          @updated="handleTagUpdated"
         />
       </div>
 
@@ -674,6 +676,31 @@ const handleTagSelect = async (tag) => {
     }
   } finally {
     if (myToken === tagFilterToken) tagFilterState.loading = false
+  }
+}
+
+const handleTagDeleted = async (tag) => {
+  if (tagFilterState.active && String(tagFilterState.tagId) === String(tag?.tagId)) {
+    clearTagFilter()
+  }
+  try {
+    await assistantStore.loadInitialNotes()
+  } catch (error) {
+    notifyError(error)
+  }
+}
+
+const handleTagUpdated = async (result) => {
+  if (
+    tagFilterState.active &&
+    String(tagFilterState.tagId) === String(result?.tagId)
+  ) {
+    tagFilterState.tagName = result.tagName || tagFilterState.tagName
+  }
+  try {
+    await assistantStore.loadInitialNotes()
+  } catch (error) {
+    notifyError(error)
   }
 }
 

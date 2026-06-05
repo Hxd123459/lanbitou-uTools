@@ -1,5 +1,5 @@
 import { NOTE_PREFIX, TAG_PREFIX } from './constants'
-import { dbAllDocs, dbPut } from './dbClient'
+import { dbAllDocs, dbGet, dbPut, dbRemove } from './dbClient'
 import { createId, formatDateTime } from './utils'
 
 function tagDocId(id) {
@@ -44,6 +44,14 @@ export async function getAllTagNamesForAi() {
 
 function normalizeTagName(tagName) {
   return String(tagName ?? '').trim()
+}
+
+export async function getTagById(tagId) {
+  const id = String(tagId ?? '').trim()
+  if (!id) return null
+  const raw = await dbGet(tagDocId(id))
+  const doc = stripTagDoc(raw)
+  return doc?.id ? doc : null
 }
 
 export async function findTagByName(tagName) {
@@ -93,6 +101,32 @@ export async function createTag(tagName) {
     tagName: doc.tagName,
     noteCount: '0',
   }
+}
+
+export async function updateTagDoc(tagId, nextName) {
+  const name = normalizeTagName(nextName)
+  if (!name) throw new Error('标签名称不能为空')
+  if (name.length > 5) throw new Error('标签名称不能超过 5 个字')
+
+  const doc = await getTagById(tagId)
+  if (!doc) throw new Error('标签不存在')
+
+  const duplicate = await findTagByName(name)
+  if (duplicate && String(duplicate.id) !== String(doc.id)) {
+    throw new Error('标签名称已存在')
+  }
+
+  doc.tagName = name
+  doc.updateTime = formatDateTime()
+  await saveTagDoc(doc)
+  return doc
+}
+
+export async function removeTagDoc(tagId) {
+  const raw = await dbGet(tagDocId(tagId))
+  if (!raw?._id) throw new Error('标签不存在')
+  await dbRemove({ _id: raw._id, _rev: raw._rev })
+  return true
 }
 
 export async function resolveTagForTitle(title) {
