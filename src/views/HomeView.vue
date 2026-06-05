@@ -788,11 +788,15 @@ const handleEditSave = async ({
   id,
   title,
   content,
+  tagId,
+  tagName,
   retainedImageIds,
   newImages,
 }) => {
   try {
     await assistantStore.updateNote(id, title, content, {
+      tagId,
+      tagName,
       retainedImageIds,
       newImages,
     })

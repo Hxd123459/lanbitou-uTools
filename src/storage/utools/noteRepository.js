@@ -86,6 +86,7 @@ function buildInsertResponse(doc) {
   return {
     id: doc.id,
     title: doc.title || '',
+    tagId: doc.tagId ?? null,
     content: doc.markdownContent || doc.rawContent || '',
     blocks: imagesToBlocks(doc.id, doc.images),
   }
@@ -185,13 +186,23 @@ export async function insertNote(rawContent, images = [], onProgress, options = 
   return buildInsertResponse(doc)
 }
 
-export async function updateNote(id, title, content, { retainedImageIds, newImages = [], onProgress } = {}) {
+export async function updateNote(
+  id,
+  title,
+  content,
+  {
+    retainedImageIds,
+    newImages = [],
+    onProgress,
+    tagId: inputTagId = undefined,
+    tagName: inputTagName = undefined,
+  } = {},
+) {
   const doc = await getNoteDoc(id)
   if (!doc || doc.deletedAt) {
     throw new Error('笔记不存在')
   }
 
-  const nextTitle = title ?? doc.title
   const nextContent = content ?? doc.markdownContent ?? doc.rawContent ?? ''
   let images = Array.isArray(doc.images) ? [...doc.images] : []
 
@@ -213,15 +224,29 @@ export async function updateNote(id, title, content, { retainedImageIds, newImag
     onProgress(1)
   }
 
-  doc.title = nextTitle
+  let tag
+  if (inputTagId !== undefined || inputTagName !== undefined) {
+    const nextTagId = inputTagId || null
+    const nextTagName = String(inputTagName ?? '').trim()
+    if (nextTagId) {
+      tag = { tagId: nextTagId, tagName: nextTagName }
+    } else if (nextTagName) {
+      tag = await resolveTagForTitle(nextTagName)
+    } else {
+      tag = { tagId: null, tagName: '' }
+    }
+  } else {
+    const nextTitle = title ?? doc.title
+    tag = await resolveTagForTitle(nextTitle)
+  }
+
+  doc.title = tag.tagName || ''
+  doc.tagId = tag.tagId
   doc.rawContent = nextContent
   doc.markdownContent = nextContent
   doc.summary = doc.summary || ''
   doc.updateTime = formatDateTime()
   doc.images = images
-  const tag = await resolveTagForTitle(nextTitle)
-  doc.tagId = tag.tagId
-  doc.title = tag.tagName || nextTitle
 
   await saveNoteDoc(doc)
   return buildInsertResponse(doc)

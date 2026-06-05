@@ -88,15 +88,15 @@
 
       <div class="input-footer">
         <div class="footer-left">
-          <AnimatePresence>
+          <AnimatePresence mode="wait">
             <motion.span
               v-if="selectedTag"
               :key="selectedTag.tagId"
               class="tag-chip"
-              :initial="presets.reveal.initial"
-              :animate="presets.reveal.animate"
-              :exit="presets.reveal.exit"
-              :transition="presets.reveal.transition"
+              :initial="presets.swapLabel.initial"
+              :animate="presets.swapLabel.animate"
+              :exit="presets.swapLabel.exit"
+              :transition="presets.swapLabel.transition"
             >
               <span class="tag-chip-label">#{{ selectedTag.tagName }}</span>
               <motion.button
@@ -581,6 +581,7 @@ defineExpose({ reset, addImages, focus })
   align-items: center;
   gap: 4px;
   flex: 0 0 auto;
+  transform-origin: left center;
   min-height: 28px;
   padding: 4px 8px 4px 10px;
   border-radius: 999px;

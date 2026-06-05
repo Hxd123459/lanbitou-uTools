@@ -73,26 +73,7 @@
     <div class="note-card-main">
     <div class="note-meta">
       <div class="meta-left">
-        <label
-          v-if="isEditing"
-          class="tag-input-wrap"
-          :class="{ 'is-invalid': !draftTitle.trim() }"
-        >
-          <span class="tag-input-shadow" aria-hidden="true">{{
-            draftTitle || '标签'
-          }}</span>
-          <input
-            v-model="draftTitle"
-            class="tag-input"
-            type="text"
-            maxlength="4"
-            placeholder="标签"
-            spellcheck="false"
-            :disabled="saving"
-            @keydown="onTitleKeydown"
-          />
-        </label>
-        <span v-else-if="titleText" class="note-tag">{{ titleText }}</span>
+        <span v-if="titleText && !isEditing" class="note-tag">{{ titleText }}</span>
         <span v-if="isPinnedTop" class="pin-badge pin-badge-top">置顶</span>
         <span v-else-if="isPinnedBottom" class="pin-badge pin-badge-bottom"
           >置底</span
@@ -268,6 +249,8 @@
         @blur="onEditorBlur"
         @keydown="onEditorKeydown"
         @paste="onEditorPaste"
+        @click="onEditorCaretChange"
+        @keyup="onEditorCaretChange"
       />
 
       <div v-if="draftImageItems.length || canAddMoreImages" class="thumb-strip">
@@ -343,6 +326,40 @@
 
       <div class="editor-bar">
         <div class="editor-bar-left">
+          <AnimatePresence mode="wait">
+            <motion.span
+              v-if="selectedTag"
+              :key="selectedTag.tagId || selectedTag.tagName"
+              class="tag-chip"
+              :initial="presets.swapLabel.initial"
+              :animate="presets.swapLabel.animate"
+              :exit="presets.swapLabel.exit"
+              :transition="presets.swapLabel.transition"
+            >
+              <span class="tag-chip-label">#{{ selectedTag.tagName }}</span>
+              <motion.button
+                type="button"
+                class="tag-chip-remove"
+                :disabled="saving"
+                aria-label="移除标签"
+                :while-hover="presets.button.hover"
+                :while-tap="presets.button.tap"
+                :transition="presets.button.transition"
+                @click="clearSelectedTag"
+              >
+                <svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true">
+                  <path
+                    d="M6 6l12 12M18 6L6 18"
+                    stroke="currentColor"
+                    stroke-width="2.2"
+                    stroke-linecap="round"
+                    fill="none"
+                  />
+                </svg>
+              </motion.button>
+            </motion.span>
+          </AnimatePresence>
+
           <AppButton
             class="btn btn-icon"
             :disabled="saving || draftImageItems.length >= MAX_IMAGES"
@@ -429,6 +446,50 @@
       <NoteImageGallery v-if="images.length" :images="images" />
     </template>
     </div>
+
+    <Teleport to="body">
+      <div
+        v-if="tagMenuOpen"
+        class="struct-note-slash-menu"
+        data-tag-hash-menu
+        role="listbox"
+        aria-label="选择标签"
+        :style="tagMenuStyle"
+        @mousedown="onTagMenuMouseDown"
+      >
+        <p v-if="tagMenuLoading" class="tag-hash-menu-state">加载标签中…</p>
+        <p v-else-if="!tagMenuItems.length" class="tag-hash-menu-state">
+          输入标签名，最多 5 个字
+        </p>
+        <button
+          v-for="(item, index) in tagMenuItems"
+          :key="`${item.type}-${item.tagName}`"
+          type="button"
+          class="struct-note-slash-menu__item"
+          :class="{ 'struct-note-slash-menu__item--active': index === tagMenuIndex }"
+          role="option"
+          :aria-selected="index === tagMenuIndex"
+          @click="applyTagMenuItem(item)"
+        >
+          <span class="struct-note-slash-menu__icon" aria-hidden="true">
+            <svg
+              v-if="item.type === 'create'"
+              viewBox="0 0 24 24"
+              width="18"
+              height="18"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.8"
+              stroke-linecap="round"
+            >
+              <path d="M12 5v14M5 12h14" />
+            </svg>
+            <span v-else class="tag-hash-menu-hash">#</span>
+          </span>
+          <span class="struct-note-slash-menu__label">{{ item.label }}</span>
+        </button>
+      </div>
+    </Teleport>
   </article>
 </template>
 
@@ -441,11 +502,13 @@ import {
   ref,
   watch,
 } from 'vue'
-import { motion } from 'motion-v'
+import { AnimatePresence, motion } from 'motion-v'
 import { isImageFileSizeAllowed } from '../../constants/uploadLimits'
 import { useMotionPresets } from '../../composables/useMotionPresets'
+import { useTagHashPicker } from '../../composables/useTagHashPicker'
 import { useAssistantStore } from '../../stores/assistantStore'
 import AppButton from '../motion/AppButton.vue'
+import '../../assets/styles/tiptap-slash-menu.css'
 import TiptapPreview from '../common/TiptapPreview.vue'
 import NoteImageGallery from './NoteImageGallery.vue'
 import NoteRecallModal from './NoteRecallModal.vue'
@@ -508,7 +571,7 @@ const EDITOR_MIN_HEIGHT = 60
 const EDITOR_MAX_HEIGHT = 480
 
 const draftContent = ref('')
-const draftTitle = ref('')
+const selectedTag = ref(null)
 const draftImageItems = ref([])
 const saving = ref(false)
 const editorRef = ref(null)
@@ -537,7 +600,35 @@ const images = computed(() =>
   Array.isArray(props.note?.images) ? props.note.images : [],
 )
 const titleText = computed(() => props.note?.title || '')
+const originalTagId = computed(() => {
+  const id = props.note?.tagId
+  return id != null && id !== '' ? String(id) : null
+})
 const timeText = computed(() => formatTime(props.note?.createdAt))
+
+const {
+  menuOpen: tagMenuOpen,
+  menuStyle: tagMenuStyle,
+  selectedIndex: tagMenuIndex,
+  filteredItems: tagMenuItems,
+  tagsLoading: tagMenuLoading,
+  loadTags,
+  syncMenu: syncTagMenu,
+  closeMenu: closeTagMenu,
+  applyItem: applyTagMenuItem,
+  handleKeyDown: handleTagMenuKeyDown,
+  onMenuMouseDown: onTagMenuMouseDown,
+  onTextareaBlur: onTagTextareaBlur,
+} = useTagHashPicker({
+  getText: () => draftContent.value,
+  setText: (value) => {
+    draftContent.value = value
+  },
+  getTextarea: () => editorRef.value,
+  onTagSelected: (tag) => {
+    selectedTag.value = tag
+  },
+})
 const pinType = computed(() => props.note?.pinWeightType || 'DEFAULT')
 const isPinnedTop = computed(() => pinType.value === 'TOP')
 const isPinnedBottom = computed(() => pinType.value === 'BOTTOM')
@@ -605,14 +696,26 @@ const canAddMoreImages = computed(
   () => !saving.value && draftImageItems.value.length < MAX_IMAGES,
 )
 
-const canSave = computed(
+const tagChanged = computed(() => {
+  const draftId = selectedTag.value?.tagId ?? null
+  const draftName = selectedTag.value?.tagName ?? ''
+  if (draftId !== originalTagId.value) return true
+  return draftName !== titleText.value
+})
+
+const hasChanges = computed(
   () =>
-    draftContent.value.trim().length > 0 &&
-    draftTitle.value.trim().length > 0 &&
-    (draftContent.value !== contentText.value ||
-      draftTitle.value !== titleText.value ||
-      imagesPayloadChanged.value),
+    draftContent.value !== contentText.value ||
+    tagChanged.value ||
+    imagesPayloadChanged.value,
 )
+
+const hasSavableContent = computed(
+  () =>
+    draftContent.value.trim().length > 0 || draftImageItems.value.length > 0,
+)
+
+const canSave = computed(() => hasChanges.value && hasSavableContent.value)
 
 function revokeDraftNewUrls() {
   draftImageItems.value.forEach((item) => {
@@ -690,18 +793,34 @@ const onEditorFocus = () => {
 
 const onEditorBlur = () => {
   isEditorFocused.value = false
+  onTagTextareaBlur()
   nextTick(shrinkEditorHeight)
 }
 
 const onEditorInput = () => {
-  nextTick(adjustEditorHeight)
+  nextTick(async () => {
+    await adjustEditorHeight()
+    await syncTagMenu()
+  })
+}
+
+const onEditorCaretChange = () => {
+  nextTick(() => syncTagMenu())
+}
+
+const clearSelectedTag = () => {
+  selectedTag.value = null
 }
 
 const enterEdit = async () => {
   revokeDraftNewUrls()
   draftContent.value = contentText.value
-  draftTitle.value = titleText.value
+  const tagId = originalTagId.value
+  const tagName = titleText.value
+  selectedTag.value =
+    tagId || tagName ? { tagId, tagName: tagName || '' } : null
   draftImageItems.value = cloneImagesForDraft()
+  loadTags()
   editorHeight.value = EDITOR_MIN_HEIGHT
   assistantStore.setEditingNoteId(props.note.id)
   await nextTick()
@@ -716,7 +835,8 @@ const cancelEdit = () => {
   editorHeight.value = EDITOR_MIN_HEIGHT
   revokeDraftNewUrls()
   draftContent.value = ''
-  draftTitle.value = ''
+  selectedTag.value = null
+  closeTagMenu()
   draftImageItems.value = []
   if (assistantStore.editingNoteId === props.note.id) {
     assistantStore.setEditingNoteId(null)
@@ -776,24 +896,9 @@ const onEditorPaste = (event) => {
   appendDraftFiles(files)
 }
 
-const onTitleKeydown = (event) => {
-  if (event.isComposing) return
-  if (event.key === 'Escape') {
-    event.preventDefault()
-    cancelEdit()
-    return
-  }
-  if (event.key === 'Enter') {
-    const modifierPressed = isMac.value ? event.metaKey : event.ctrlKey
-    if (modifierPressed) {
-      event.preventDefault()
-      saveEdit()
-    }
-  }
-}
-
 const onEditorKeydown = (event) => {
   if (event.isComposing) return
+  if (handleTagMenuKeyDown(event)) return
   if (event.key === 'Escape') {
     event.preventDefault()
     cancelEdit()
@@ -814,7 +919,9 @@ const saveEdit = async () => {
   try {
     const payload = {
       id: props.note.id,
-      title: draftTitle.value.trim(),
+      title: selectedTag.value?.tagName ?? '',
+      tagId: selectedTag.value?.tagId ?? null,
+      tagName: selectedTag.value?.tagName ?? '',
       content: draftContent.value,
     }
     if (imagesPayloadChanged.value) {
@@ -830,7 +937,8 @@ const saveEdit = async () => {
     editorHeight.value = EDITOR_MIN_HEIGHT
     revokeDraftNewUrls()
     draftContent.value = ''
-    draftTitle.value = ''
+    selectedTag.value = null
+    closeTagMenu()
     draftImageItems.value = []
     if (assistantStore.editingNoteId === props.note.id) {
       assistantStore.setEditingNoteId(null)
@@ -872,7 +980,8 @@ watch(
       unbindListScroll()
       editorHeight.value = EDITOR_MIN_HEIGHT
       if (draftContent.value) draftContent.value = ''
-      if (draftTitle.value) draftTitle.value = ''
+      selectedTag.value = null
+      closeTagMenu()
       revokeDraftNewUrls()
       draftImageItems.value = []
     }
@@ -1204,75 +1313,57 @@ function formatTime(dateValue) {
   color: var(--color-accent);
 }
 
-.tag-input-wrap {
-  position: relative;
-  display: inline-grid;
-  vertical-align: middle;
-  font-size: 12px;
-  line-height: 1.5;
-  letter-spacing: 0.2px;
-  font-family: inherit;
-}
-
-.tag-input-shadow,
-.tag-input {
-  grid-area: 1 / 1;
-  height: 22px;
-  padding: 0 10px;
+.tag-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex: 0 0 auto;
+  min-height: 28px;
+  padding: 4px 8px 4px 10px;
   border-radius: 999px;
-  border: 1.5px dashed rgba(24, 24, 27, 0.22);
-  font: inherit;
-  letter-spacing: inherit;
-  white-space: pre;
-  box-sizing: border-box;
-}
-
-.tag-input-shadow {
-  visibility: hidden;
-  pointer-events: none;
-  min-width: 56px;
-  border-color: transparent;
-  background: transparent;
-  white-space: pre;
-}
-
-.tag-input {
-  width: 100%;
-  background: rgba(24, 24, 27, 0.04);
-  color: var(--color-text);
-  outline: 0;
-  text-align: center;
-}
-
-.tag-input::placeholder {
-  color: #a1a1aa;
-}
-
-.tag-input:hover:not(:disabled) {
-  border-color: rgba(24, 24, 27, 0.4);
-  background: rgba(24, 24, 27, 0.06);
-}
-
-.tag-input:focus {
-  border-width: 2px;
-  border-color: rgba(24, 24, 27, 0.7);
+  border: 1px solid var(--color-border);
   background: var(--color-surface);
+  color: var(--color-accent);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.35;
+  transform-origin: left center;
 }
 
-.tag-input-wrap.is-invalid .tag-input,
-.tag-input-wrap.is-invalid .tag-input-shadow {
-  border-color: var(--color-error, #dc2626);
+.tag-chip-label {
+  font-weight: 600;
 }
 
-.tag-input-wrap.is-invalid .tag-input:focus {
-  border-width: 2px;
-  border-color: var(--color-error, #dc2626);
-  background: rgba(220, 38, 38, 0.04);
+.tag-chip-remove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--color-secondary-text);
+  cursor: pointer;
 }
 
-.tag-input:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
+.tag-chip-remove:hover:not(:disabled) {
+  color: var(--color-accent);
+  background: rgba(37, 99, 235, 0.08);
+}
+
+.tag-hash-menu-state {
+  margin: 0;
+  padding: 8px 10px;
+  font-size: 13px;
+  color: var(--color-secondary-text);
+}
+
+.tag-hash-menu-hash {
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1;
 }
 
 .note-time {

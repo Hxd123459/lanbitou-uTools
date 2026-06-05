@@ -171,10 +171,14 @@ export async function updateBlock(
   id,
   title,
   content,
-  { retainedImageIds, newImages = [], onProgress } = {},
+  { retainedImageIds, newImages = [], onProgress, tagId, tagName } = {},
 ) {
+  const resolvedTitle = tagName ?? title ?? ''
+
   if (isUtoolsMode()) {
-    return utoolsNote.updateNote(id, title, content, {
+    return utoolsNote.updateNote(id, resolvedTitle, content, {
+      tagId,
+      tagName: resolvedTitle,
       retainedImageIds,
       newImages,
       onProgress,
@@ -185,16 +189,17 @@ export async function updateBlock(
   const hasImageMutation =
     Array.isArray(retainedImageIds) || files.length > 0
 
+  const basePayload = { id, title: resolvedTitle, content }
+  if (tagId != null) basePayload.tagId = tagId
+
   if (!hasImageMutation) {
-    const data = await post('/api/note/update', { id, title, content })
+    const data = await post('/api/note/update', basePayload)
     return data
   }
 
   if (files.length === 0) {
     const data = await post('/api/note/update', {
-      id,
-      title,
-      content,
+      ...basePayload,
       retainedImageIds: Array.isArray(retainedImageIds)
         ? retainedImageIds
         : [],
@@ -204,8 +209,9 @@ export async function updateBlock(
 
   const form = new FormData()
   form.append('id', String(id))
-  form.append('title', title ?? '')
+  form.append('title', resolvedTitle)
   form.append('content', content ?? '')
+  if (tagId != null) form.append('tagId', String(tagId))
   if (Array.isArray(retainedImageIds)) {
     form.append('retainedImageIds', JSON.stringify(retainedImageIds))
   }

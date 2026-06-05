@@ -1,11 +1,27 @@
 <template>
-  <section class="ai-settings" aria-label="AI 设置">
-    <header class="ai-settings-header">
+  <motion.section
+    class="ai-settings"
+    aria-label="AI 设置"
+    :initial="panelMotion.initial"
+    :animate="panelMotion.animate"
+    :transition="panelMotion.transition"
+  >
+    <motion.header
+      class="ai-settings-header"
+      :initial="headerMotion.initial"
+      :animate="headerMotion.animate"
+      :transition="headerMotion.transition"
+    >
       <h2 class="ai-settings-title">AI 设置</h2>
       <p class="ai-settings-desc">选择标题生成使用的 AI 服务。第三方 Key 将加密保存在本机。</p>
-    </header>
+    </motion.header>
 
-    <div class="ai-settings-card">
+    <motion.div
+      class="ai-settings-card"
+      :initial="cardMotion.initial"
+      :animate="cardMotion.animate"
+      :transition="cardMotion.transition"
+    >
       <fieldset class="ai-settings-group">
         <legend class="ai-settings-label">服务来源</legend>
         <div class="ai-provider-list">
@@ -95,13 +111,15 @@
           {{ saving ? '保存中…' : '保存设置' }}
         </AppButton>
       </div>
-    </div>
-  </section>
+    </motion.div>
+  </motion.section>
 </template>
 
 <script setup>
 import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { motion } from 'motion-v'
 import { testAiConnection } from '../../ai/aiService'
+import { useMotionPresets } from '../../composables/useMotionPresets'
 import AppButton from '../motion/AppButton.vue'
 import { AI_PROVIDERS, loadAiSettings, saveAiSettings } from '../../storage/utools/aiSettings'
 
@@ -110,6 +128,29 @@ const props = defineProps({
     type: Boolean,
     default: false,
   },
+})
+
+const { presets } = useMotionPresets()
+
+const panelMotion = computed(() => {
+  const reveal = presets.value.reveal
+  return props.active
+    ? { initial: reveal.initial, animate: reveal.animate, transition: reveal.transition }
+    : { initial: reveal.initial, animate: reveal.initial, transition: reveal.transition }
+})
+
+const headerMotion = computed(() => {
+  const reveal = presets.value.reveal
+  return props.active
+    ? { initial: reveal.initial, animate: reveal.animate, transition: { ...reveal.transition, delay: 0.04 } }
+    : { initial: reveal.initial, animate: reveal.initial, transition: reveal.transition }
+})
+
+const cardMotion = computed(() => {
+  const reveal = presets.value.reveal
+  return props.active
+    ? { initial: reveal.initial, animate: reveal.animate, transition: { ...reveal.transition, delay: 0.08 } }
+    : { initial: reveal.initial, animate: reveal.initial, transition: reveal.transition }
 })
 
 const providerOptions = [
