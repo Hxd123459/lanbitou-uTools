@@ -11,10 +11,7 @@
     </div>
 
     <div class="brand-text">
-      <div class="brand-title-row">
-        <h1 class="brand-title">烂笔头</h1>
-        <span class="env-tag">{{ envLabel }}</span>
-      </div>
+      <h1 class="brand-title">烂笔头</h1>
       <div class="brand-slogan">好记性，不如烂笔头</div>
     </div>
   </div>
@@ -32,8 +29,6 @@ defineProps({
     default: false,
   },
 })
-
-const envLabel = (import.meta.env.VITE_APP_ENV || 'dev').toUpperCase()
 </script>
 
 <style scoped>
@@ -70,13 +65,6 @@ const envLabel = (import.meta.env.VITE_APP_ENV || 'dev').toUpperCase()
   min-width: 0;
 }
 
-.brand-title-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  line-height: 1.05;
-}
-
 .brand-title {
   margin: 0;
   font-family: 'ZCOOL KuaiLe', 'PingFang SC', 'Hiragino Sans GB',
@@ -86,18 +74,7 @@ const envLabel = (import.meta.env.VITE_APP_ENV || 'dev').toUpperCase()
   letter-spacing: 2px;
   color: #000;
   white-space: nowrap;
-}
-
-.env-tag {
-  padding: 1px 6px;
-  border: 1px solid var(--color-border);
-  border-radius: 999px;
-  color: var(--color-secondary-text);
-  font-size: 10px;
-  font-weight: 500;
-  letter-spacing: 0.4px;
-  line-height: 1.4;
-  font-family: var(--font-base);
+  line-height: 1.05;
 }
 
 .brand-slogan {
@@ -137,11 +114,6 @@ const envLabel = (import.meta.env.VITE_APP_ENV || 'dev').toUpperCase()
   gap: 1px;
 }
 
-.brand-area--sidebar .brand-title-row {
-  flex-shrink: 0;
-  line-height: 1;
-}
-
 .brand-area--sidebar .brand-title {
   font-size: 17px;
   letter-spacing: 1px;
@@ -156,13 +128,6 @@ const envLabel = (import.meta.env.VITE_APP_ENV || 'dev').toUpperCase()
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-}
-
-.brand-area--sidebar .env-tag {
-  font-size: 9px;
-  flex-shrink: 0;
-  padding: 0 5px;
-  line-height: 1.3;
 }
 
 @media (max-width: 720px) {
@@ -194,10 +159,6 @@ const envLabel = (import.meta.env.VITE_APP_ENV || 'dev').toUpperCase()
 
 @media (max-width: 720px) {
   .brand-area:not(.brand-area--sidebar) .brand-slogan {
-    display: none;
-  }
-
-  .brand-area:not(.brand-area--sidebar) .env-tag {
     display: none;
   }
 }
