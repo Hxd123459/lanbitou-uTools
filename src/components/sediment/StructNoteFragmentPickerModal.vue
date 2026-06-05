@@ -321,7 +321,7 @@ onBeforeUnmount(() => {
 .fragment-picker-dialog {
   display: flex;
   flex-direction: column;
-  width: min(640px, 100%);
+  width: min(760px, 100%);
   max-height: min(720px, calc(100vh - 48px));
   border-radius: 14px;
   border: 1px solid var(--color-border);
@@ -361,7 +361,7 @@ onBeforeUnmount(() => {
 .fragment-picker-search-wrap {
   position: relative;
   flex: 1 1 auto;
-  max-width: 240px;
+  max-width: 280px;
   min-width: 120px;
 }
 

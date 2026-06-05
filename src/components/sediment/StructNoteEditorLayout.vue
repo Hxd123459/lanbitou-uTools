@@ -7,6 +7,19 @@
       <div class="struct-note-editor-column">
         <slot />
       </div>
+
+      <button
+        v-if="showExpandButton && !fragmentsOpen"
+        type="button"
+        class="struct-note-fragments-expand"
+        aria-label="展开碎片面板"
+        @click="fragmentsOpen = true"
+      >
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+          <path d="M15 6l-6 6 6 6" />
+        </svg>
+        <span>碎片 {{ fragmentNotes.length }}</span>
+      </button>
     </div>
 
     <StructNoteFragmentsPanel
@@ -14,7 +27,6 @@
       :fragment-notes="fragmentNotes"
       :inserted-ids="insertedIds"
       :disabled="disabled"
-      :show-expand-button="showExpandButton"
       @update:fragment-notes="emit('update:fragmentNotes', $event)"
       @insert="emit('insert', $event)"
     />
@@ -54,12 +66,13 @@ const fragmentsOpen = computed({
 }
 
 .struct-note-editor-zone {
+  position: relative;
   flex: 1;
   min-width: 0;
   min-height: 0;
   display: flex;
   justify-content: center;
-  overflow: hidden;
+  overflow: visible;
 }
 
 .struct-note-editor-column {
@@ -74,9 +87,45 @@ const fragmentsOpen = computed({
   overscroll-behavior: contain;
 }
 
+.struct-note-fragments-expand {
+  position: absolute;
+  top: 50%;
+  right: -18px;
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 10px 12px 10px 14px;
+  border: 0;
+  border-right: 0;
+  border-radius: 8px 0 0 8px;
+  background: rgba(24, 24, 27, 0.06);
+  color: var(--color-secondary-text);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transform: translateY(-50%);
+  box-shadow: -1px 0 0 rgba(24, 24, 27, 0.06);
+  transition: background-color 0.18s ease, color 0.18s ease;
+}
+
+.struct-note-fragments-expand:hover {
+  background: rgba(24, 24, 27, 0.1);
+  color: var(--color-primary);
+}
+
 @media (max-width: 900px) {
   .struct-note-editor-layout {
     flex-direction: column;
+  }
+
+  .struct-note-fragments-expand {
+    top: auto;
+    bottom: 0;
+    right: 0;
+    transform: none;
+    border-radius: 8px;
   }
 }
 </style>

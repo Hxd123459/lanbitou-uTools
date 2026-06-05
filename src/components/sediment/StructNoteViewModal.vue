@@ -34,22 +34,6 @@
 
           <div class="note-view-header-actions">
             <motion.button
-              v-if="!fragmentsOpen"
-              type="button"
-              class="note-view-fragments-toggle"
-              aria-label="展开碎片面板"
-              :while-hover="presets.button.hover"
-              :while-tap="presets.button.tap"
-              :transition="presets.button.transition"
-              @click="fragmentsOpen = true"
-            >
-              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
-                <path d="M15 6l-6 6 6 6" />
-              </svg>
-              <span>碎片 {{ localFragmentNotes.length }}</span>
-            </motion.button>
-
-            <motion.button
               type="button"
               class="btn btn-primary note-view-save-btn"
               :class="{
@@ -156,7 +140,6 @@
             v-model:fragments-open="fragmentsOpen"
             with-fragments
             :inserted-ids="insertedFragmentIds"
-            :show-expand-button="false"
             class="note-view-editor"
             @insert="insertFragment"
           >
@@ -420,26 +403,6 @@ onBeforeUnmount(() => {
   align-items: center;
   justify-content: flex-end;
   gap: 8px;
-}
-
-.note-view-fragments-toggle {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  padding: 8px 10px;
-  border: 0;
-  border-radius: 8px;
-  background: rgba(24, 24, 27, 0.06);
-  color: var(--color-secondary-text);
-  font-size: 12px;
-  font-weight: 600;
-  cursor: pointer;
-}
-
-.note-view-fragments-toggle:hover {
-  background: rgba(24, 24, 27, 0.1);
-  color: var(--color-primary);
 }
 
 .note-view-save-btn {

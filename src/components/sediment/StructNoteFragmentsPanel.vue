@@ -108,19 +108,6 @@
     </motion.aside>
   </AnimatePresence>
 
-  <button
-    v-if="showExpandButton && !open"
-    type="button"
-    class="struct-note-fragments-expand"
-    aria-label="展开碎片面板"
-    @click="emit('update:open', true)"
-  >
-    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
-      <path d="M15 6l-6 6 6 6" />
-    </svg>
-    <span>碎片 {{ fragmentNotes.length }}</span>
-  </button>
-
   <StructNoteFragmentPickerModal
     :visible="pickerVisible"
     :selected-notes="fragmentNotes"
@@ -144,7 +131,6 @@ const props = defineProps({
   insertedIds: { type: Object, default: () => new Set() },
   disabled: { type: Boolean, default: false },
   open: { type: Boolean, default: true },
-  showExpandButton: { type: Boolean, default: true },
 })
 
 const emit = defineEmits(['update:open', 'update:fragmentNotes', 'insert'])
@@ -216,43 +202,14 @@ const onPickerConfirm = (notes) => {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
+  width: 28px;
+  height: 28px;
+  padding: 0;
   border: 0;
   border-radius: 8px;
   background: rgba(24, 24, 27, 0.06);
   color: var(--color-secondary-text);
   cursor: pointer;
-  width: 28px;
-  height: 28px;
-  padding: 0;
-}
-
-.struct-note-fragments-expand {
-  position: absolute;
-  top: 50%;
-  right: -18px;
-  z-index: 1;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  padding: 10px 12px 10px 14px;
-  border: 0;
-  border-right: 0;
-  border-radius: 8px 0 0 8px;
-  background: rgba(24, 24, 27, 0.06);
-  color: var(--color-secondary-text);
-  font-size: 12px;
-  font-weight: 600;
-  cursor: pointer;
-  transform: translateY(-50%);
-  box-shadow: -1px 0 0 rgba(24, 24, 27, 0.06);
-  transition: background-color 0.18s ease;
-}
-
-.struct-note-fragments-expand:hover {
-  background: rgba(24, 24, 27, 0.1);
-  color: var(--color-primary);
 }
 
 .struct-note-fragments-empty {
@@ -353,14 +310,6 @@ const onPickerConfirm = (notes) => {
   .struct-note-fragments {
     border-left: 0;
     border-top: 1px solid var(--color-border);
-  }
-
-  .struct-note-fragments-expand {
-    top: auto;
-    bottom: 16px;
-    right: 0;
-    transform: none;
-    border-radius: 8px;
   }
 }
 </style>
