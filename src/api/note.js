@@ -102,6 +102,30 @@ function parseBlockListPage(data, pageNo, pageSize) {
   }
 }
 
+export async function fetchNoteList({
+  pageNo = 1,
+  pageSize = NOTE_LIST_PAGE_SIZE,
+} = {}) {
+  const safePageNo = normalizePageNo(pageNo)
+  const safePageSize = normalizePageSize(pageSize)
+
+  if (isUtoolsMode()) {
+    const data = await utoolsNote.listByDay({
+      pageNo: safePageNo,
+      pageSize: safePageSize,
+    })
+    return parseBlockListPage(data, safePageNo, safePageSize)
+  }
+
+  const data = await post('/api/note/listByDay', {
+    date: null,
+    tagId: null,
+    pageNo: safePageNo,
+    pageSize: safePageSize,
+  })
+  return parseBlockListPage(data, safePageNo, safePageSize)
+}
+
 export async function fetchBlockListByDate(
   currentDate,
   tagId = null,

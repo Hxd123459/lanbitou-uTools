@@ -3,12 +3,10 @@ import { defineStore } from 'pinia'
 import {
   createBlock,
   deleteBlock,
-  fetchBlockListByDate,
-  formatDateParam,
+  fetchNoteList,
   mapBlockResources,
   NOTE_LIST_PAGE_SIZE,
   setPinBlock,
-  shiftDateString,
   updateBlock,
 } from '../api/note'
 
@@ -25,8 +23,6 @@ export const useAssistantStore = defineStore('assistant', () => {
   const loadingMoreNotes = ref(false)
   const hasMoreNotes = ref(true)
   const currentPageNo = ref(0)
-  const currentListDate = ref(formatDateParam(new Date()))
-  const nextDateCursor = ref(formatDateParam(new Date()))
   const editingNoteId = ref(null)
 
   const visibleNotes = computed(() =>
@@ -61,7 +57,7 @@ export const useAssistantStore = defineStore('assistant', () => {
     notes.value = [...notes.value, ...next]
   }
 
-  const loadNotesByDate = async (currentDate, { reset = false } = {}) => {
+  const loadNotes = async ({ reset = false } = {}) => {
     if (loadingNotes.value || loadingMoreNotes.value) return
     if (!reset && !hasMoreNotes.value) return
 
@@ -73,18 +69,13 @@ export const useAssistantStore = defineStore('assistant', () => {
     }
 
     try {
-      const date = currentDate || formatDateParam(new Date())
-      const result = await fetchBlockListByDate(date, null, {
+      const result = await fetchNoteList({
         pageNo,
         pageSize: NOTE_LIST_PAGE_SIZE,
       })
       appendNotes(result.list)
       currentPageNo.value = result.pageNo
       hasMoreNotes.value = result.hasMore
-      currentListDate.value = date
-      if (reset) {
-        nextDateCursor.value = shiftDateString(date, -1)
-      }
     } finally {
       loadingNotes.value = false
       loadingMoreNotes.value = false
@@ -96,13 +87,11 @@ export const useAssistantStore = defineStore('assistant', () => {
     noteIdSet.value = new Set()
     currentPageNo.value = 0
     hasMoreNotes.value = true
-    currentListDate.value = formatDateParam(new Date())
-    nextDateCursor.value = formatDateParam(new Date())
-    await loadNotesByDate(undefined, { reset: true })
+    await loadNotes({ reset: true })
   }
 
   const loadMoreNotes = async () => {
-    await loadNotesByDate(currentListDate.value, { reset: false })
+    await loadNotes({ reset: false })
   }
 
   const addNote = async (text, images = [], onProgress, { tagId, tagName } = {}) => {
