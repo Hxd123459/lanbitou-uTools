@@ -13,10 +13,6 @@
         :exit="{ opacity: 0, y: 28 }"
         :transition="{ duration: 0.26, ease: [0.22, 1, 0.36, 1] }"
       >
-        <div class="struct-note-drag-handle-mount" aria-hidden="true">
-          <div class="struct-note-drag-handle-target" />
-        </div>
-
         <header class="struct-note-modal-header">
           <motion.button
             type="button"

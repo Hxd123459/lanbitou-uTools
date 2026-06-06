@@ -1,31 +1,19 @@
-/* 与 tiptap-extension-global-drag-handle 在 role=dialog + transform 下的坐标系对齐 */
-[role="dialog"] > .struct-note-drag-handle-mount {
-  position: absolute;
-  inset: 0;
-  z-index: 4;
-  pointer-events: none;
-  overflow: hidden;
-}
-
-.struct-note-drag-handle-target.drag-handle {
-  position: absolute;
-  box-sizing: border-box;
+.struct-note-drag-handle {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
   width: 34px;
   height: 24px;
   margin: 0;
   padding: 0;
   border: 0;
-  pointer-events: auto;
   cursor: grab;
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
   color: #71717a;
   background: transparent;
+  z-index: 5;
 }
 
-.struct-note-drag-handle-target.drag-handle::before {
-  content: "⋮⋮";
+.struct-note-drag-handle-grip {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -43,15 +31,23 @@
     background 0.15s ease;
 }
 
-.struct-note-drag-handle-target.drag-handle:hover {
+.struct-note-drag-handle:hover .struct-note-drag-handle-grip {
   color: var(--color-primary, #18181b);
-}
-
-.struct-note-drag-handle-target.drag-handle:hover::before {
   background: rgba(24, 24, 27, 0.08);
 }
 
-.struct-note-drag-handle-target.drag-handle.hide {
-  opacity: 0;
+.struct-note-md-editor .tiptap-content .ProseMirror-selectednode,
+.struct-note-md-editor .tiptap-content .ProseMirror-selectednoderange {
+  position: relative;
+}
+
+.struct-note-md-editor .tiptap-content .ProseMirror-selectednode::before,
+.struct-note-md-editor .tiptap-content .ProseMirror-selectednoderange::before {
+  content: '';
+  position: absolute;
+  inset: -0.15rem -0.25rem;
+  background-color: rgba(37, 99, 235, 0.08);
+  border-radius: 6px;
   pointer-events: none;
+  z-index: -1;
 }

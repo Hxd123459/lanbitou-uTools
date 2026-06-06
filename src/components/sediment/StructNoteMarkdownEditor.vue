@@ -15,6 +15,14 @@
       :class="{ 'is-disabled': disabled }"
       :style="rootStyle"
     >
+      <div
+        ref="dragHandleRef"
+        class="struct-note-drag-handle"
+        data-dragging="false"
+        aria-hidden="true"
+      >
+        <span class="struct-note-drag-handle-grip">⋮⋮</span>
+      </div>
       <EditorContent :editor="editor" class="struct-note-md-editor__content tiptap-content" />
     </div>
   </StructNoteEditorLayout>
@@ -25,14 +33,27 @@
     :class="{ 'is-disabled': disabled }"
     :style="rootStyle"
   >
+    <div
+      ref="dragHandleRef"
+      class="struct-note-drag-handle"
+      data-dragging="false"
+      aria-hidden="true"
+    >
+      <span class="struct-note-drag-handle-grip">⋮⋮</span>
+    </div>
     <EditorContent :editor="editor" class="struct-note-md-editor__content tiptap-content" />
   </div>
 </template>
 
 <script setup>
+import NodeRange from '@tiptap/extension-node-range'
 import { EditorContent, useEditor } from '@tiptap/vue-3'
-import { computed, onBeforeUnmount, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { createTiptapExtensions } from '../../composables/useTiptapExtensions'
+import {
+  mountStructNoteDragHandle,
+  unmountStructNoteDragHandle,
+} from '../../composables/useStructNoteDragHandle'
 import '../../assets/styles/tiptap-slash-menu.css'
 import '../../assets/styles/struct-note-drag-handle.css'
 import StructNoteEditorLayout from './StructNoteEditorLayout.vue'
@@ -93,12 +114,15 @@ const rootStyle = computed(() => ({
   '--struct-note-md-min-height': `${Number(props.minHeight) || 320}px`,
 }))
 
+const dragHandleRef = ref(null)
+let dragHandleApi = null
+
 const editor = useEditor({
   content: props.modelValue || '',
   contentType: 'markdown',
   editable: !props.disabled,
   immediatelyRender: false,
-  extensions: createTiptapExtensions({ dragHandle: true }),
+  extensions: [...createTiptapExtensions(), NodeRange],
   editorProps: {
     attributes: {
       class: 'struct-note-md-prosemirror',
@@ -108,6 +132,20 @@ const editor = useEditor({
     emit('update:modelValue', currentEditor.getMarkdown())
   },
 })
+
+const syncDragHandle = async () => {
+  const currentEditor = editor.value
+  const handleEl = dragHandleRef.value
+
+  if (dragHandleApi) {
+    unmountStructNoteDragHandle(currentEditor, dragHandleApi)
+    dragHandleApi = null
+  }
+
+  if (!currentEditor || currentEditor.isDestroyed || !handleEl) return
+
+  dragHandleApi = mountStructNoteDragHandle(currentEditor, handleEl)
+}
 
 watch(
   () => props.modelValue,
@@ -129,6 +167,15 @@ watch(
   },
 )
 
+watch(
+  () => [editor.value, dragHandleRef.value],
+  async () => {
+    await nextTick()
+    await syncDragHandle()
+  },
+  { flush: 'post' },
+)
+
 const focus = () => {
   editor.value?.commands.focus('end')
 }
@@ -136,6 +183,8 @@ const focus = () => {
 defineExpose({ focus })
 
 onBeforeUnmount(() => {
+  unmountStructNoteDragHandle(editor.value, dragHandleApi)
+  dragHandleApi = null
   editor.value?.destroy()
 })
 </script>
@@ -148,6 +197,7 @@ onBeforeUnmount(() => {
 }
 
 .struct-note-md-editor {
+  position: relative;
   flex: 1;
   min-height: 0;
   display: flex;
