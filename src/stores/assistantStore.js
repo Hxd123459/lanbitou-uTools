@@ -57,8 +57,8 @@ export const useAssistantStore = defineStore('assistant', () => {
     notes.value = [...notes.value, ...next]
   }
 
-  const loadNotes = async ({ reset = false } = {}) => {
-    if (loadingNotes.value || loadingMoreNotes.value) return
+  const loadNotes = async ({ reset = false, force = false } = {}) => {
+    if (!force && (loadingNotes.value || loadingMoreNotes.value)) return
     if (!reset && !hasMoreNotes.value) return
 
     const pageNo = reset ? 1 : currentPageNo.value + 1
@@ -73,7 +73,14 @@ export const useAssistantStore = defineStore('assistant', () => {
         pageNo,
         pageSize: NOTE_LIST_PAGE_SIZE,
       })
-      appendNotes(result.list)
+      if (reset) {
+        notes.value = result.list
+        noteIdSet.value = new Set(
+          result.list.map((item) => item.id).filter(Boolean),
+        )
+      } else {
+        appendNotes(result.list)
+      }
       currentPageNo.value = result.pageNo
       hasMoreNotes.value = result.hasMore
     } finally {
@@ -82,12 +89,22 @@ export const useAssistantStore = defineStore('assistant', () => {
     }
   }
 
-  const loadInitialNotes = async () => {
-    notes.value = []
-    noteIdSet.value = new Set()
+  const reloadNotes = async () => {
+    loadingNotes.value = false
+    loadingMoreNotes.value = false
     currentPageNo.value = 0
     hasMoreNotes.value = true
-    await loadNotes({ reset: true })
+    await loadNotes({ reset: true, force: true })
+  }
+
+  const loadInitialNotes = async () => {
+    await reloadNotes()
+  }
+
+  const insertRestoredNote = (note) => {
+    if (!note?.id || noteIdSet.value.has(note.id)) return
+    noteIdSet.value.add(note.id)
+    notes.value = [{ ...note, pendingDelete: false }, ...notes.value]
   }
 
   const loadMoreNotes = async () => {
@@ -196,6 +213,8 @@ export const useAssistantStore = defineStore('assistant', () => {
     setPinNote,
     loadInitialNotes,
     loadMoreNotes,
+    reloadNotes,
+    insertRestoredNote,
     setEditingNoteId,
     setNotePendingDelete,
     removeNoteLocal,

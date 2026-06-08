@@ -269,6 +269,7 @@
 
       <!-- 回收站 -->
       <TrashPanel
+        ref="trashPanelRef"
         v-show="activeTab === 'trash'"
         :active="activeTab === 'trash'"
         @restored="handleRecycleRestored"
@@ -331,7 +332,12 @@ const noteViewMode = ref('list')
 const searchKeyword = ref('')
 const noteListRef = ref(null)
 const sedimentPanelRef = ref(null)
+<<<<<<< HEAD
 const inputBarCompact = ref(false)
+=======
+const trashPanelRef = ref(null)
+const refreshNotesOnHomeEnter = ref(false)
+>>>>>>> dd5a00b (修复笔记删除恢复BUG)
 const selectedNoteIds = ref(new Set())
 const noteSelectingActive = ref(false)
 const bulkActionBusy = ref(false)
@@ -733,19 +739,42 @@ const loadMoreTagNotes = async () => {
   }
 }
 
-const handleRecycleRestored = async () => {
+const flushHomeNotesRefresh = async () => {
+  if (!refreshNotesOnHomeEnter.value) return
+  refreshNotesOnHomeEnter.value = false
   try {
-    await assistantStore.loadInitialNotes()
+    await assistantStore.reloadNotes()
     openToast('已恢复笔记', 'success', { duration: 1600 })
   } catch (error) {
     notifyError(error)
   }
 }
 
+const handleRecycleRestored = async (note) => {
+  refreshNotesOnHomeEnter.value = true
+  clearTagFilter()
+  clearSearch()
+  noteViewMode.value = 'list'
+  if (note) {
+    assistantStore.insertRestoredNote(note)
+  }
+  if (activeTab.value === 'home') {
+    await flushHomeNotesRefresh()
+    return
+  }
+  activeTab.value = 'home'
+}
+
 const onTabChange = (tab) => {
   if (activeTab.value === tab) return
   activeTab.value = tab
 }
+
+watch(activeTab, (tab) => {
+  if (tab === 'home') {
+    flushHomeNotesRefresh()
+  }
+})
 
 const {
   showToast,
@@ -820,6 +849,7 @@ const handleDelete = ({ id }) => {
     try {
       await deleteBlock(id)
       assistantStore.removeNoteLocal(id)
+      trashPanelRef.value?.reload()
     } catch (error) {
       assistantStore.setNotePendingDelete(id, false)
       notifyError(error)

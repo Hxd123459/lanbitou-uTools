@@ -208,12 +208,13 @@ const loadList = async () => {
 
 const handleRestore = async (id) => {
   if (actionLoadingId.value != null) return
+  const note = items.value.find((item) => item.id === id)
   actionLoadingId.value = id
   try {
     await restoreRecycleNote(id)
     items.value = items.value.filter((item) => item.id !== id)
     syncCount()
-    emit('restored')
+    emit('restored', note || { id })
   } catch (error) {
     emit('error', error)
   } finally {
