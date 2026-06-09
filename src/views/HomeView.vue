@@ -10,7 +10,6 @@
         v-model="inputValue"
         :submitting="noteSubmitting"
         :upload-progress="uploadProgress"
-        :compact="inputBarCompact"
         @submit="handleSubmit"
         @limit-exceeded="handleLimitExceeded"
         @image-too-large="handleImageTooLarge"
@@ -332,16 +331,11 @@ const noteViewMode = ref('list')
 const searchKeyword = ref('')
 const noteListRef = ref(null)
 const sedimentPanelRef = ref(null)
-<<<<<<< HEAD
-const inputBarCompact = ref(false)
-=======
 const trashPanelRef = ref(null)
 const refreshNotesOnHomeEnter = ref(false)
->>>>>>> dd5a00b (修复笔记删除恢复BUG)
 const selectedNoteIds = ref(new Set())
 const noteSelectingActive = ref(false)
 const bulkActionBusy = ref(false)
-let lastListScrollTop = 0
 let searchToken = 0
 
 const searchState = reactive({
@@ -471,7 +465,6 @@ const scrollNoteListToTop = () => {
   const el = noteListRef.value
   if (!el) return
   el.scrollTop = 0
-  lastListScrollTop = 0
 }
 
 const appendSearchNotes = (list) => {
@@ -587,15 +580,6 @@ const onNoteListScroll = () => {
     return
   }
 
-  const top = el.scrollTop
-  if (top <= 0) {
-    inputBarCompact.value = false
-  } else if (top > lastListScrollTop) {
-    inputBarCompact.value = true
-  } else if (top < lastListScrollTop) {
-    inputBarCompact.value = false
-  }
-
   const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 80
   if (nearBottom) {
     if (noteViewMode.value !== 'list' && noteViewMode.value !== 'select') return
@@ -608,8 +592,6 @@ const onNoteListScroll = () => {
       assistantStore.loadMoreNotes()
     }
   }
-
-  lastListScrollTop = top
 }
 
 const appendTagNotes = (list) => {
@@ -905,13 +887,6 @@ const notifyError = (error) => {
   const message = error?.message || '系统异常'
   openToast(`[UNKNOWN] ${message}`, 'error')
 }
-
-watch(noteViewMode, (mode) => {
-  if (mode !== 'list' && mode !== 'select' && mode !== 'selected') {
-    inputBarCompact.value = false
-    lastListScrollTop = 0
-  }
-})
 
 watch(
   () => selectedNoteIds.value.size,
