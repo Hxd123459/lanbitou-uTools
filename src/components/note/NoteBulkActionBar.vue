@@ -27,9 +27,8 @@
           stroke-linecap="round"
           stroke-linejoin="round"
         >
-          <path d="M7.5 8.5h7M7.5 12h4" />
-          <path d="M14 3.5H5.5A2 2 0 0 0 3.5 5.5v8.8L7 12.5h7a2 2 0 0 0 2-2V5.5a2 2 0 0 0-2-2z" />
-          <path d="M20.5 11.5H15a2 2 0 0 0-2 2v5.3l2.5-2h5.5a2 2 0 0 0 2-2v-5.8a2 2 0 0 0-2-2z" />
+          <path d="M12 3c5 0 9 3.6 9 8s-4 8-9 8c-.9 0-1.8-.1-2.6-.3L3 21l1.8-4.2A7.7 7.7 0 0 1 3 11c0-4.4 4-8 9-8z" />
+          <path d="M9.5 11h.01M14.5 11h.01" />
         </svg>
       </span>
       <span class="note-bulk-btn-label">问 AI</span>
