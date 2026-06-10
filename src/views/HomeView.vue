@@ -237,6 +237,7 @@
         >
           <NoteBulkActionBar
             :busy="bulkActionBusy"
+            @ask-ai="handleBulkAskAi"
             @clear="handleBulkClearSelection"
             @sediment="handleBulkSediment"
             @delete="handleBulkDelete"
@@ -251,6 +252,15 @@
           @updated="handleTagUpdated"
         />
       </div>
+
+      <!-- AI 对话 -->
+      <AiChatPanel
+        ref="aiChatPanelRef"
+        v-show="activeTab === 'ai'"
+        :active="activeTab === 'ai'"
+        @sediment-error="notifyError"
+        @sediment-success="handleAiSedimentSuccess"
+      />
 
       <!-- 沉淀 -->
       <SedimentPanel
@@ -302,6 +312,7 @@ import MainFrame from '../components/layout/MainFrame.vue'
 import SedimentPanel from '../components/sediment/SedimentPanel.vue'
 import HeatmapPanel from '../components/heatmap/HeatmapPanel.vue'
 import TrashPanel from '../components/trash/TrashPanel.vue'
+import AiChatPanel from '../components/ai/AiChatPanel.vue'
 import AiSettingsPanel from '../components/settings/AiSettingsPanel.vue'
 import SidePanel from '../components/layout/SidePanel.vue'
 import NoteBulkActionBar from '../components/note/NoteBulkActionBar.vue'
@@ -332,6 +343,7 @@ const searchKeyword = ref('')
 const noteListRef = ref(null)
 const sedimentPanelRef = ref(null)
 const trashPanelRef = ref(null)
+const aiChatPanelRef = ref(null)
 const refreshNotesOnHomeEnter = ref(false)
 const selectedNoteIds = ref(new Set())
 const noteSelectingActive = ref(false)
@@ -568,6 +580,18 @@ const handleBulkSediment = () => {
   })
 }
 
+const handleBulkAskAi = () => {
+  const notes = selectedNotesList.value
+  if (!notes.length || bulkActionBusy.value) return
+
+  exitNoteSelectingSession()
+  noteViewMode.value = 'list'
+  activeTab.value = 'ai'
+  nextTick(() => {
+    aiChatPanelRef.value?.attachNotes(notes)
+  })
+}
+
 const onNoteListScroll = () => {
   const el = noteListRef.value
   if (
@@ -766,6 +790,10 @@ const {
   openToast,
   triggerToastAction,
 } = useCopyNote()
+
+const handleAiSedimentSuccess = () => {
+  openToast('已保存到沉淀', 'success', { duration: 1600 })
+}
 
 const deleteTimers = new Map()
 

@@ -14,6 +14,33 @@
       :while-hover="presets.button.hover"
       :while-tap="presets.button.tap"
       :transition="presets.button.transition"
+      @click="$emit('ask-ai')"
+    >
+      <span class="note-bulk-btn-icon" aria-hidden="true">
+        <svg
+          viewBox="0 0 24 24"
+          width="18"
+          height="18"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="1.8"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M7.5 8.5h7M7.5 12h4" />
+          <path d="M14 3.5H5.5A2 2 0 0 0 3.5 5.5v8.8L7 12.5h7a2 2 0 0 0 2-2V5.5a2 2 0 0 0-2-2z" />
+          <path d="M20.5 11.5H15a2 2 0 0 0-2 2v5.3l2.5-2h5.5a2 2 0 0 0 2-2v-5.8a2 2 0 0 0-2-2z" />
+        </svg>
+      </span>
+      <span class="note-bulk-btn-label">问 AI</span>
+    </motion.button>
+    <motion.button
+      type="button"
+      class="note-bulk-btn"
+      :disabled="busy"
+      :while-hover="presets.button.hover"
+      :while-tap="presets.button.tap"
+      :transition="presets.button.transition"
       @click="$emit('sediment')"
     >
       <span class="note-bulk-btn-icon" aria-hidden="true">
@@ -101,7 +128,7 @@ defineProps({
   },
 })
 
-defineEmits(['sediment', 'delete', 'clear'])
+defineEmits(['ask-ai', 'sediment', 'delete', 'clear'])
 
 const { presets } = useMotionPresets()
 </script>

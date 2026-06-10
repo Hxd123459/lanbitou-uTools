@@ -110,6 +110,21 @@
             <rect x="17" y="17" width="4" height="4" rx="1" />
           </svg>
           <svg
+            v-else-if="item.id === 'ai'"
+            viewBox="0 0 24 24"
+            width="18"
+            height="18"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.8"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <path d="M7.5 8.5h7M7.5 12h4" />
+            <path d="M14 3.5H5.5A2 2 0 0 0 3.5 5.5v8.8L7 12.5h7a2 2 0 0 0 2-2V5.5a2 2 0 0 0-2-2z" />
+            <path d="M20.5 11.5H15a2 2 0 0 0-2 2v5.3l2.5-2h5.5a2 2 0 0 0 2-2v-5.8a2 2 0 0 0-2-2z" />
+          </svg>
+          <svg
             v-else-if="item.id === 'trash'"
             viewBox="0 0 24 24"
             width="18"
@@ -203,6 +218,7 @@ const isCompactSidebar = useUtoolsCompactSidebar()
 
 const navItems = [
   { id: 'home', label: '碎片' },
+  { id: 'ai', label: '问AI' },
   { id: 'sediment', label: '沉淀' },
   { id: 'trash', label: '回收站' },
 ]
