@@ -86,6 +86,19 @@
               noteViewMode !== 'selected' &&
               !isSearchActive &&
               !tagFilterState.active &&
+              assistantStore.loadingNotes &&
+              !assistantStore.visibleNotes.length
+            "
+            class="empty-state"
+          >
+            加载中…
+          </p>
+          <p
+            v-else-if="
+              !noteSelectingActive &&
+              noteViewMode !== 'selected' &&
+              !isSearchActive &&
+              !tagFilterState.active &&
               !assistantStore.visibleNotes.length &&
               !assistantStore.loadingNotes
             "
@@ -345,6 +358,7 @@ const sedimentPanelRef = ref(null)
 const trashPanelRef = ref(null)
 const aiChatPanelRef = ref(null)
 const refreshNotesOnHomeEnter = ref(false)
+const refreshNotesOnListEnter = ref(false)
 const selectedNoteIds = ref(new Set())
 const noteSelectingActive = ref(false)
 const bulkActionBusy = ref(false)
@@ -458,6 +472,16 @@ const onNoteViewModeChange = (mode) => {
     exitNoteSelectingSession()
   }
   noteViewMode.value = mode
+  if ((mode === 'list' || mode === 'select') && prev === 'tags') {
+    if (
+      tagFilterState.active &&
+      !tagFilterState.list.length &&
+      !tagFilterState.loading
+    ) {
+      clearTagFilter()
+    }
+    void flushNotesRefreshOnListEnter()
+  }
 }
 
 const onNoteSearchOpen = () => {
@@ -691,14 +715,42 @@ const handleTagSelect = async (tag) => {
   }
 }
 
-const handleTagDeleted = async (tag) => {
-  if (tagFilterState.active && String(tagFilterState.tagId) === String(tag?.tagId)) {
-    clearTagFilter()
+const patchNotesAfterTagDelete = (tagId) => {
+  const deletedTagId = String(tagId ?? '')
+  if (!deletedTagId) return
+  for (const note of assistantStore.notes) {
+    if (String(note?.tagId ?? '') === deletedTagId) {
+      note.tagId = null
+      note.title = ''
+    }
   }
+}
+
+const flushNotesRefreshOnListEnter = async () => {
+  if (!refreshNotesOnListEnter.value) return
+  refreshNotesOnListEnter.value = false
   try {
     await assistantStore.loadInitialNotes()
+    scrollNoteListToTop()
   } catch (error) {
     notifyError(error)
+  }
+}
+
+const handleTagDeleted = async (tag) => {
+  const deletedTagId = String(tag?.tagId ?? '')
+  if (tagFilterState.active && String(tagFilterState.tagId) === deletedTagId) {
+    clearTagFilter()
+  } else if (tagFilterState.active && tagFilterState.list.length) {
+    tagFilterState.list = tagFilterState.list.filter(
+      (note) => String(note?.tagId ?? '') !== deletedTagId,
+    )
+    tagFilterState.total = tagFilterState.list.length
+  }
+  patchNotesAfterTagDelete(deletedTagId)
+  refreshNotesOnListEnter.value = true
+  if (noteViewMode.value === 'list' || noteViewMode.value === 'select') {
+    await flushNotesRefreshOnListEnter()
   }
 }
 

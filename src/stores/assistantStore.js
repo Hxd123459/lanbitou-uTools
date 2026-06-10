@@ -24,6 +24,7 @@ export const useAssistantStore = defineStore('assistant', () => {
   const hasMoreNotes = ref(true)
   const currentPageNo = ref(0)
   const editingNoteId = ref(null)
+  let loadToken = 0
 
   const visibleNotes = computed(() =>
     notes.value
@@ -62,6 +63,7 @@ export const useAssistantStore = defineStore('assistant', () => {
     if (!reset && !hasMoreNotes.value) return
 
     const pageNo = reset ? 1 : currentPageNo.value + 1
+    const myToken = reset ? ++loadToken : loadToken
     if (reset) {
       loadingNotes.value = true
     } else {
@@ -73,6 +75,7 @@ export const useAssistantStore = defineStore('assistant', () => {
         pageNo,
         pageSize: NOTE_LIST_PAGE_SIZE,
       })
+      if (reset && myToken !== loadToken) return
       if (reset) {
         notes.value = result.list
         noteIdSet.value = new Set(
@@ -84,8 +87,10 @@ export const useAssistantStore = defineStore('assistant', () => {
       currentPageNo.value = result.pageNo
       hasMoreNotes.value = result.hasMore
     } finally {
-      loadingNotes.value = false
-      loadingMoreNotes.value = false
+      if (!reset || myToken === loadToken) {
+        loadingNotes.value = false
+        loadingMoreNotes.value = false
+      }
     }
   }
 
