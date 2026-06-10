@@ -17,6 +17,10 @@ import {
 } from './attachment'
 import { pinTypeToWeight, pinWeightToType } from './pin'
 import { createId, datePartFromDateTime, formatDateTime } from './utils'
+import {
+  isTagNameWithinLimit,
+  TAG_NAME_MAX_UNITS,
+} from '../../utils/tagName'
 
 const NOTE_LIST_PAGE_SIZE = 20
 
@@ -354,7 +358,9 @@ export async function updateTag(tagId, tagName) {
   } else if (matched.length) {
     const name = String(tagName ?? '').trim()
     if (!name) throw new Error('标签名称不能为空')
-    if (name.length > 5) throw new Error('标签名称不能超过 5 个字')
+    if (!isTagNameWithinLimit(name)) {
+      throw new Error(`标签名称不能超过 ${TAG_NAME_MAX_UNITS} 个字`)
+    }
     const duplicate = await findTagByName(name)
     if (duplicate && String(duplicate.id) !== id) {
       throw new Error('标签名称已存在')

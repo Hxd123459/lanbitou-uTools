@@ -2,9 +2,9 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef } from 
 import { createTag, fetchAllTags } from '../api/note'
 import { invalidateTagList, subscribeTagListInvalidate } from './tagListSync'
 import { getTextareaCaretCoords } from '../utils/textareaCaret'
+import { isTagNameWithinLimit } from '../utils/tagName'
 
 const MENU_CLASS = 'struct-note-slash-menu'
-const MAX_TAG_LEN = 5
 
 export function getHashTriggerState(text, caretPos) {
   const before = String(text ?? '').slice(0, caretPos)
@@ -53,7 +53,7 @@ export function useTagHashPicker({
     if (
       query &&
       !exact &&
-      query.length <= MAX_TAG_LEN &&
+      isTagNameWithinLimit(query) &&
       !/\s/.test(query)
     ) {
       items.push({

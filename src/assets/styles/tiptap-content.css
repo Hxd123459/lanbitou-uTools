@@ -10,12 +10,16 @@
   margin-top: 0;
 }
 
-.tiptap-content .ProseMirror > :last-child {
-  margin-bottom: 0;
-}
-
 .tiptap-content .ProseMirror p {
   margin: 0 0 0.75em;
+}
+
+.tiptap-content .ProseMirror li > p {
+  margin: 0;
+}
+
+.tiptap-content .ProseMirror li > p + p {
+  margin-top: 0.5em;
 }
 
 .tiptap-content .ProseMirror h1,
@@ -45,6 +49,12 @@
 .tiptap-content .ProseMirror ol {
   margin: 0 0 0.75em;
   padding-left: 1.25em;
+}
+
+.tiptap-content .ProseMirror > :last-child,
+.tiptap-content .ProseMirror ul:last-child,
+.tiptap-content .ProseMirror ol:last-child {
+  margin-bottom: 0;
 }
 
 .tiptap-content .ProseMirror ul[data-type='taskList'] {

@@ -942,6 +942,8 @@ defineExpose({ attachNotes })
 :global(.note-at-picker-menu) {
   min-width: 392px;
   max-width: min(520px, calc(100vw - 16px));
+  padding-top: 10px;
+  padding-bottom: 10px;
 }
 
 :global(.note-at-menu-item) {

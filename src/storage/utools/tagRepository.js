@@ -1,6 +1,10 @@
 import { NOTE_PREFIX, TAG_PREFIX } from './constants'
 import { dbAllDocs, dbGet, dbPut, dbRemove } from './dbClient'
 import { createId, formatDateTime } from './utils'
+import {
+  isTagNameWithinLimit,
+  TAG_NAME_MAX_UNITS,
+} from '../../utils/tagName'
 
 function tagDocId(id) {
   return `${TAG_PREFIX}${id}`
@@ -82,8 +86,8 @@ export async function createTag(tagName) {
   if (!name) {
     throw new Error('标签名称不能为空')
   }
-  if (name.length > 5) {
-    throw new Error('标签名称不能超过 5 个字')
+  if (!isTagNameWithinLimit(name)) {
+    throw new Error(`标签名称不能超过 ${TAG_NAME_MAX_UNITS} 个字`)
   }
 
   const existing = await findTagByName(name)
@@ -106,7 +110,9 @@ export async function createTag(tagName) {
 export async function updateTagDoc(tagId, nextName) {
   const name = normalizeTagName(nextName)
   if (!name) throw new Error('标签名称不能为空')
-  if (name.length > 5) throw new Error('标签名称不能超过 5 个字')
+  if (!isTagNameWithinLimit(name)) {
+    throw new Error(`标签名称不能超过 ${TAG_NAME_MAX_UNITS} 个字`)
+  }
 
   const doc = await getTagById(tagId)
   if (!doc) throw new Error('标签不存在')

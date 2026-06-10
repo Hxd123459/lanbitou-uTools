@@ -59,12 +59,12 @@
         >
           <input
             :ref="(el) => bindEditInput(el, tag.tagId)"
-            v-model="draftEdit"
+            :value="draftEdit"
             type="text"
             class="tag-cloud-edit-input"
-            maxlength="5"
             aria-label="编辑标签名称"
             :disabled="editSaving"
+            @input="onDraftEditInput"
             @keydown.enter.prevent="confirmEdit"
             @keydown.esc.prevent="cancelEdit"
             @blur="onEditBlur"
@@ -140,13 +140,13 @@
       <div v-if="adding" class="tag-cloud-add-chip" role="listitem">
         <input
           ref="addInputRef"
-          v-model="draftTag"
+          :value="draftTag"
           type="text"
           class="tag-cloud-add-input"
-          maxlength="5"
           placeholder="标签"
           aria-label="新标签名称"
           :disabled="creating"
+          @input="onDraftTagInput"
           @keydown.enter.prevent="submitTag"
           @keydown.esc.prevent="cancelAdd"
           @blur="onAddBlur"
@@ -178,6 +178,7 @@ import { createTag, deleteTag, fetchAllTags, updateTag } from '../../api/note'
 import { isUtoolsMode } from '../../storage/env'
 import { invalidateTagList } from '../../composables/tagListSync'
 import { useMotionPresets } from '../../composables/useMotionPresets'
+import { clampTagNameInput } from '../../utils/tagName'
 import AppButton from '../motion/AppButton.vue'
 
 const props = defineProps({
@@ -317,6 +318,14 @@ const cancelAdd = () => {
   window.clearTimeout(blurTimer)
   adding.value = false
   draftTag.value = ''
+}
+
+const onDraftTagInput = (event) => {
+  draftTag.value = clampTagNameInput(event.target.value)
+}
+
+const onDraftEditInput = (event) => {
+  draftEdit.value = clampTagNameInput(event.target.value)
 }
 
 const onAddBlur = () => {
@@ -608,7 +617,7 @@ defineExpose({ reload: loadTags })
 
 .tag-cloud-edit-input,
 .tag-cloud-add-input {
-  width: 64px;
+  width: 88px;
   border: 0;
   background: transparent;
   padding: 0;
