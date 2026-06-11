@@ -1458,6 +1458,50 @@ function formatTime(dateValue) {
   width: 100%;
 }
 
+.note-content-root :deep(.tiptap-content .ProseMirror) {
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.note-content-root :deep(.tiptap-content .ProseMirror > :last-child) {
+  margin-bottom: 0;
+}
+
+.note-content-root :deep(.tiptap-content .ProseMirror ul),
+.note-content-root :deep(.tiptap-content .ProseMirror ol) {
+  margin: 0;
+  padding-left: 1.25em;
+}
+
+.note-content-root :deep(.tiptap-content .ProseMirror li) {
+  margin: 0;
+}
+
+.note-content-root :deep(.tiptap-content .ProseMirror li + li) {
+  margin-top: 0.15em;
+}
+
+.note-content-root :deep(.tiptap-content .ProseMirror ul[data-type='taskList']) {
+  margin: 0;
+  padding-left: 0;
+}
+
+.note-content-root :deep(.tiptap-content .ProseMirror ul[data-type='taskList'] li label) {
+  margin-top: 0.05em;
+}
+
+.note-content-root :deep(.tiptap-content .ProseMirror > p:last-child:empty),
+.note-content-root :deep(.tiptap-content .ProseMirror > p:last-child:has(> br:only-child)) {
+  margin: 0;
+  min-height: 0;
+  height: 0;
+  overflow: hidden;
+}
+
+.note-content-root :deep(.tiptap-preview) {
+  margin: 0;
+}
+
 .note-card :deep(mark.note-highlight) {
   background: rgba(37, 99, 235, 0.16);
   color: var(--color-accent);

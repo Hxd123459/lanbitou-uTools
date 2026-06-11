@@ -93,7 +93,6 @@
               v-if="effectiveTag"
               :key="effectiveTag.tagId || effectiveTag.tagName"
               class="tag-chip"
-              :class="{ 'tag-chip--context': isContextTagActive }"
               :initial="presets.swapLabel.initial"
               :animate="presets.swapLabel.animate"
               :exit="presets.swapLabel.exit"
@@ -630,11 +629,6 @@ defineExpose({ reset, addImages, focus })
   font-size: 13px;
   font-weight: 600;
   line-height: 1.35;
-}
-
-.tag-chip--context {
-  border-color: color-mix(in srgb, var(--color-accent) 28%, var(--color-border));
-  background: color-mix(in srgb, var(--color-accent) 8%, var(--color-surface));
 }
 
 .tag-chip-label {
