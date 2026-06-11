@@ -34,11 +34,12 @@ function stripNoteDoc(doc) {
   return rest
 }
 
-async function loadAllNoteDocs({ includeDeleted = false } = {}) {
+async function loadAllNoteDocs({ includeDeleted = false, includeArchived = false } = {}) {
   const docs = await dbAllDocs(NOTE_PREFIX)
   return (docs || [])
     .map(stripNoteDoc)
     .filter((doc) => doc?.id && (includeDeleted || !doc.deletedAt))
+    .filter((doc) => includeArchived || !doc.archivedAt)
 }
 
 function toApiNote(doc) {
@@ -440,17 +441,61 @@ export async function localSemanticSearch(query) {
   }))
 }
 
-export async function moveToSediment(ids, parentId = 0) {
-  const idList = (Array.isArray(ids) ? ids : [ids]).filter(Boolean).map(String)
+export async function getNotesByIds(ids = []) {
+  const idList = (Array.isArray(ids) ? ids : []).filter(Boolean).map(String)
+  if (!idList.length) return []
+  const docs = await loadAllNoteDocs({ includeArchived: true })
+  const byId = new Map(docs.map((doc) => [String(doc.id), doc]))
+  return idList
+    .map((id) => byId.get(String(id)))
+    .filter(Boolean)
+    .map(toApiNote)
+}
+
+export async function archiveFragmentsForStructNote(fragmentIds, structNoteId) {
+  const idList = (Array.isArray(fragmentIds) ? fragmentIds : []).filter(Boolean).map(String)
+  if (!idList.length) return []
+  const now = formatDateTime()
+  const archivedIds = []
   for (const id of idList) {
     const doc = await getNoteDoc(id)
-    if (!doc || doc.deletedAt) continue
-    await createNoteInFolder({
+    if (!doc || doc.deletedAt || doc.archivedAt) continue
+    doc.archivedAt = now
+    doc.archivedByStructNoteId = String(structNoteId)
+    doc.updateTime = now
+    await saveNoteDoc(doc)
+    archivedIds.push(doc.id)
+  }
+  return archivedIds
+}
+
+export async function restoreFragmentFromArchive(fragmentId) {
+  const id = String(fragmentId ?? '').trim()
+  if (!id) throw new Error('碎片不存在')
+  const doc = await getNoteDoc(id)
+  if (!doc || doc.deletedAt) throw new Error('碎片不存在')
+  if (!doc.archivedAt) return toApiNote(doc)
+  doc.archivedAt = null
+  doc.archivedByStructNoteId = null
+  doc.updateTime = formatDateTime()
+  await saveNoteDoc(doc)
+  return toApiNote(doc)
+}
+
+export async function moveToSediment(ids, parentId = 0) {
+  const idList = (Array.isArray(ids) ? ids : [ids]).filter(Boolean).map(String)
+  const archivedIds = []
+  for (const id of idList) {
+    const doc = await getNoteDoc(id)
+    if (!doc || doc.deletedAt || doc.archivedAt) continue
+    const structNoteId = await createNoteInFolder({
       parentId,
       title: doc.title || autoTitleFromContent(doc.rawContent),
       content: doc.markdownContent || doc.rawContent || '',
+      sourceFragmentIds: [id],
     })
-    await deleteNoteToRecycle(id)
+    const archived = await archiveFragmentsForStructNote([id], structNoteId)
+    archivedIds.push(...archived)
   }
-  return true
+  return archivedIds
 }

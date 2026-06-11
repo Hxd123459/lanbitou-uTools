@@ -12,9 +12,12 @@
     >
       <div class="struct-note-fragments-inner">
         <div class="struct-note-fragments-head">
-          <h3 class="struct-note-fragments-title">已选碎片（{{ fragmentNotes.length }}）</h3>
+          <h3 class="struct-note-fragments-title">
+            {{ panelTitle }}
+          </h3>
           <div class="struct-note-fragments-head-actions">
             <motion.button
+              v-if="mode === 'compose'"
               type="button"
               class="struct-note-fragments-action"
               aria-label="添加碎片"
@@ -44,7 +47,9 @@
           </div>
         </div>
 
-        <p v-if="!fragmentNotes.length" class="struct-note-fragments-empty">暂无碎片，点击 + 添加</p>
+        <p v-if="!fragmentNotes.length" class="struct-note-fragments-empty">
+          {{ emptyText }}
+        </p>
 
         <ul v-else class="struct-note-fragments-list">
           <AnimatePresence mode="popLayout">
@@ -59,6 +64,20 @@
               :transition="itemMotion.transition"
             >
               <motion.button
+                v-if="mode === 'source'"
+                type="button"
+                class="struct-note-fragment-restore"
+                :disabled="disabled || restoringId === note.id"
+                aria-label="放回碎片列表"
+                :while-hover="disabled || restoringId === note.id ? undefined : presets.button.hover"
+                :while-tap="disabled || restoringId === note.id ? undefined : presets.button.tap"
+                :transition="presets.button.transition"
+                @click="emit('restore', note)"
+              >
+                {{ restoringId === note.id ? '…' : '还原' }}
+              </motion.button>
+              <motion.button
+                v-else
                 type="button"
                 class="struct-note-fragment-add"
                 :class="{ 'is-added': insertedIds.has(note.id) }"
@@ -109,6 +128,7 @@
   </AnimatePresence>
 
   <StructNoteFragmentPickerModal
+    v-if="mode === 'compose'"
     :visible="pickerVisible"
     :selected-notes="fragmentNotes"
     @close="pickerVisible = false"
@@ -131,9 +151,31 @@ const props = defineProps({
   insertedIds: { type: Object, default: () => new Set() },
   disabled: { type: Boolean, default: false },
   open: { type: Boolean, default: true },
+  mode: {
+    type: String,
+    default: 'compose',
+    validator: (value) => ['compose', 'source'].includes(value),
+  },
+  restoringId: {
+    type: String,
+    default: '',
+  },
 })
 
-const emit = defineEmits(['update:open', 'update:fragmentNotes', 'insert'])
+const emit = defineEmits(['update:open', 'update:fragmentNotes', 'insert', 'restore'])
+
+const panelTitle = computed(() => {
+  if (props.mode === 'source') {
+    return `来源碎片（${props.fragmentNotes.length}）`
+  }
+  return `已选碎片（${props.fragmentNotes.length}）`
+})
+
+const emptyText = computed(() =>
+  props.mode === 'source'
+    ? '暂无关联的碎片'
+    : '暂无碎片，点击 + 添加',
+)
 
 const FRAGMENTS_PANEL_WIDTH = 360
 
@@ -298,6 +340,33 @@ const onPickerConfirm = (notes) => {
 .struct-note-fragment-add.is-added {
   background: var(--btn-icon-bg-hover);
   color: var(--color-secondary-text);
+}
+
+.struct-note-fragment-restore {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 44px;
+  height: 28px;
+  padding: 0 10px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--btn-radius);
+  background: var(--color-surface);
+  color: var(--color-secondary-text);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.struct-note-fragment-restore:hover:not(:disabled) {
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+}
+
+.struct-note-fragment-restore:disabled {
+  opacity: var(--btn-disabled-opacity);
+  cursor: not-allowed;
 }
 
 @media (max-width: 900px) {

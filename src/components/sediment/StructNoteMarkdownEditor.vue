@@ -7,7 +7,10 @@
     :inserted-ids="insertedIds"
     :disabled="disabled"
     :show-expand-button="showExpandButton"
+    :fragments-mode="fragmentsMode"
+    :restoring-id="restoringId"
     @insert="emit('insert', $event)"
+    @restore="emit('restore', $event)"
   >
     <slot name="prefix" />
     <div
@@ -91,6 +94,14 @@ const props = defineProps({
     type: Boolean,
     default: true,
   },
+  fragmentsMode: {
+    type: String,
+    default: 'compose',
+  },
+  restoringId: {
+    type: String,
+    default: '',
+  },
 })
 
 const emit = defineEmits([
@@ -98,6 +109,7 @@ const emit = defineEmits([
   'update:fragmentNotes',
   'update:fragmentsOpen',
   'insert',
+  'restore',
 ])
 
 const fragmentNotesModel = computed({

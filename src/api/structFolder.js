@@ -31,9 +31,18 @@ export async function createStructFolder({ parentId = 0, name }) {
   return post('/struct/folder/createFolder', { parentId, name })
 }
 
-export async function createNoteInFolder({ parentId = 0, title, content, tagId = null }) {
+export async function createNoteInFolder({
+  parentId = 0,
+  title,
+  content,
+  tagId = null,
+  sourceFragmentIds = null,
+}) {
   const body = { parentId, title, content }
   if (tagId != null) body.tagId = tagId
+  if (Array.isArray(sourceFragmentIds) && sourceFragmentIds.length) {
+    body.sourceFragmentIds = sourceFragmentIds
+  }
   if (isUtoolsMode()) {
     return utoolsStruct.createNoteInFolder(body)
   }

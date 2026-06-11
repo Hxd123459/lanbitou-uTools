@@ -287,6 +287,8 @@
         v-show="activeTab === 'sediment'"
         :active="activeTab === 'sediment'"
         @error="notifyError"
+        @fragments-archived="handleFragmentsArchived"
+        @fragment-restored="handleFragmentRestored"
       />
 
       <!-- 热力图 -->
@@ -469,6 +471,46 @@ function appendNoteToTagFilter(note) {
   if (tagFilterState.list.some((item) => item.id === note.id)) return
   tagFilterState.list = [note, ...tagFilterState.list]
   tagFilterState.total += 1
+}
+
+function removeNotesFromHomeLists(ids = []) {
+  const idSet = new Set((Array.isArray(ids) ? ids : []).map(String))
+  if (!idSet.size) return
+
+  idSet.forEach((id) => {
+    assistantStore.removeNoteLocal(id)
+  })
+
+  if (tagFilterState.active) {
+    const next = tagFilterState.list.filter((note) => !idSet.has(String(note.id)))
+    const removedCount = tagFilterState.list.length - next.length
+    tagFilterState.list = next
+    if (removedCount > 0) {
+      tagFilterState.total = Math.max(0, tagFilterState.total - removedCount)
+    }
+  }
+
+  if (noteSelectingActive.value) {
+    const nextSelected = new Set(
+      [...selectedNoteIds.value].filter((id) => !idSet.has(String(id))),
+    )
+    selectedNoteIds.value = nextSelected
+    if (shouldExitEmptySelecting()) {
+      exitNoteSelectingSession()
+    }
+  }
+}
+
+const handleFragmentsArchived = (ids) => {
+  removeNotesFromHomeLists(ids)
+  openToast('已沉淀，相关碎片已从列表移出', 'success', { duration: 1800 })
+}
+
+const handleFragmentRestored = (note) => {
+  if (!note?.id) return
+  assistantStore.insertRestoredNote(note)
+  appendNoteToTagFilter(note)
+  openToast('已放回碎片列表', 'success', { duration: 1600 })
 }
 
 const clearNoteSelection = () => {

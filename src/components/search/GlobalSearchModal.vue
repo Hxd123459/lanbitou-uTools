@@ -44,7 +44,7 @@
                 :value="draftKeyword"
                 type="text"
                 class="global-search-input"
-                placeholder="使用 # 选标签；输入关键词，Enter 添加（多词 AND）；右侧选日期"
+                placeholder="使用 # 选标签；输入关键词，Enter添加；右侧选日期"
                 spellcheck="false"
                 @input="onKeywordInput"
                 @focus="onKeywordFocus"

@@ -18,7 +18,7 @@
         <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
           <path d="M15 6l-6 6 6 6" />
         </svg>
-        <span>碎片 {{ fragmentNotes.length }}</span>
+        <span>{{ fragmentsPanelLabel }}</span>
       </button>
     </div>
 
@@ -27,8 +27,11 @@
       :fragment-notes="fragmentNotes"
       :inserted-ids="insertedIds"
       :disabled="disabled"
+      :mode="fragmentsMode"
+      :restoring-id="restoringId"
       @update:fragment-notes="emit('update:fragmentNotes', $event)"
       @insert="emit('insert', $event)"
+      @restore="emit('restore', $event)"
     />
   </div>
 </template>
@@ -43,9 +46,23 @@ const props = defineProps({
   disabled: { type: Boolean, default: false },
   open: { type: Boolean, default: true },
   showExpandButton: { type: Boolean, default: true },
+  fragmentsMode: {
+    type: String,
+    default: 'compose',
+  },
+  restoringId: {
+    type: String,
+    default: '',
+  },
 })
 
-const emit = defineEmits(['update:fragmentNotes', 'update:open', 'insert'])
+const emit = defineEmits(['update:fragmentNotes', 'update:open', 'insert', 'restore'])
+
+const fragmentsPanelLabel = computed(() =>
+  props.fragmentsMode === 'source'
+    ? `来源 ${props.fragmentNotes.length}`
+    : `碎片 ${props.fragmentNotes.length}`,
+)
 
 const fragmentsOpen = computed({
   get: () => props.open,

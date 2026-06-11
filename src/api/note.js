@@ -1,5 +1,6 @@
 import { isUtoolsMode } from '../storage/env'
 import * as utoolsNote from '../storage/utools/noteRepository'
+import * as utoolsStruct from '../storage/utools/structRepository'
 import { ApiError, post, get, postForm, resolveResourceUrl } from './http'
 
 export function formatDateParam(date) {
@@ -256,11 +257,53 @@ export async function deleteBlock(id) {
 
 export async function moveBlocksToSediment(ids, parentId = 0) {
   const idList = (Array.isArray(ids) ? ids : [ids]).filter((id) => id != null)
-  if (!idList.length) return null
+  if (!idList.length) return []
   if (isUtoolsMode()) {
     return utoolsNote.moveToSediment(idList, parentId)
   }
   return post('/api/note/moveToSediment', { ids: idList, parentId })
+}
+
+export async function fetchNotesByIds(ids = []) {
+  if (!isUtoolsMode()) return []
+  const list = await utoolsNote.getNotesByIds(ids)
+  return list.map((item) => ({
+    id: item.id,
+    title: item.title || '',
+    fineTitle: item.fineTitle || '',
+    summary: item.summary || '',
+    text: item.rawContent || item.markdownContent || '',
+    markdownContent: item.markdownContent || '',
+    createdAt: item.createTime,
+    tagId: item.tagId ?? null,
+    pinWeightType: item.pinWeightType || 'DEFAULT',
+    images: mapBlockResources(item.blocks),
+  }))
+}
+
+export async function archiveFragmentNotes(fragmentIds, structNoteId) {
+  if (!isUtoolsMode()) return []
+  return utoolsNote.archiveFragmentsForStructNote(fragmentIds, structNoteId)
+}
+
+export async function restoreArchivedFragment(fragmentId, structNoteId = null) {
+  if (!isUtoolsMode()) {
+    throw new Error('当前环境不支持还原碎片')
+  }
+  const item = await utoolsNote.restoreFragmentFromArchive(fragmentId)
+  if (structNoteId) {
+    await utoolsStruct.removeSourceFragmentFromStructNote(structNoteId, fragmentId)
+  }
+  return {
+    id: item.id,
+    title: item.title || '',
+    text: item.rawContent || item.markdownContent || '',
+    markdownContent: item.markdownContent || '',
+    createdAt: item.createTime,
+    tagId: item.tagId ?? null,
+    pinWeightType: item.pinWeightType || 'DEFAULT',
+    images: mapBlockResources(item.blocks),
+  }
 }
 
 export async function setPinBlock(id, pinWeightValue) {

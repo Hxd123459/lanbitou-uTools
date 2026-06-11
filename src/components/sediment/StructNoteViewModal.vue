@@ -136,8 +136,11 @@
             v-model:fragments-open="fragmentsOpen"
             with-fragments
             :inserted-ids="insertedFragmentIds"
+            :fragments-mode="fragmentsMode"
+            :restoring-id="restoringFragmentId"
             class="note-view-editor"
             @insert="insertFragment"
+            @restore="handleRestoreFragment"
           >
             <template #prefix>
               <input
@@ -162,6 +165,7 @@
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { AnimatePresence, motion } from 'motion-v'
 import { getStructNote, updateStructNote } from '../../api/structNote'
+import { fetchNotesByIds, restoreArchivedFragment } from '../../api/note'
 import { appendFragmentToContent } from '../../composables/useStructNoteFragments'
 import { useMotionPresets } from '../../composables/useMotionPresets'
 import StructNoteMarkdownEditor from './StructNoteMarkdownEditor.vue'
@@ -173,7 +177,7 @@ const props = defineProps({
   noteItem: { type: Object, default: null },
 })
 
-const emit = defineEmits(['close', 'saved'])
+const emit = defineEmits(['close', 'saved', 'fragment-restored'])
 
 const { presets } = useMotionPresets()
 
@@ -190,6 +194,9 @@ const contentEditorRef = ref(null)
 const localFragmentNotes = ref([])
 const insertedFragmentIds = ref(new Set())
 const fragmentsOpen = ref(false)
+const fragmentsMode = ref('compose')
+const sourceFragmentIds = ref([])
+const restoringFragmentId = ref('')
 
 let autoSaveTimer = null
 let loadToken = 0
@@ -221,10 +228,48 @@ const applyDraftFromNote = () => {
 }
 
 const insertFragment = (fragmentNote) => {
+  if (fragmentsMode.value === 'source') return
   if (insertedFragmentIds.value.has(fragmentNote.id)) return
   draftContent.value = appendFragmentToContent(draftContent.value, fragmentNote)
   insertedFragmentIds.value = new Set([...insertedFragmentIds.value, fragmentNote.id])
   nextTick(() => contentEditorRef.value?.focus())
+}
+
+const structNoteId = computed(
+  () => props.noteItem?.noteId ?? props.noteItem?.id ?? note.value?.id ?? '',
+)
+
+const handleRestoreFragment = async (fragmentNote) => {
+  const fragmentId = fragmentNote?.id
+  const noteId = structNoteId.value
+  if (!fragmentId || !noteId || restoringFragmentId.value) return
+
+  restoringFragmentId.value = fragmentId
+  try {
+    const restored = await restoreArchivedFragment(fragmentId, noteId)
+    sourceFragmentIds.value = sourceFragmentIds.value.filter(
+      (id) => String(id) !== String(fragmentId),
+    )
+    localFragmentNotes.value = localFragmentNotes.value.filter(
+      (item) => String(item.id) !== String(fragmentId),
+    )
+    if (!localFragmentNotes.value.length) {
+      fragmentsOpen.value = false
+    }
+    emit('fragment-restored', restored)
+  } catch (err) {
+    console.error(err)
+  } finally {
+    restoringFragmentId.value = ''
+  }
+}
+
+const loadSourceFragments = async (ids = []) => {
+  const list = await fetchNotesByIds(ids)
+  localFragmentNotes.value = list
+  fragmentsMode.value = list.length ? 'source' : 'compose'
+  fragmentsOpen.value = list.length > 0
+  insertedFragmentIds.value = new Set()
 }
 
 const clearAutoSaveTimer = () => {
@@ -282,7 +327,11 @@ const fetchDetail = async () => {
     const data = await getStructNote(props.noteItem.noteId ?? props.noteItem.id)
     if (token !== loadToken) return
     note.value = { ...props.noteItem, ...data }
+    sourceFragmentIds.value = Array.isArray(data?.sourceFragmentIds)
+      ? [...data.sourceFragmentIds]
+      : []
     applyDraftFromNote()
+    await loadSourceFragments(sourceFragmentIds.value)
     await nextTick()
     titleInputRef.value?.focus()
   } catch {
@@ -334,6 +383,9 @@ watch(
       localFragmentNotes.value = []
       insertedFragmentIds.value = new Set()
       fragmentsOpen.value = false
+      fragmentsMode.value = 'compose'
+      sourceFragmentIds.value = []
+      restoringFragmentId.value = ''
       clearAutoSaveTimer()
       fetchDetail()
       window.addEventListener('keydown', onKeydown)

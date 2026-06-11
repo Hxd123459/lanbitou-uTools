@@ -431,6 +431,7 @@
       :note-item="activeNoteItem"
       @close="closeNoteView"
       @saved="loadCurrentList"
+      @fragment-restored="(note) => emit('fragment-restored', note)"
     />
   </section>
 </template>
@@ -448,6 +449,7 @@ import {
   renameStructItem,
   updateStructSort,
 } from '../../api/structFolder'
+import { archiveFragmentNotes } from '../../api/note'
 import { findStructFolderItemByNoteId } from '../../api/structNote'
 import { useMotionPresets } from '../../composables/useMotionPresets'
 import AppButton from '../motion/AppButton.vue'
@@ -461,7 +463,7 @@ const props = defineProps({
   },
 })
 
-const emit = defineEmits(['error'])
+const emit = defineEmits(['error', 'fragments-archived', 'fragment-restored'])
 
 const { presets } = useMotionPresets()
 
@@ -879,15 +881,27 @@ const closeCreateNoteModal = () => {
   pendingFragmentNotes.value = []
 }
 
-const handleCreateNote = async ({ title, content, parentId }) => {
+const handleCreateNote = async ({ title, content, parentId, sourceFragmentIds = [] }) => {
   if (noteSaving.value) return
   noteSaving.value = true
   try {
-    await createNoteInFolder({
+    const fragmentIds = (Array.isArray(sourceFragmentIds) ? sourceFragmentIds : [])
+      .map((id) => String(id))
+      .filter(Boolean)
+    const structNoteId = await createNoteInFolder({
       parentId: parentId ?? currentParentId.value,
       title,
       content,
+      sourceFragmentIds: fragmentIds,
     })
+    let archivedIds = []
+    if (fragmentIds.length) {
+      archivedIds = await archiveFragmentNotes(fragmentIds, structNoteId)
+      if (archivedIds.length) {
+        emit('fragments-archived', archivedIds)
+      }
+    }
+    pendingFragmentNotes.value = []
     createNoteVisible.value = false
     await loadCurrentList()
   } catch (error) {

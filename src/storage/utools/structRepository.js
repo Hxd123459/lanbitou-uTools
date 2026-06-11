@@ -66,7 +66,12 @@ export async function createFolder({ parentId = 0, name }) {
   return id
 }
 
-export async function createStructNote({ title, content, tagId = null }) {
+export async function createStructNote({
+  title,
+  content,
+  tagId = null,
+  sourceFragmentIds = null,
+}) {
   const id = createId()
   const now = formatDateTime()
   const doc = {
@@ -74,6 +79,7 @@ export async function createStructNote({ title, content, tagId = null }) {
     title: String(title ?? '').trim() || '无标题',
     content: String(content ?? ''),
     tagId: tagId ?? null,
+    sourceFragmentIds: normalizeSourceFragmentIds(sourceFragmentIds),
     createTime: now,
     updateTime: now,
   }
@@ -81,8 +87,19 @@ export async function createStructNote({ title, content, tagId = null }) {
   return id
 }
 
-export async function createNoteInFolder({ parentId = 0, title, content, tagId = null }) {
-  const noteId = await createStructNote({ title, content, tagId })
+function normalizeSourceFragmentIds(ids) {
+  if (!Array.isArray(ids)) return []
+  return [...new Set(ids.filter(Boolean).map(String))]
+}
+
+export async function createNoteInFolder({
+  parentId = 0,
+  title,
+  content,
+  tagId = null,
+  sourceFragmentIds = null,
+}) {
+  const noteId = await createStructNote({ title, content, tagId, sourceFragmentIds })
   const folderItemId = createId()
   const now = formatDateTime()
   const folderDoc = {
@@ -161,9 +178,25 @@ export async function getStructNote(id) {
     title: doc.title || '',
     content: doc.content || '',
     tagId: doc.tagId ?? null,
+    sourceFragmentIds: normalizeSourceFragmentIds(doc.sourceFragmentIds),
     createTime: doc.createTime,
     updateTime: doc.updateTime,
   }
+}
+
+export async function removeSourceFragmentFromStructNote(structNoteId, fragmentId) {
+  const id = String(structNoteId ?? '').trim()
+  const fragment = String(fragmentId ?? '').trim()
+  if (!id || !fragment) return false
+  const doc = stripDoc(await dbGet(structNoteDocId(id)))
+  if (!doc) return false
+  const next = normalizeSourceFragmentIds(doc.sourceFragmentIds).filter(
+    (item) => item !== fragment,
+  )
+  doc.sourceFragmentIds = next
+  doc.updateTime = formatDateTime()
+  await saveDoc(STRUCT_NOTE_PREFIX, doc)
+  return true
 }
 
 export async function findFolderItemByNoteId(noteId) {

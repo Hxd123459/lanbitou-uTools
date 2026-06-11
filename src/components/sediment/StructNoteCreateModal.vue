@@ -325,10 +325,14 @@ const emitClose = () => {
 
 const handleSave = () => {
   if (!canSave.value || props.saving) return
+  const sourceFragmentIds = localFragmentNotes.value
+    .map((note) => note?.id)
+    .filter(Boolean)
   emit('save', {
     title: draftTitle.value.trim(),
     content: draftContent.value.trim(),
     parentId: currentParentId.value,
+    sourceFragmentIds,
   })
 }
 
