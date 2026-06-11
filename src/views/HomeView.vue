@@ -302,6 +302,8 @@
       <AiSettingsPanel
         v-show="activeTab === 'settings'"
         :active="activeTab === 'settings'"
+        :pending-auto-tag-setup="pendingAutoTagSetup"
+        @auto-tag-enabled="handleAutoTagEnabled"
       />
     </template>
   </MainFrame>
@@ -311,7 +313,9 @@
     :text="toastText"
     :type="toastType"
     :action-label="toastActionLabel"
+    :dismiss-mode="toastDismissMode"
     @action="triggerToastAction"
+    @close="closeToast"
   />
 </template>
 
@@ -333,6 +337,9 @@ import NoteCard from '../components/note/NoteCard.vue'
 import NoteTagCloud from '../components/note/NoteTagCloud.vue'
 import NoteViewSwitcher from '../components/note/NoteViewSwitcher.vue'
 import { useCopyNote } from '../composables/useCopyNote'
+import { generateNoteTitle } from '../ai/aiService'
+import { isUtoolsMode } from '../storage/env'
+import { loadAiSettings } from '../storage/utools/aiSettings'
 import { ApiError } from '../api/http'
 import {
   deleteBlock,
@@ -348,6 +355,7 @@ const inputValue = ref('')
 const noteSubmitting = ref(false)
 const uploadProgress = ref(0)
 const inputBarRef = ref(null)
+const pendingAutoTagSetup = ref(false)
 const assistantStore = useAssistantStore()
 
 const activeTab = ref('home')
@@ -839,6 +847,8 @@ const {
   toastText,
   toastType,
   toastActionLabel,
+  toastDismissMode,
+  closeToast,
   openToast,
   triggerToastAction,
 } = useCopyNote()
@@ -849,14 +859,53 @@ const handleAiSedimentSuccess = () => {
 
 const deleteTimers = new Map()
 
+const handleAutoTagEnabled = () => {
+  pendingAutoTagSetup.value = false
+  openToast('已开启 AI 自动打标签', 'success', { duration: 2000 })
+}
+
 const handleSubmit = async ({ text, images, tagId, tagName }) => {
   if (noteSubmitting.value) return
+
+  const aiSettings = loadAiSettings()
+  const hasManualTag = tagId || String(tagName || '').trim()
+  const shouldResolveTag =
+    isUtoolsMode() &&
+    aiSettings.autoTagEnabled &&
+    !hasManualTag &&
+    text.trim()
+
+  if (
+    isUtoolsMode() &&
+    !hasManualTag &&
+    text.trim() &&
+    !aiSettings.autoTagEnabled
+  ) {
+    openToast('开启 AI 自动打标签，省时省力！', 'success', {
+      dismissMode: 'manual',
+      actionLabel: '去开启',
+      onAction: () => {
+        pendingAutoTagSetup.value = true
+        activeTab.value = 'settings'
+      },
+    })
+  }
+
   noteSubmitting.value = true
   uploadProgress.value = 0
   try {
-    await assistantStore.addNote(text, images, (p) => {
-      uploadProgress.value = p
-    }, { tagId, tagName })
+    await assistantStore.addNote(
+      text,
+      images,
+      (p) => {
+        uploadProgress.value = p
+      },
+      {
+        tagId,
+        tagName,
+        resolveTagName: shouldResolveTag ? generateNoteTitle : undefined,
+      },
+    )
     inputValue.value = ''
     inputBarRef.value?.reset()
   } catch (error) {

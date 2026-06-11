@@ -22,6 +22,26 @@
       >
         {{ actionLabel }}
       </motion.button>
+      <motion.button
+        v-if="dismissMode === 'manual'"
+        type="button"
+        class="toast-close"
+        aria-label="关闭提醒"
+        :while-hover="presets.button.hover"
+        :while-tap="presets.button.tap"
+        :transition="presets.button.transition"
+        @click="onCloseClick"
+      >
+        <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true">
+          <path
+            d="M6 6l12 12M18 6L6 18"
+            stroke="currentColor"
+            stroke-width="2.2"
+            stroke-linecap="round"
+            fill="none"
+          />
+        </svg>
+      </motion.button>
     </motion.div>
   </AnimatePresence>
 </template>
@@ -47,13 +67,21 @@ defineProps({
     type: String,
     default: '',
   },
+  dismissMode: {
+    type: String,
+    default: 'auto',
+  },
 })
 
-const emit = defineEmits(['action'])
+const emit = defineEmits(['action', 'close'])
 const { presets } = useMotionPresets()
 
 const onActionClick = () => {
   emit('action')
+}
+
+const onCloseClick = () => {
+  emit('close')
 }
 </script>
 
@@ -104,5 +132,23 @@ const onActionClick = () => {
 
 .toast-action:hover {
   background: rgba(255, 255, 255, 0.28);
+}
+
+.toast-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+  cursor: pointer;
+}
+
+.toast-close:hover {
+  background: rgba(255, 255, 255, 0.22);
 }
 </style>

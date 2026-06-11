@@ -20,6 +20,7 @@ export const AI_PROVIDERS = {
 const DEFAULT_SETTINGS = {
   provider: 'utools',
   model: '',
+  autoTagEnabled: false,
 }
 
 function getStorage() {
@@ -54,19 +55,39 @@ export function loadAiSettings() {
   const crypto = getCryptoStorage()
   const apiKey = crypto?.getItem(API_KEY_KEY) || ''
 
-  return { provider, model, baseUrl, apiKey }
+  const autoTagEnabled = saved?.autoTagEnabled === true
+
+  return { provider, model, baseUrl, apiKey, autoTagEnabled }
 }
 
-export function saveAiSettings({ provider, model, baseUrl, apiKey }) {
+export function saveAiSettings({ provider, model, baseUrl, apiKey, autoTagEnabled }) {
   const storage = getStorage()
   const crypto = getCryptoStorage()
   if (!storage) throw new Error('uTools 存储不可用')
 
-  const nextProvider = AI_PROVIDERS[provider] ? provider : 'utools'
+  const prev = storage.getItem(SETTINGS_KEY) || {}
+  const nextProvider =
+    provider !== undefined
+      ? AI_PROVIDERS[provider]
+        ? provider
+        : 'utools'
+      : prev.provider && AI_PROVIDERS[prev.provider]
+        ? prev.provider
+        : DEFAULT_SETTINGS.provider
+
   storage.setItem(SETTINGS_KEY, {
+    ...prev,
     provider: nextProvider,
-    model: String(model ?? '').trim(),
-    baseUrl: String(baseUrl ?? '').trim(),
+    model:
+      model !== undefined
+        ? String(model ?? '').trim()
+        : String(prev.model ?? AI_PROVIDERS[nextProvider]?.defaultModel ?? ''),
+    baseUrl:
+      baseUrl !== undefined
+        ? String(baseUrl ?? '').trim()
+        : String(prev.baseUrl ?? AI_PROVIDERS[nextProvider]?.defaultBaseUrl ?? ''),
+    autoTagEnabled:
+      autoTagEnabled === undefined ? prev.autoTagEnabled === true : autoTagEnabled === true,
   })
 
   if (crypto && apiKey !== undefined) {
@@ -74,6 +95,21 @@ export function saveAiSettings({ provider, model, baseUrl, apiKey }) {
     if (trimmed) crypto.setItem(API_KEY_KEY, trimmed)
     else crypto.removeItem(API_KEY_KEY)
   }
+}
+
+export function saveAutoTagEnabled(enabled) {
+  saveAiSettings({ autoTagEnabled: enabled === true })
+}
+
+/** 开启自动打标时一并持久化服务来源，供记录笔记时 generateNoteTitle 读取 */
+export function saveProviderAndAutoTagEnabled({ provider, model, baseUrl, apiKey }) {
+  saveAiSettings({
+    provider,
+    model,
+    baseUrl,
+    apiKey,
+    autoTagEnabled: true,
+  })
 }
 
 export function getResolvedModel(settings) {

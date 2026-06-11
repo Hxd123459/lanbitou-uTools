@@ -13,14 +13,14 @@
       :transition="headerMotion.transition"
     >
       <h2 class="ai-settings-title">AI 设置</h2>
-      <p class="ai-settings-desc">选择标题生成使用的 AI 服务。第三方 Key 将加密保存在本机。</p>
+      <p class="ai-settings-desc">配置 AI 服务来源与自动打标签。第三方 Key 将加密保存在本机。</p>
     </motion.header>
 
     <motion.div
       class="ai-settings-card"
-      :initial="cardMotion.initial"
-      :animate="cardMotion.animate"
-      :transition="cardMotion.transition"
+      :initial="providerCardMotion.initial"
+      :animate="providerCardMotion.animate"
+      :transition="providerCardMotion.transition"
     >
       <fieldset class="ai-settings-group">
         <legend class="ai-settings-label">服务来源</legend>
@@ -91,8 +91,8 @@
         />
       </label>
 
-      <p v-if="statusMessage" class="ai-settings-status" :class="statusType">
-        {{ statusMessage }}
+      <p v-if="providerStatusMessage" class="ai-settings-status" :class="providerStatusType">
+        {{ providerStatusMessage }}
       </p>
 
       <div class="ai-settings-actions">
@@ -112,6 +112,36 @@
         </AppButton>
       </div>
     </motion.div>
+
+    <motion.div
+      class="ai-settings-card ai-settings-card--auto-tag"
+      :initial="autoTagCardMotion.initial"
+      :animate="autoTagCardMotion.animate"
+      :transition="autoTagCardMotion.transition"
+    >
+      <label class="ai-settings-toggle-row">
+        <span class="ai-settings-label">AI 自动打标签</span>
+        <span
+          class="ai-switch"
+          :class="{ 'is-on': form.autoTagEnabled, 'is-busy': autoTagChecking }"
+        >
+          <input
+            v-model="form.autoTagEnabled"
+            type="checkbox"
+            class="ai-switch-input"
+            aria-label="AI 自动打标签"
+            :disabled="autoTagChecking"
+            @change="handleAutoTagToggle"
+          />
+          <span class="ai-switch-track" aria-hidden="true">
+            <span class="ai-switch-thumb" />
+          </span>
+        </span>
+      </label>
+      <p v-if="autoTagStatusMessage" class="ai-settings-auto-tag-status">
+        {{ autoTagStatusMessage }}
+      </p>
+    </motion.div>
   </motion.section>
 </template>
 
@@ -121,14 +151,26 @@ import { motion } from 'motion-v'
 import { testAiConnection } from '../../ai/aiService'
 import { useMotionPresets } from '../../composables/useMotionPresets'
 import AppButton from '../motion/AppButton.vue'
-import { AI_PROVIDERS, loadAiSettings, saveAiSettings } from '../../storage/utools/aiSettings'
+import {
+  AI_PROVIDERS,
+  loadAiSettings,
+  saveAiSettings,
+  saveAutoTagEnabled,
+  saveProviderAndAutoTagEnabled,
+} from '../../storage/utools/aiSettings'
 
 const props = defineProps({
   active: {
     type: Boolean,
     default: false,
   },
+  pendingAutoTagSetup: {
+    type: Boolean,
+    default: false,
+  },
 })
+
+const emit = defineEmits(['auto-tag-enabled'])
 
 const { presets } = useMotionPresets()
 
@@ -146,10 +188,17 @@ const headerMotion = computed(() => {
     : { initial: reveal.initial, animate: reveal.initial, transition: reveal.transition }
 })
 
-const cardMotion = computed(() => {
+const providerCardMotion = computed(() => {
   const reveal = presets.value.reveal
   return props.active
     ? { initial: reveal.initial, animate: reveal.animate, transition: { ...reveal.transition, delay: 0.08 } }
+    : { initial: reveal.initial, animate: reveal.initial, transition: reveal.transition }
+})
+
+const autoTagCardMotion = computed(() => {
+  const reveal = presets.value.reveal
+  return props.active
+    ? { initial: reveal.initial, animate: reveal.animate, transition: { ...reveal.transition, delay: 0.12 } }
     : { initial: reveal.initial, animate: reveal.initial, transition: reveal.transition }
 })
 
@@ -164,12 +213,15 @@ const form = reactive({
   model: '',
   baseUrl: '',
   apiKey: '',
+  autoTagEnabled: false,
 })
 
 const saving = ref(false)
 const testing = ref(false)
-const statusMessage = ref('')
-const statusType = ref('')
+const providerStatusMessage = ref('')
+const providerStatusType = ref('')
+const autoTagStatusMessage = ref('')
+const autoTagChecking = ref(false)
 
 const currentProvider = computed(
   () => AI_PROVIDERS[form.provider] || AI_PROVIDERS.utools,
@@ -181,11 +233,12 @@ const hydrate = () => {
   form.model = saved.model
   form.baseUrl = saved.baseUrl
   form.apiKey = saved.apiKey
+  form.autoTagEnabled = saved.autoTagEnabled
 }
 
-const setStatus = (message, type = 'info') => {
-  statusMessage.value = message
-  statusType.value = type
+const setProviderStatus = (message, type = 'info') => {
+  providerStatusMessage.value = message
+  providerStatusType.value = type
 }
 
 const handleSave = async () => {
@@ -197,9 +250,9 @@ const handleSave = async () => {
       baseUrl: form.baseUrl,
       apiKey: form.apiKey,
     })
-    setStatus('设置已保存', 'success')
+    setProviderStatus('服务来源已保存', 'success')
   } catch (error) {
-    setStatus(error?.message || '保存失败', 'error')
+    setProviderStatus(error?.message || '保存失败', 'error')
   } finally {
     saving.value = false
   }
@@ -207,19 +260,57 @@ const handleSave = async () => {
 
 const handleTest = async () => {
   testing.value = true
-  setStatus('')
+  setProviderStatus('')
   try {
-    await testAiConnection({
-      provider: form.provider,
-      model: form.model,
-      baseUrl: form.baseUrl,
-      apiKey: form.apiKey,
-    })
-    setStatus('连接成功，可以正常使用', 'success')
+    await testAiConnection(getConnectionParams())
+    if (props.pendingAutoTagSetup) {
+      form.autoTagEnabled = true
+      saveProviderAndAutoTagEnabled(getConnectionParams())
+      emit('auto-tag-enabled')
+      setProviderStatus('连接成功，已自动开启 AI 自动打标签', 'success')
+    } else {
+      setProviderStatus('连接成功，可以正常使用', 'success')
+    }
   } catch (error) {
-    setStatus(error?.message || '连接失败', 'error')
+    setProviderStatus(error?.message || '连接失败', 'error')
   } finally {
     testing.value = false
+  }
+}
+
+const getConnectionParams = () => ({
+  provider: form.provider,
+  model: form.model,
+  baseUrl: form.baseUrl,
+  apiKey: form.apiKey,
+})
+
+const handleAutoTagToggle = async () => {
+  const next = form.autoTagEnabled
+
+  if (!next) {
+    autoTagStatusMessage.value = ''
+    try {
+      saveAutoTagEnabled(false)
+    } catch (error) {
+      form.autoTagEnabled = true
+      console.warn('[烂笔头] 自动打标签设置保存失败', error)
+    }
+    return
+  }
+
+  autoTagChecking.value = true
+  autoTagStatusMessage.value = ''
+  try {
+    await testAiConnection(getConnectionParams())
+    saveProviderAndAutoTagEnabled(getConnectionParams())
+  } catch (error) {
+    form.autoTagEnabled = false
+    saveAutoTagEnabled(false)
+    autoTagStatusMessage.value = '请先设置可用的 AI 服务来源'
+    console.warn('[烂笔头] AI 服务不可用，无法开启自动打标签', error)
+  } finally {
+    autoTagChecking.value = false
   }
 }
 
@@ -266,6 +357,34 @@ onMounted(hydrate)
   border-radius: var(--radius-lg);
   background: var(--color-surface);
   box-shadow: var(--shadow-card);
+}
+
+.ai-settings-card--auto-tag {
+  margin-top: 14px;
+}
+
+.ai-settings-toggle-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  cursor: pointer;
+}
+
+.ai-settings-toggle-row .ai-settings-label {
+  margin-bottom: 0;
+}
+
+.ai-settings-auto-tag-status {
+  margin: 10px 0 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--color-error);
+}
+
+.ai-switch.is-busy {
+  opacity: 0.6;
+  pointer-events: none;
 }
 
 .ai-settings-group {
@@ -362,6 +481,51 @@ onMounted(hydrate)
 
 .ai-settings-status.info {
   color: var(--color-secondary-text);
+}
+
+.ai-switch {
+  position: relative;
+  display: inline-flex;
+  flex: 0 0 auto;
+}
+
+.ai-switch-input {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+}
+
+.ai-switch-track {
+  position: relative;
+  display: block;
+  width: 44px;
+  height: 26px;
+  border-radius: 999px;
+  background: #d4d4d8;
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+
+.ai-switch.is-on .ai-switch-track {
+  background: #18181b;
+}
+
+.ai-switch-thumb {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.18);
+  transition: transform 0.2s ease;
+}
+
+.ai-switch.is-on .ai-switch-thumb {
+  transform: translateX(18px);
 }
 
 .ai-settings-actions {

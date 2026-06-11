@@ -5,6 +5,8 @@ export function useCopyNote() {
   const toastText = ref('复制成功')
   const toastType = ref('success')
   const toastActionLabel = ref('')
+  /** @type {import('vue').Ref<'auto' | 'manual'>} */
+  const toastDismissMode = ref('auto')
   let toastActionHandler = null
   let timer = null
 
@@ -20,20 +22,33 @@ export function useCopyNote() {
     showToast.value = false
     toastActionLabel.value = ''
     toastActionHandler = null
+    toastDismissMode.value = 'auto'
   }
 
   /**
-   * options: { duration?: number, actionLabel?: string, onAction?: Function }
+   * options: {
+   *   duration?: number,
+   *   actionLabel?: string,
+   *   onAction?: Function,
+   *   dismissMode?: 'auto' | 'manual',
+   * }
    */
   const openToast = (text = '复制成功', type = 'success', options = {}) => {
-    const { duration = 2000, actionLabel = '', onAction = null } = options
+    const {
+      duration = 2000,
+      actionLabel = '',
+      onAction = null,
+      dismissMode = 'auto',
+    } = options
     toastText.value = text
     toastType.value = type
     toastActionLabel.value = actionLabel
+    toastDismissMode.value = dismissMode
     toastActionHandler = onAction
     showToast.value = true
 
     clearTimer()
+    if (dismissMode === 'manual') return
     if (duration > 0) {
       timer = window.setTimeout(() => {
         closeToast()
@@ -67,6 +82,7 @@ export function useCopyNote() {
     toastText,
     toastType,
     toastActionLabel,
+    toastDismissMode,
     closeToast,
     openToast,
     triggerToastAction,

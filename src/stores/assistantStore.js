@@ -116,7 +116,12 @@ export const useAssistantStore = defineStore('assistant', () => {
     await loadNotes({ reset: false })
   }
 
-  const addNote = async (text, images = [], onProgress, { tagId, tagName } = {}) => {
+  const addNote = async (
+    text,
+    images = [],
+    onProgress,
+    { tagId, tagName, resolveTagName } = {},
+  ) => {
     const pendingId = `pending_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
     const pendingNote = {
       id: pendingId,
@@ -133,7 +138,30 @@ export const useAssistantStore = defineStore('assistant', () => {
     notes.value.unshift(pendingNote)
 
     try {
-      const result = await createBlock(text, images, onProgress, { tagId, tagName })
+      let resolvedTagId = tagId
+      let resolvedTagName = String(tagName ?? '').trim()
+      if (
+        typeof resolveTagName === 'function' &&
+        !resolvedTagId &&
+        !resolvedTagName &&
+        String(text ?? '').trim()
+      ) {
+        try {
+          const aiTag = await resolveTagName(text)
+          if (aiTag) {
+            resolvedTagName = aiTag
+            const target = notes.value.find((item) => item.id === pendingId)
+            if (target) target.title = aiTag
+          }
+        } catch (error) {
+          console.warn('[烂笔头] AI 自动打标失败', error)
+        }
+      }
+
+      const result = await createBlock(text, images, onProgress, {
+        tagId: resolvedTagId,
+        tagName: resolvedTagName,
+      })
       const target = notes.value.find((item) => item.id === pendingId)
       if (!target) return result
       const data =
