@@ -16,7 +16,7 @@
         </div>
         <p class="ai-chat-empty-title">选择笔记后开始</p>
         <div class="ai-chat-empty-hint">
-          <p>使用 <kbd>@</kbd> 引用碎片，然后告诉我你想做什么：</p>
+          <p>使用 <kbd>@</kbd> 引用碎片，然后告诉我你想做什么。</p>
         </div>
       </div>
 
