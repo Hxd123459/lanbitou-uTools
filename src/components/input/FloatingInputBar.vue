@@ -7,7 +7,7 @@
           :value="modelValue"
           class="main-input"
           :disabled="submitting"
-          :placeholder="placeholder"
+          :placeholder="resolvedPlaceholder"
           rows="1"
           :style="{ height: inputHeight + 'px' }"
           @input="onInput"
@@ -90,20 +90,21 @@
         <div class="footer-left">
           <AnimatePresence mode="wait">
             <motion.span
-              v-if="selectedTag"
-              :key="selectedTag.tagId"
+              v-if="effectiveTag"
+              :key="effectiveTag.tagId || effectiveTag.tagName"
               class="tag-chip"
+              :class="{ 'tag-chip--context': isContextTagActive }"
               :initial="presets.swapLabel.initial"
               :animate="presets.swapLabel.animate"
               :exit="presets.swapLabel.exit"
               :transition="presets.swapLabel.transition"
             >
-              <span class="tag-chip-label">#{{ selectedTag.tagName }}</span>
+              <span class="tag-chip-label">#{{ effectiveTag.tagName }}</span>
               <motion.button
                 type="button"
                 class="tag-chip-remove"
                 :disabled="submitting"
-                aria-label="移除标签"
+                :aria-label="isContextTagActive ? '移除标签，本条将记为待整理' : '移除标签'"
                 :while-hover="presets.button.hover"
                 :while-tap="presets.button.tap"
                 :transition="presets.button.transition"
@@ -269,6 +270,11 @@ const props = defineProps({
     type: Boolean,
     default: false,
   },
+  /** 列表按标签筛选时传入，新建碎片默认带上该标签 */
+  contextTag: {
+    type: Object,
+    default: null,
+  },
 })
 
 const emit = defineEmits([
@@ -293,6 +299,27 @@ const initialHeight = ref(MIN_HEIGHT)
 const savedHeight = ref(null)
 const isFocused = ref(false)
 const selectedTag = ref(null)
+const contextTagDismissed = ref(false)
+
+const effectiveTag = computed(() => {
+  if (selectedTag.value) return selectedTag.value
+  if (props.contextTag && !contextTagDismissed.value) return props.contextTag
+  return null
+})
+
+const isContextTagActive = computed(
+  () => !!props.contextTag && !contextTagDismissed.value && !selectedTag.value,
+)
+
+const DEFAULT_PLACEHOLDER = '记录此刻想法 ，使用#用或者加标签'
+
+const resolvedPlaceholder = computed(() => {
+  if (props.placeholder !== DEFAULT_PLACEHOLDER) return props.placeholder
+  if (isContextTagActive.value && props.contextTag?.tagName) {
+    return `在 #${props.contextTag.tagName} 下记录…`
+  }
+  return props.placeholder
+})
 
 const {
   menuOpen: tagMenuOpen,
@@ -376,7 +403,11 @@ const onInput = (event) => {
 }
 
 const clearSelectedTag = () => {
-  selectedTag.value = null
+  if (selectedTag.value) {
+    selectedTag.value = null
+    return
+  }
+  contextTagDismissed.value = true
 }
 
 const onKeydown = (event) => {
@@ -465,10 +496,18 @@ const onSubmit = () => {
   emit('submit', {
     text,
     images: images.value.map((item) => item.file),
-    tagId: selectedTag.value?.tagId ?? null,
-    tagName: selectedTag.value?.tagName ?? '',
+    tagId: effectiveTag.value?.tagId ?? null,
+    tagName: effectiveTag.value?.tagName ?? '',
   })
 }
+
+watch(
+  () => props.contextTag?.tagId,
+  () => {
+    contextTagDismissed.value = false
+    selectedTag.value = null
+  },
+)
 
 watch(
   () => props.modelValue,
@@ -591,6 +630,11 @@ defineExpose({ reset, addImages, focus })
   font-size: 13px;
   font-weight: 600;
   line-height: 1.35;
+}
+
+.tag-chip--context {
+  border-color: color-mix(in srgb, var(--color-accent) 28%, var(--color-border));
+  background: color-mix(in srgb, var(--color-accent) 8%, var(--color-surface));
 }
 
 .tag-chip-label {

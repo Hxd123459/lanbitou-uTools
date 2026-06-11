@@ -126,6 +126,7 @@ export const useAssistantStore = defineStore('assistant', () => {
     const pendingNote = {
       id: pendingId,
       title: tagName || '',
+      tagId: tagId || null,
       fineTitle: '',
       text,
       markdownContent: text,
@@ -169,6 +170,7 @@ export const useAssistantStore = defineStore('assistant', () => {
       const finalId = data.id ?? pendingId
       target.id = finalId
       target.title = data.title || ''
+      target.tagId = data.tagId ?? resolvedTagId ?? null
       target.text = data.content || text
       target.markdownContent = data.content || text
       target.images = mapBlockResources(data.blocks)

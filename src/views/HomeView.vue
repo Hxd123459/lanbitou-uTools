@@ -14,6 +14,7 @@
         v-model="inputValue"
         :submitting="noteSubmitting"
         :upload-progress="uploadProgress"
+        :context-tag="inputContextTag"
         @submit="handleSubmit"
         @limit-exceeded="handleLimitExceeded"
         @image-too-large="handleImageTooLarge"
@@ -443,6 +444,32 @@ const tagFilterState = reactive({
   hasMore: false,
 })
 let tagFilterToken = 0
+
+const inputContextTag = computed(() => {
+  if (!tagFilterState.active || !tagFilterState.tagId) return null
+  return {
+    tagId: tagFilterState.tagId,
+    tagName: tagFilterState.tagName || '未命名',
+  }
+})
+
+function noteMatchesTagFilter(note, tagId, tagName) {
+  if (!note?.id) return false
+  if (tagId && String(note.tagId || '') === String(tagId)) return true
+  return (note.title || '') === tagName
+}
+
+function appendNoteToTagFilter(note) {
+  if (!tagFilterState.active || !note?.id) return
+  if (
+    !noteMatchesTagFilter(note, tagFilterState.tagId, tagFilterState.tagName)
+  ) {
+    return
+  }
+  if (tagFilterState.list.some((item) => item.id === note.id)) return
+  tagFilterState.list = [note, ...tagFilterState.list]
+  tagFilterState.total += 1
+}
 
 const clearNoteSelection = () => {
   selectedNoteIds.value = new Set()
@@ -931,7 +958,7 @@ const handleSubmit = async ({ text, images, tagId, tagName }) => {
   noteSubmitting.value = true
   uploadProgress.value = 0
   try {
-    await assistantStore.addNote(
+    const note = await assistantStore.addNote(
       text,
       images,
       (p) => {
@@ -943,6 +970,7 @@ const handleSubmit = async ({ text, images, tagId, tagName }) => {
         resolveTagName: shouldResolveTag ? generateNoteTitle : undefined,
       },
     )
+    appendNoteToTagFilter(note)
     inputValue.value = ''
     inputBarRef.value?.reset()
   } catch (error) {
