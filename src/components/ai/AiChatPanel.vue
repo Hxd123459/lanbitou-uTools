@@ -17,8 +17,6 @@
         <p class="ai-chat-empty-title">选择笔记后开始</p>
         <div class="ai-chat-empty-hint">
           <p>使用 <kbd>@</kbd> 引用碎片，然后告诉我你想做什么：</p>
-          <p>（1）格式化、合并汇总、提炼总结</p>
-          <p>（2）创建任务、任务分解</p>
         </div>
       </div>
 
