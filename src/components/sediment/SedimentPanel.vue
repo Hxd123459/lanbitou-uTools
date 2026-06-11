@@ -448,6 +448,7 @@ import {
   renameStructItem,
   updateStructSort,
 } from '../../api/structFolder'
+import { findStructFolderItemByNoteId } from '../../api/structNote'
 import { useMotionPresets } from '../../composables/useMotionPresets'
 import AppButton from '../motion/AppButton.vue'
 import StructNoteCreateModal from './StructNoteCreateModal.vue'
@@ -680,6 +681,18 @@ const openNoteView = (item) => {
   noteViewVisible.value = true
 }
 
+const openNoteViewByNoteId = async (noteId, title = '') => {
+  const folderItem = await findStructFolderItemByNoteId(noteId)
+  openNoteView(
+    folderItem || {
+      type: 'note',
+      id: noteId,
+      noteId,
+      name: title || '无标题',
+    },
+  )
+}
+
 const closeNoteView = () => {
   noteViewVisible.value = false
   activeNoteItem.value = null
@@ -906,7 +919,7 @@ onBeforeUnmount(() => {
   document.removeEventListener('pointerdown', onDocumentPointerdown)
 })
 
-defineExpose({ openCreateNoteModal })
+defineExpose({ openCreateNoteModal, openNoteViewByNoteId })
 </script>
 
 <style scoped>

@@ -434,6 +434,7 @@
           v-if="contentText"
           :content="contentText"
           :show-fallback="false"
+          @updated="scheduleHighlight"
         />
         <p
           v-else-if="!images.length"
@@ -512,6 +513,7 @@ import '../../assets/styles/tiptap-slash-menu.css'
 import TiptapPreview from '../common/TiptapPreview.vue'
 import NoteImageGallery from './NoteImageGallery.vue'
 import NoteRecallModal from './NoteRecallModal.vue'
+import { findMergedHighlightRanges } from '../../utils/searchHighlight'
 
 const { presets, reduced } = useMotionPresets()
 
@@ -537,7 +539,7 @@ const props = defineProps({
     required: true,
   },
   highlight: {
-    type: String,
+    type: [String, Array],
     default: '',
   },
   selectable: {
@@ -1017,10 +1019,9 @@ function applyHighlight() {
   const root = contentRootRef.value
   if (!root) return
   clearHighlight(root)
-  const keyword = (props.highlight || '').trim()
-  if (!keyword) return
+  const keywords = normalizeHighlightKeywords(props.highlight)
+  if (!keywords.length) return
 
-  const lowerKeyword = keyword.toLowerCase()
   const targets = []
   const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
     acceptNode(node) {
@@ -1046,22 +1047,21 @@ function applyHighlight() {
 
   targets.forEach((textNode) => {
     const text = textNode.nodeValue || ''
-    const lowerText = text.toLowerCase()
-    let cursor = 0
-    let idx = lowerText.indexOf(lowerKeyword, cursor)
-    if (idx === -1) return
+    const ranges = findMergedHighlightRanges(text, keywords)
+    if (!ranges.length) return
+
     const frag = document.createDocumentFragment()
-    while (idx !== -1) {
-      if (idx > cursor) {
-        frag.appendChild(document.createTextNode(text.slice(cursor, idx)))
+    let cursor = 0
+    ranges.forEach(({ start, end }) => {
+      if (start > cursor) {
+        frag.appendChild(document.createTextNode(text.slice(cursor, start)))
       }
       const mark = document.createElement('mark')
       mark.className = HIGHLIGHT_CLASS
-      mark.textContent = text.slice(idx, idx + keyword.length)
+      mark.textContent = text.slice(start, end)
       frag.appendChild(mark)
-      cursor = idx + keyword.length
-      idx = lowerText.indexOf(lowerKeyword, cursor)
-    }
+      cursor = end
+    })
     if (cursor < text.length) {
       frag.appendChild(document.createTextNode(text.slice(cursor)))
     }

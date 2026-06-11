@@ -1,7 +1,11 @@
 <template>
   <MainFrame :show-input-area="activeTab === 'home'">
     <template #sidebar>
-      <SidePanel :active-tab="activeTab" @tab-change="onTabChange" />
+      <SidePanel
+        :active-tab="activeTab"
+        @tab-change="onTabChange"
+        @global-search-select="handleGlobalSearchSelect"
+      />
     </template>
 
     <template #input>
@@ -216,6 +220,7 @@
               v-for="note in assistantStore.visibleNotes"
               :key="note.id"
               class="note-list-item"
+              :data-note-id="note.id"
               layout
               :initial="presets.reveal.initial"
               :animate="presets.reveal.animate"
@@ -834,6 +839,38 @@ const handleRecycleRestored = async (note) => {
 const onTabChange = (tab) => {
   if (activeTab.value === tab) return
   activeTab.value = tab
+}
+
+const scrollToNote = async (id) => {
+  const tryScroll = () => {
+    const el = document.querySelector(`[data-note-id="${id}"]`)
+    if (!el) return false
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    return true
+  }
+  if (tryScroll()) return
+  const exists = assistantStore.notes.some((note) => note.id === id)
+  if (!exists) {
+    await assistantStore.reloadNotes()
+    await nextTick()
+  }
+  tryScroll()
+}
+
+const handleGlobalSearchSelect = async (item) => {
+  if (!item?.id) return
+  if (item.type === 'sediment') {
+    activeTab.value = 'sediment'
+    await nextTick()
+    sedimentPanelRef.value?.openNoteViewByNoteId(item.noteId || item.id, item.title)
+    return
+  }
+  activeTab.value = 'home'
+  clearTagFilter()
+  clearSearch()
+  noteViewMode.value = 'list'
+  await nextTick()
+  await scrollToNote(item.id)
 }
 
 watch(activeTab, (tab) => {

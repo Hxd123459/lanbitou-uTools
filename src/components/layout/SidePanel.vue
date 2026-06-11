@@ -12,7 +12,7 @@
     </div>
 
     <div class="sidebar-search">
-      <label class="sidebar-search-field" @click.prevent="openSemanticSearch">
+      <label class="sidebar-search-field" @click.prevent="openGlobalSearch">
         <span class="sidebar-search-icon" aria-hidden="true">
           <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <circle cx="11" cy="11" r="7" />
@@ -22,20 +22,20 @@
         <input
           type="search"
           class="sidebar-search-input"
-          placeholder="给我一个想法"
+          placeholder="全局搜索"
           autocomplete="off"
           spellcheck="false"
-          aria-label="给我一个想法"
+          aria-label="全局搜索"
           readonly
-          @focus="openSemanticSearch"
+          @focus="openGlobalSearch"
         />
       </label>
     </div>
 
-    <SemanticSearchModal
-      :visible="semanticSearchVisible"
-      @close="semanticSearchVisible = false"
-      @select-note="onSemanticNoteSelect"
+    <GlobalSearchModal
+      :visible="globalSearchVisible"
+      @close="globalSearchVisible = false"
+      @select="onGlobalSearchSelect"
     />
 
     <nav class="sidebar-nav" aria-label="菜单">
@@ -191,7 +191,7 @@ import { useMotionPresets } from '../../composables/useMotionPresets'
 import { isUtoolsMode } from '../../storage/env'
 import { useUtoolsCompactSidebar } from '../../composables/useUtoolsWindow'
 import BrandArea from '../brand/BrandArea.vue'
-import SemanticSearchModal from '../search/SemanticSearchModal.vue'
+import GlobalSearchModal from '../search/GlobalSearchModal.vue'
 
 defineProps({
   activeTab: {
@@ -200,16 +200,17 @@ defineProps({
   },
 })
 
-const emit = defineEmits(['tab-change', 'semantic-note-select'])
+const emit = defineEmits(['tab-change', 'global-search-select'])
 
-const semanticSearchVisible = ref(false)
+const globalSearchVisible = ref(false)
 
-const openSemanticSearch = () => {
-  semanticSearchVisible.value = true
+const openGlobalSearch = () => {
+  globalSearchVisible.value = true
 }
 
-const onSemanticNoteSelect = (note) => {
-  emit('semantic-note-select', note)
+const onGlobalSearchSelect = (item) => {
+  globalSearchVisible.value = false
+  emit('global-search-select', item)
 }
 
 const showSettingsNav = isUtoolsMode()

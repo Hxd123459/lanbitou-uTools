@@ -9,7 +9,7 @@
 
 <script setup>
 import { EditorContent, useEditor } from '@tiptap/vue-3'
-import { computed, onBeforeUnmount, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, watch } from 'vue'
 import { createTiptapExtensions } from '../../composables/useTiptapExtensions'
 
 const props = defineProps({
@@ -27,6 +27,12 @@ const props = defineProps({
   },
 })
 
+const emit = defineEmits(['updated'])
+
+const notifyUpdated = () => {
+  nextTick(() => emit('updated'))
+}
+
 const hasContent = computed(() => Boolean((props.content || '').trim()))
 
 const editor = useEditor({
@@ -38,6 +44,9 @@ const editor = useEditor({
     placeholder: '',
     slashCommand: false,
   }),
+  onCreate: () => {
+    notifyUpdated()
+  },
 })
 
 watch(
@@ -50,6 +59,7 @@ watch(
       contentType: 'markdown',
       emitUpdate: false,
     })
+    notifyUpdated()
   },
 )
 

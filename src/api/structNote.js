@@ -33,3 +33,10 @@ export async function getStructNote(id) {
   }
   return get(`/struct/note/get/${id}`)
 }
+
+export async function findStructFolderItemByNoteId(noteId) {
+  if (isUtoolsMode()) {
+    return utoolsStruct.findFolderItemByNoteId(noteId)
+  }
+  return null
+}

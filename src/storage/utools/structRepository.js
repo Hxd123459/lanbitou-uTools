@@ -166,6 +166,16 @@ export async function getStructNote(id) {
   }
 }
 
+export async function findFolderItemByNoteId(noteId) {
+  const targetId = String(noteId ?? '').trim()
+  if (!targetId) return null
+  const docs = await dbAllDocs(STRUCT_FOLDER_PREFIX)
+  const doc = (docs || [])
+    .map(stripDoc)
+    .find((item) => item?.type === 'note' && String(item.noteId) === targetId)
+  return doc ? toFolderItem(doc) : null
+}
+
 export async function updateStructNote({ id, title, content, tagId = null }) {
   const doc = stripDoc(await dbGet(structNoteDocId(id)))
   if (!doc) throw new Error('结构化笔记不存在')
