@@ -282,7 +282,7 @@ const folderMenuLoading = ref(false)
 const folderMenuItems = ref([])
 const insertedFragmentIds = ref(new Set())
 const localFragmentNotes = ref([])
-const fragmentsOpen = ref(true)
+const fragmentsOpen = ref(false)
 const currentCrumbRef = ref(null)
 const creatingFolder = ref(false)
 const draftFolderName = ref('')
@@ -306,7 +306,7 @@ const resetDraft = () => {
   draftContent.value = ''
   insertedFragmentIds.value = new Set()
   localFragmentNotes.value = props.fragmentNotes.map((note) => ({ ...note }))
-  fragmentsOpen.value = props.fragmentNotes.length > 0
+  fragmentsOpen.value = false
   creatingFolder.value = false
   draftFolderName.value = ''
 }
@@ -731,7 +731,7 @@ defineExpose({ resetDraft })
   color: var(--color-primary);
   font-family: inherit;
   padding: 0;
-  margin-bottom: 20px;
+  margin-bottom: 8px;
   caret-color: var(--color-accent);
 }
 

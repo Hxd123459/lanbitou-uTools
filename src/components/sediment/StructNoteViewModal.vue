@@ -152,7 +152,6 @@
                 placeholder="请输入标题"
                 spellcheck="false"
               />
-              <div class="note-view-divider" />
             </template>
           </StructNoteMarkdownEditor>
         </div>
@@ -268,7 +267,7 @@ const loadSourceFragments = async (ids = []) => {
   const list = await fetchNotesByIds(ids)
   localFragmentNotes.value = list
   fragmentsMode.value = list.length ? 'source' : 'compose'
-  fragmentsOpen.value = list.length > 0
+  fragmentsOpen.value = false
   insertedFragmentIds.value = new Set()
 }
 
@@ -526,19 +525,12 @@ onBeforeUnmount(() => {
   color: var(--color-primary);
   font-family: inherit;
   padding: 8px 0 0;
-  margin-bottom: 0;
+  margin-bottom: 8px;
   caret-color: var(--color-accent);
 }
 
 .note-view-title-input::placeholder {
   color: #d1d5db;
-}
-
-.note-view-divider {
-  height: 1px;
-  background: rgba(24, 24, 27, 0.07);
-  margin: 18px 0 12px;
-  flex: 0 0 auto;
 }
 
 .note-view-loading,

@@ -13,6 +13,18 @@
     @restore="emit('restore', $event)"
   >
     <slot name="prefix" />
+    <StructNoteMaterialBar
+      :fragment-notes="fragmentNotesModel"
+      :inserted-ids="insertedIds"
+      :disabled="disabled"
+      :mode="fragmentsMode"
+      :restoring-id="restoringId"
+      @update:fragment-notes="fragmentNotesModel = $event"
+      @insert="emit('insert', $event)"
+      @restore="emit('restore', $event)"
+      @expand="fragmentsOpenModel = true"
+    />
+    <div class="struct-note-material-divider" aria-hidden="true" />
     <div
       class="struct-note-md-editor"
       :class="{ 'is-disabled': disabled }"
@@ -60,6 +72,7 @@ import {
 import '../../assets/styles/tiptap-slash-menu.css'
 import '../../assets/styles/struct-note-drag-handle.css'
 import StructNoteEditorLayout from './StructNoteEditorLayout.vue'
+import StructNoteMaterialBar from './StructNoteMaterialBar.vue'
 
 const props = defineProps({
   modelValue: {
@@ -88,7 +101,7 @@ const props = defineProps({
   },
   fragmentsOpen: {
     type: Boolean,
-    default: true,
+    default: false,
   },
   showExpandButton: {
     type: Boolean,
@@ -206,6 +219,13 @@ onBeforeUnmount(() => {
   flex: 1;
   min-height: 0;
   width: 100%;
+}
+
+.struct-note-material-divider {
+  height: 1px;
+  background: rgba(24, 24, 27, 0.07);
+  margin-bottom: 12px;
+  flex: 0 0 auto;
 }
 
 .struct-note-md-editor {

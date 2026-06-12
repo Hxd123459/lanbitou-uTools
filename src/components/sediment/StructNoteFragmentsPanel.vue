@@ -150,7 +150,7 @@ const props = defineProps({
   fragmentNotes: { type: Array, default: () => [] },
   insertedIds: { type: Object, default: () => new Set() },
   disabled: { type: Boolean, default: false },
-  open: { type: Boolean, default: true },
+  open: { type: Boolean, default: false },
   mode: {
     type: String,
     default: 'compose',
