@@ -33,6 +33,59 @@
       </span>
       <span class="note-bulk-btn-label">问 AI</span>
     </motion.button>
+    <div class="note-bulk-actions">
+      <span ref="tagAnchorRef" class="note-bulk-tag-anchor">
+        <motion.button
+          type="button"
+          class="note-bulk-btn"
+          :disabled="busy"
+          :while-hover="presets.button.hover"
+          :while-tap="presets.button.tap"
+          :transition="presets.button.transition"
+          @click="$emit('tag')"
+        >
+          <span class="note-bulk-btn-icon" aria-hidden="true">
+            <svg
+              viewBox="0 0 24 24"
+              width="18"
+              height="18"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.8"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z" />
+              <circle cx="7" cy="7" r="1.5" fill="currentColor" stroke="none" />
+            </svg>
+          </span>
+          <span class="note-bulk-btn-label">打标签</span>
+        </motion.button>
+      </span>
+      <motion.button
+        type="button"
+        class="note-bulk-btn note-bulk-btn--clear"
+        :disabled="busy"
+        :while-hover="presets.button.hover"
+        :while-tap="presets.button.tap"
+        :transition="presets.button.transition"
+        @click="$emit('clear-tags')"
+      >
+        <span class="note-bulk-btn-icon" aria-hidden="true">
+          <svg
+            viewBox="0 0 1024 1024"
+            width="18"
+            height="18"
+            fill="currentColor"
+            aria-hidden="true"
+          >
+            <path d="M485.4 668.8c0-160.8 130.4-291.2 291.2-291.2 5.6 0 10.9 1.3 16.4 1.7L503.8 90c-16.1-16.1-38.5-26-63.2-26H127c-49.3 0-89.6 40.3-89.6 89.6v313.6c0 24.6 9.9 47 26.4 63.6L467 934c16.1 16.1 38.5 26 63.2 26 24.6 0 47-9.9 63.2-26.4l22.3-22.3c-78.5-52.2-130.3-141.2-130.3-242.5zM194.2 288c-37.2 0-67.2-30-67.2-67.2s30-67.2 67.2-67.2 67.2 30 67.2 67.2-30 67.2-67.2 67.2z" />
+            <path d="M776.7 458.9c-116.1 0-209.9 93.8-209.9 209.9 0 116.1 93.8 209.9 209.9 209.9 116.1 0 209.9-93.8 209.9-209.9 0-116.1-93.8-209.9-209.9-209.9zM864.9 757c-5.6 5.6-15.4 5.6-21 0l-67.2-67.2-67.1 67.2c-5.6 5.6-15.4 5.6-21 0s-5.6-15.4 0-21l67.2-67.2-67.2-67.2c-5.6-5.6-5.6-15.4 0-21s15.4-5.6 21 0l67.2 67.2 67.2-67.2c5.6-5.6 15.4-5.6 21 0s5.6 15.4 0 21l-67.2 67.2L865 736c6.9 5.6 6.9 15.3-0.1 21z" />
+          </svg>
+        </span>
+        <span class="note-bulk-btn-label">清空标签</span>
+      </motion.button>
+    </div>
     <motion.button
       type="button"
       class="note-bulk-btn"
@@ -117,6 +170,7 @@
 </template>
 
 <script setup>
+import { ref } from 'vue'
 import { motion } from 'motion-v'
 import { useMotionPresets } from '../../composables/useMotionPresets'
 
@@ -127,9 +181,15 @@ defineProps({
   },
 })
 
-defineEmits(['ask-ai', 'sediment', 'delete', 'clear'])
+defineEmits(['ask-ai', 'tag', 'clear-tags', 'sediment', 'delete', 'clear'])
 
 const { presets } = useMotionPresets()
+
+const tagAnchorRef = ref(null)
+
+defineExpose({
+  tagAnchorEl: tagAnchorRef,
+})
 </script>
 
 <style scoped>
@@ -153,6 +213,10 @@ const { presets } = useMotionPresets()
   gap: 8px;
   padding-left: 8px;
   border-left: 1px solid var(--color-border);
+}
+
+.note-bulk-tag-anchor {
+  display: inline-flex;
 }
 
 .note-bulk-btn {

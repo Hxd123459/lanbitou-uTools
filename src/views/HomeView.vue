@@ -252,18 +252,30 @@
 
         <div
           v-if="selectedNoteIds.size > 0"
+          ref="bulkBarWrapRef"
           class="note-bulk-bar-wrap"
         >
           <NoteBulkActionBar
+            ref="bulkActionBarRef"
             :busy="bulkActionBusy"
             @ask-ai="handleBulkAskAi"
+            @tag="openBulkTagMenu"
+            @clear-tags="handleBulkClearTags"
             @clear="handleBulkClearSelection"
             @sediment="handleBulkSediment"
             @delete="handleBulkDelete"
           />
         </div>
 
+        <NoteBulkTagMenu
+          :visible="bulkTagMenuOpen"
+          :anchor-el="bulkTagAnchorEl"
+          @select="handleBulkApplyTag"
+          @close="bulkTagMenuOpen = false"
+        />
+
         <NoteTagCloud
+          ref="noteTagCloudRef"
           v-show="noteViewMode === 'tags'"
           :active="activeTab === 'home' && noteViewMode === 'tags'"
           @select="handleTagSelect"
@@ -341,11 +353,14 @@ import AiChatPanel from '../components/ai/AiChatPanel.vue'
 import AiSettingsPanel from '../components/settings/AiSettingsPanel.vue'
 import SidePanel from '../components/layout/SidePanel.vue'
 import NoteBulkActionBar from '../components/note/NoteBulkActionBar.vue'
+import NoteBulkTagMenu from '../components/note/NoteBulkTagMenu.vue'
 import NoteCard from '../components/note/NoteCard.vue'
 import NoteTagCloud from '../components/note/NoteTagCloud.vue'
 import NoteViewSwitcher from '../components/note/NoteViewSwitcher.vue'
+import { isUntaggedTag } from '../constants/noteTag'
+import { invalidateTagList } from '../composables/tagListSync'
 import { useCopyNote } from '../composables/useCopyNote'
-import { generateNoteTitle } from '../ai/aiService'
+import { generateNoteTitle, shouldAutoTagContent } from '../ai/aiService'
 import { isUtoolsMode } from '../storage/env'
 import { loadAiSettings } from '../storage/utools/aiSettings'
 import { ApiError } from '../api/http'
@@ -378,6 +393,12 @@ const refreshNotesOnListEnter = ref(false)
 const selectedNoteIds = ref(new Set())
 const noteSelectingActive = ref(false)
 const bulkActionBusy = ref(false)
+const bulkTagMenuOpen = ref(false)
+const bulkBarWrapRef = ref(null)
+const bulkActionBarRef = ref(null)
+const noteTagCloudRef = ref(null)
+
+const bulkTagAnchorEl = computed(() => bulkActionBarRef.value?.tagAnchorEl ?? null)
 let searchToken = 0
 
 const searchState = reactive({
@@ -449,6 +470,7 @@ let tagFilterToken = 0
 
 const inputContextTag = computed(() => {
   if (!tagFilterState.active || !tagFilterState.tagId) return null
+  if (isUntaggedTag({ tagId: tagFilterState.tagId })) return null
   return {
     tagId: tagFilterState.tagId,
     tagName: tagFilterState.tagName || '未命名',
@@ -457,6 +479,7 @@ const inputContextTag = computed(() => {
 
 function noteMatchesTagFilter(note, tagId, tagName) {
   if (!note?.id) return false
+  if (isUntaggedTag({ tagId })) return !note.tagId
   if (tagId && String(note.tagId || '') === String(tagId)) return true
   return (note.title || '') === tagName
 }
@@ -553,15 +576,11 @@ const onNoteViewModeChange = (mode) => {
   if ((mode === 'list' || mode === 'tags') && shouldExitEmptySelecting()) {
     exitNoteSelectingSession()
   }
+  if (mode === 'tags' && tagFilterState.active) {
+    clearTagFilter()
+  }
   noteViewMode.value = mode
   if ((mode === 'list' || mode === 'select') && prev === 'tags') {
-    if (
-      tagFilterState.active &&
-      !tagFilterState.list.length &&
-      !tagFilterState.loading
-    ) {
-      clearTagFilter()
-    }
     void flushNotesRefreshOnListEnter()
   }
 }
@@ -690,12 +709,91 @@ const handleBulkAskAi = () => {
   const notes = selectedNotesList.value
   if (!notes.length || bulkActionBusy.value) return
 
+  bulkTagMenuOpen.value = false
   exitNoteSelectingSession()
   noteViewMode.value = 'list'
   activeTab.value = 'ai'
   nextTick(() => {
     aiChatPanelRef.value?.attachNotes(notes)
   })
+}
+
+const getNoteContent = (note) =>
+  note?.markdownContent || note?.text || note?.rawContent || ''
+
+const getNoteRetainedImageIds = (note) =>
+  (Array.isArray(note?.images) ? note.images : [])
+    .map((item) => item?.id)
+    .filter((id) => id != null)
+
+const openBulkTagMenu = () => {
+  if (bulkActionBusy.value || !selectedNotesList.value.length) return
+  bulkTagMenuOpen.value = true
+}
+
+const handleBulkApplyTag = async (tag) => {
+  const notes = selectedNotesList.value
+  if (!notes.length || bulkActionBusy.value || !tag?.tagId) return
+
+  bulkActionBusy.value = true
+  bulkTagMenuOpen.value = false
+  try {
+    for (const note of notes) {
+      await assistantStore.updateNote(
+        note.id,
+        tag.tagName,
+        getNoteContent(note),
+        {
+          tagId: tag.tagId,
+          tagName: tag.tagName,
+          retainedImageIds: getNoteRetainedImageIds(note),
+        },
+      )
+    }
+    invalidateTagList()
+    noteTagCloudRef.value?.reload?.()
+    if (tagFilterState.active) {
+      await reloadActiveTagFilter()
+    }
+    openToast(`已为 ${notes.length} 条笔记打上标签「${tag.tagName}」`, 'success', {
+      duration: 1800,
+    })
+    exitNoteSelectingSession()
+    noteViewMode.value = 'list'
+  } catch (error) {
+    notifyError(error)
+  } finally {
+    bulkActionBusy.value = false
+  }
+}
+
+const handleBulkClearTags = async () => {
+  const notes = selectedNotesList.value
+  if (!notes.length || bulkActionBusy.value) return
+
+  bulkActionBusy.value = true
+  bulkTagMenuOpen.value = false
+  try {
+    for (const note of notes) {
+      await assistantStore.updateNote(note.id, '', getNoteContent(note), {
+        tagId: null,
+        tagName: '',
+        retainedImageIds: getNoteRetainedImageIds(note),
+      })
+    }
+    invalidateTagList()
+    noteTagCloudRef.value?.reload?.()
+    if (tagFilterState.active) {
+      await reloadActiveTagFilter()
+    }
+    openToast(`已清空 ${notes.length} 条笔记的标签`, 'success', { duration: 1800 })
+    exitNoteSelectingSession()
+    noteViewMode.value = 'list'
+  } catch (error) {
+    notifyError(error)
+  } finally {
+    bulkActionBusy.value = false
+  }
 }
 
 const onNoteListScroll = () => {
@@ -757,10 +855,18 @@ const handleTagSelect = async (tag) => {
   const tagName = tag?.tagName || '未命名'
   if (!tagId) return
 
+  await reloadActiveTagFilter({ tagId, tagName })
+}
+
+const reloadActiveTagFilter = async ({ tagId, tagName } = {}) => {
+  const resolvedTagId = tagId ?? tagFilterState.tagId
+  const resolvedTagName = tagName ?? tagFilterState.tagName
+  if (!resolvedTagId) return
+
   const myToken = ++tagFilterToken
   tagFilterState.active = true
-  tagFilterState.tagId = tagId
-  tagFilterState.tagName = tagName
+  tagFilterState.tagId = resolvedTagId
+  tagFilterState.tagName = resolvedTagName
   tagFilterState.loading = true
   tagFilterState.loadingMore = false
   tagFilterState.list = []
@@ -769,7 +875,7 @@ const handleTagSelect = async (tag) => {
   tagFilterState.hasMore = false
 
   try {
-    const result = await fetchNotesByTag(tagId, {
+    const result = await fetchNotesByTag(resolvedTagId, {
       pageNo: 1,
       pageSize: NOTE_LIST_PAGE_SIZE,
     })
@@ -780,8 +886,10 @@ const handleTagSelect = async (tag) => {
     tagFilterState.hasMore = result.hasMore
   } catch (error) {
     if (myToken !== tagFilterToken) return
-    const local = assistantStore.visibleNotes.filter(
-      (note) => (note.title || '') === tagName,
+    const local = assistantStore.visibleNotes.filter((note) =>
+      isUntaggedTag({ tagId: resolvedTagId })
+        ? !note.tagId
+        : (note.title || '') === resolvedTagName,
     )
     if (local.length) {
       tagFilterState.list = local
@@ -979,7 +1087,7 @@ const handleSubmit = async ({ text, images, tagId, tagName }) => {
     isUtoolsMode() &&
     aiSettings.autoTagEnabled &&
     !hasManualTag &&
-    text.trim()
+    shouldAutoTagContent(text)
 
   if (
     isUtoolsMode() &&
@@ -1047,6 +1155,9 @@ const handleEditSave = async ({
       retainedImageIds,
       newImages,
     })
+    if (tagFilterState.active) {
+      await reloadActiveTagFilter()
+    }
     openToast('已保存修改', 'success')
   } catch (error) {
     notifyError(error)
@@ -1127,8 +1238,11 @@ const notifyError = (error) => {
 watch(
   () => selectedNoteIds.value.size,
   (count) => {
-    if (count === 0 && noteViewMode.value === 'selected') {
-      noteViewMode.value = noteSelectingActive.value ? 'select' : 'list'
+    if (count === 0) {
+      bulkTagMenuOpen.value = false
+      if (noteViewMode.value === 'selected') {
+        noteViewMode.value = noteSelectingActive.value ? 'select' : 'list'
+      }
     }
   },
 )

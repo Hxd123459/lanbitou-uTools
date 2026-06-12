@@ -1,5 +1,5 @@
 import { AI_PROVIDERS, getResolvedBaseUrl, getResolvedModel } from '../storage/utools/aiSettings'
-import { parseTitleFromAssistantMessage } from './titleParser'
+import { parseTitleResultFromAssistantMessage } from './titleParser'
 
 const TITLE_REQUEST_MAX_TOKENS = 256
 const TITLE_RETRY_MAX_TOKENS = 512
@@ -180,7 +180,7 @@ export async function callThirdPartyChat({
 function buildStrictTitlePrompt(systemPrompt) {
   return `${systemPrompt}
 
-最后提醒：不要输出思考过程、不要 reasoning、不要解释。立即直接输出 {"title":"标签"}。`
+最后提醒：不要输出思考过程、不要 reasoning、不要解释。无法判断主题或语义不清时输出 {"title":"意义不明"}，否则输出 {"title":"标签"}。`
 }
 
 async function requestTitleMessage(settings, systemPrompt, userContent, attempt) {
@@ -214,8 +214,8 @@ export async function generateTitleViaThirdParty(settings, systemPrompt, userCon
         attempt,
       )
       lastMessage = message
-      const title = parseTitleFromAssistantMessage(message)
-      if (title) return title
+      const { title, resolved } = parseTitleResultFromAssistantMessage(message)
+      if (resolved) return title
     } catch (error) {
       console.warn('[烂笔头] AI 标题请求失败，准备重试', error)
     }

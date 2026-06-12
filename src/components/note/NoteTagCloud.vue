@@ -17,8 +17,9 @@
           'is-action-open': actionTagId === tag.tagId,
           'is-editing': editingTagId === tag.tagId,
           'is-deleting': deletingTagId === tag.tagId,
+          'is-virtual': tag.isVirtual,
         }"
-        @contextmenu.prevent="openActionMenu(tag)"
+        @contextmenu.prevent="!tag.isVirtual && openActionMenu(tag)"
       >
         <div
           v-if="deletingTagId === tag.tagId"
@@ -75,7 +76,10 @@
           v-else
           type="button"
           class="tag-cloud-item"
-          :class="{ 'is-action-open': actionTagId === tag.tagId }"
+          :class="{
+            'is-action-open': actionTagId === tag.tagId,
+            'is-virtual': tag.isVirtual,
+          }"
           :title="`${tag.tagName} · ${tag.noteCount} 条笔记`"
           :initial="presets.reveal.initial"
           :animate="presets.reveal.animate"
@@ -174,11 +178,16 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { AnimatePresence, motion } from 'motion-v'
 import { ApiError } from '../../api/http'
-import { createTag, deleteTag, fetchAllTags, updateTag } from '../../api/note'
+import { createTag, deleteTag, fetchAllTags, updateTag, countUntaggedNotes } from '../../api/note'
 import { isUtoolsMode } from '../../storage/env'
 import { invalidateTagList } from '../../composables/tagListSync'
 import { useMotionPresets } from '../../composables/useMotionPresets'
 import { clampTagNameInput } from '../../utils/tagName'
+import {
+  UNTAGGED_TAG_ID,
+  UNTAGGED_TAG_NAME,
+  isUntaggedTag,
+} from '../../constants/noteTag'
 import AppButton from '../motion/AppButton.vue'
 
 const props = defineProps({
@@ -256,7 +265,7 @@ const closeActionMenu = () => {
 }
 
 const openActionMenu = (tag) => {
-  if (!canAddTag.value) return
+  if (!canAddTag.value || tag?.isVirtual || isUntaggedTag(tag)) return
   if (editingTagId.value != null || deletingTagId.value != null) return
   inlineError.value = ''
   actionTagId.value = tag.tagId
@@ -285,13 +294,26 @@ const loadTags = async () => {
   loading.value = true
   error.value = ''
   try {
-    const data = await fetchAllTags()
+    const [data, untaggedCount] = await Promise.all([
+      fetchAllTags(),
+      countUntaggedNotes(),
+    ])
     if (token !== loadToken) return
-    tags.value = data.map((item) => ({
+    const mapped = data.map((item) => ({
       tagId: String(item.tagId ?? ''),
       tagName: item.tagName || '未命名',
       noteCount: String(item.noteCount ?? '0'),
+      isVirtual: false,
     }))
+    tags.value = [
+      {
+        tagId: UNTAGGED_TAG_ID,
+        tagName: UNTAGGED_TAG_NAME,
+        noteCount: String(untaggedCount),
+        isVirtual: true,
+      },
+      ...mapped,
+    ]
   } catch (err) {
     if (token !== loadToken) return
     tags.value = []
@@ -563,6 +585,15 @@ defineExpose({ reload: loadTags })
 .tag-cloud-item:hover .tag-cloud-count {
   color: var(--color-primary);
   background: rgba(24, 24, 27, 0.1);
+}
+
+.tag-cloud-item.is-virtual {
+  border-style: dashed;
+  color: var(--color-secondary-text);
+}
+
+.tag-cloud-item.is-virtual:hover {
+  color: var(--color-primary);
 }
 
 .tag-item-actions {

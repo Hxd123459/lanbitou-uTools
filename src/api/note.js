@@ -1,6 +1,7 @@
 import { isUtoolsMode } from '../storage/env'
 import * as utoolsNote from '../storage/utools/noteRepository'
 import * as utoolsStruct from '../storage/utools/structRepository'
+import { UNTAGGED_TAG_ID } from '../constants/noteTag'
 import { ApiError, post, get, postForm, resolveResourceUrl } from './http'
 
 export function formatDateParam(date) {
@@ -41,6 +42,7 @@ function mapBlockToNote(item) {
     tokenUsage: item.tokenUsage,
     pinWeightType: item.pinWeightType || 'DEFAULT',
     aiNoteRecallId: item.aiNoteRecallId ?? null,
+    tagId: item.tagId ?? null,
     images: mapBlockResources(item.blocks),
   }
 }
@@ -155,9 +157,11 @@ export async function fetchBlockListByDate(
   const body = {
     date,
     tagId:
-      tagId != null && tagId !== '' && Number.isFinite(Number(tagId))
-        ? Number(tagId)
-        : null,
+      tagId === UNTAGGED_TAG_ID
+        ? UNTAGGED_TAG_ID
+        : tagId != null && tagId !== '' && Number.isFinite(Number(tagId))
+          ? Number(tagId)
+          : null,
     pageNo: safePageNo,
     pageSize: safePageSize,
   }
@@ -366,6 +370,13 @@ export async function fetchAllTags() {
   }
   const data = await get('/api/note/allTags')
   return Array.isArray(data) ? data : []
+}
+
+export async function countUntaggedNotes() {
+  if (isUtoolsMode()) {
+    return utoolsNote.countUntaggedNotes()
+  }
+  return 0
 }
 
 export async function createTag(tagName) {

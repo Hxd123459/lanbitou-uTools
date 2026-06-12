@@ -30,6 +30,53 @@ function tryParseJsonTitle(text) {
   }
 }
 
+/** @returns {{ title: string|null, resolved: boolean }} */
+export function parseTitleResultFromText(text) {
+  const normalized = normalizeJsonText(text)
+  if (!normalized) return { title: null, resolved: false }
+
+  try {
+    const json = JSON.parse(normalized)
+    if (!Object.prototype.hasOwnProperty.call(json, 'title')) {
+      return { title: null, resolved: false }
+    }
+    const raw = json.title
+    if (raw == null || String(raw).trim() === '') {
+      return { title: null, resolved: true }
+    }
+    return { title: sanitizeNoteTitle(raw), resolved: true }
+  } catch {
+    // fall through
+  }
+
+  const fromRegex = extractTitleByRegex(normalized)
+  if (fromRegex) return { title: fromRegex, resolved: true }
+
+  return { title: null, resolved: false }
+}
+
+/** @returns {{ title: string|null, resolved: boolean }} */
+export function parseTitleResultFromAssistantMessage(message) {
+  if (!message) return { title: null, resolved: false }
+
+  const content = String(message.content ?? '').trim()
+  const fromContent = parseTitleResultFromText(content)
+  if (fromContent.resolved) return fromContent
+
+  const reasoning = String(
+    message.reasoning_content ?? message.reasoning ?? '',
+  ).trim()
+  if (!reasoning) return { title: null, resolved: false }
+
+  const fromReasoning = parseTitleResultFromText(reasoning)
+  if (fromReasoning.resolved) return fromReasoning
+
+  const title = extractTitleByRegex(reasoning) || tryParseJsonTitle(reasoning)
+  if (title) return { title, resolved: true }
+
+  return { title: null, resolved: false }
+}
+
 function extractTitleByRegex(text) {
   const normalized = normalizeJsonText(text)
   if (!normalized) return null
@@ -57,16 +104,5 @@ export function parseTitleFromContent(content) {
 }
 
 export function parseTitleFromAssistantMessage(message) {
-  if (!message) return null
-
-  const content = String(message.content ?? '').trim()
-  const fromContent = parseTitleFromContent(content)
-  if (fromContent) return fromContent
-
-  const reasoning = String(
-    message.reasoning_content ?? message.reasoning ?? '',
-  ).trim()
-  if (!reasoning) return null
-
-  return extractTitleByRegex(reasoning) || tryParseJsonTitle(reasoning)
+  return parseTitleResultFromAssistantMessage(message).title
 }

@@ -21,6 +21,7 @@ import {
   isTagNameWithinLimit,
   TAG_NAME_MAX_UNITS,
 } from '../../utils/tagName'
+import { UNTAGGED_TAG_ID } from '../../constants/noteTag'
 
 const NOTE_LIST_PAGE_SIZE = 20
 
@@ -171,7 +172,9 @@ export async function listByDay({ date, tagId = null, pageNo = 1, pageSize = NOT
     filtered = filtered.filter((doc) => datePartFromDateTime(doc.createTime) === date)
   }
 
-  if (tagId != null && tagId !== '') {
+  if (tagId === UNTAGGED_TAG_ID) {
+    filtered = filtered.filter((doc) => !doc?.tagId)
+  } else if (tagId != null && tagId !== '') {
     const targetTagId = String(tagId)
     filtered = filtered.filter((doc) => String(doc.tagId || '') === targetTagId)
   }
@@ -341,6 +344,11 @@ export async function allTags() {
     nameByTagId.set(String(doc.tagId), doc.title)
   })
   return listTagsWithCounts(countNotesByTagId(docs), nameByTagId)
+}
+
+export async function countUntaggedNotes() {
+  const docs = await loadAllNoteDocs()
+  return docs.filter((doc) => !doc?.tagId).length
 }
 
 export { createTag } from './tagRepository'
