@@ -1,27 +1,10 @@
 import { getAllTagNamesForAi } from '../storage/utools/tagRepository'
 import { loadAiSettings } from '../storage/utools/aiSettings'
 import { generateTitleViaThirdParty, testThirdPartyConnection } from './thirdPartyAi'
+import { parseTitleFromAssistantMessage } from './titleParser'
 
 export function isUtoolsAiAvailable() {
   return typeof window !== 'undefined' && typeof window.utools?.ai === 'function'
-}
-
-function parseTitleFromContent(content) {
-  if (!content) return null
-
-  let text = String(content).trim()
-  const fence = text.match(/```(?:json)?\s*([\s\S]*?)```/i)
-  if (fence) text = fence[1].trim()
-  text = text.replace(/[\n\r\t]/g, '').trim()
-
-  try {
-    const json = JSON.parse(text)
-    const title = String(json.title ?? '').trim()
-    return title || null
-  } catch {
-    const plain = text.replace(/^["']|["']$/g, '').trim()
-    return plain ? plain.slice(0, 5) : null
-  }
 }
 
 export function buildTitlePrompt(existingTagNames = []) {
@@ -34,7 +17,8 @@ export function buildTitlePrompt(existingTagNames = []) {
 1. 先判断内容是否与【已有粗标签列表】中任何一个完全匹配。
 2. 只有完全匹配才能选择已有标签；只要不匹配，必须生成全新粗标签。
 3. title：粗粒度标签（2-5个字），用于分类归档，最多不超过5个字。
-4. 必须输出严格合法 JSON，不能有换行、注释、多余字符。
+4. 禁止输出思考过程、推理、解释或 markdown。
+5. 必须输出严格合法 JSON，不能有换行、注释、多余字符。
 
 已有粗标签列表：${existTags}
 
@@ -53,7 +37,7 @@ async function generateViaUtools(systemPrompt, userContent, model) {
   if (model) option.model = model
 
   const result = await window.utools.ai(option)
-  return parseTitleFromContent(result?.content)
+  return parseTitleFromAssistantMessage(result)
 }
 
 export async function generateNoteTitle(rawContent) {
@@ -65,7 +49,13 @@ export async function generateNoteTitle(rawContent) {
 
   try {
     if (settings.provider === 'utools') {
-      return await generateViaUtools(systemPrompt, text, settings.model)
+      const title = await generateViaUtools(systemPrompt, text, settings.model)
+      if (title) return title
+
+      const strictPrompt = `${systemPrompt}
+
+最后提醒：不要输出思考过程，立即直接输出 {"title":"标签"}。`
+      return generateViaUtools(strictPrompt, text, settings.model)
     }
 
     if (settings.provider === 'openai' || settings.provider === 'anthropic') {

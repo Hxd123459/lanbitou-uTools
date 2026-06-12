@@ -1,39 +1,45 @@
 import { AI_PROVIDERS, getResolvedBaseUrl, getResolvedModel } from '../storage/utools/aiSettings'
+import { parseTitleFromAssistantMessage } from './titleParser'
 
-function parseTitleFromContent(content) {
-  if (!content) return null
+const TITLE_REQUEST_MAX_TOKENS = 256
+const TITLE_RETRY_MAX_TOKENS = 512
 
-  let text = String(content).trim()
-  const fence = text.match(/```(?:json)?\s*([\s\S]*?)```/i)
-  if (fence) text = fence[1].trim()
-  text = text.replace(/[\n\r\t]/g, '').trim()
-
-  try {
-    const json = JSON.parse(text)
-    const title = String(json.title ?? '').trim()
-    return title || null
-  } catch {
-    const plain = text.replace(/^["']|["']$/g, '').trim()
-    return plain ? plain.slice(0, 5) : null
+function buildTitleRequestBody({ model, system, user, maxTokens, jsonMode }) {
+  const body = {
+    model,
+    temperature: 0.1,
+    max_tokens: maxTokens,
+    messages: [
+      { role: 'system', content: system },
+      { role: 'user', content: user },
+    ],
   }
+
+  if (jsonMode) {
+    body.response_format = { type: 'json_object' }
+  }
+
+  return body
 }
 
-async function requestOpenAi({ baseUrl, apiKey, model, system, user }) {
+async function requestOpenAiMessage({
+  baseUrl,
+  apiKey,
+  model,
+  system,
+  user,
+  maxTokens = TITLE_REQUEST_MAX_TOKENS,
+  jsonMode = true,
+}) {
   const response = await fetch(`${baseUrl}/chat/completions`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       Authorization: `Bearer ${apiKey}`,
     },
-    body: JSON.stringify({
-      model,
-      temperature: 0.1,
-      max_tokens: 128,
-      messages: [
-        { role: 'system', content: system },
-        { role: 'user', content: user },
-      ],
-    }),
+    body: JSON.stringify(
+      buildTitleRequestBody({ model, system, user, maxTokens, jsonMode }),
+    ),
   })
 
   const payload = await response.json().catch(() => ({}))
@@ -42,10 +48,38 @@ async function requestOpenAi({ baseUrl, apiKey, model, system, user }) {
     throw new Error(msg)
   }
 
-  return payload?.choices?.[0]?.message?.content || ''
+  return payload?.choices?.[0]?.message || null
 }
 
-async function requestAnthropic({ baseUrl, apiKey, model, system, user }) {
+async function requestOpenAi({
+  baseUrl,
+  apiKey,
+  model,
+  system,
+  user,
+  maxTokens = TITLE_REQUEST_MAX_TOKENS,
+  jsonMode = false,
+}) {
+  const message = await requestOpenAiMessage({
+    baseUrl,
+    apiKey,
+    model,
+    system,
+    user,
+    maxTokens,
+    jsonMode,
+  })
+  return message?.content || ''
+}
+
+async function requestAnthropicMessage({
+  baseUrl,
+  apiKey,
+  model,
+  system,
+  user,
+  maxTokens = TITLE_REQUEST_MAX_TOKENS,
+}) {
   const response = await fetch(`${baseUrl}/messages`, {
     method: 'POST',
     headers: {
@@ -56,7 +90,7 @@ async function requestAnthropic({ baseUrl, apiKey, model, system, user }) {
     },
     body: JSON.stringify({
       model,
-      max_tokens: 128,
+      max_tokens: maxTokens,
       system,
       messages: [{ role: 'user', content: user }],
     }),
@@ -69,35 +103,134 @@ async function requestAnthropic({ baseUrl, apiKey, model, system, user }) {
   }
 
   const block = payload?.content?.find((item) => item.type === 'text')
-  return block?.text || ''
+  return block?.text ? { content: block.text } : null
 }
 
-export async function callThirdPartyChat({ provider, apiKey, baseUrl, model, system, user }) {
+async function requestAnthropic(args) {
+  const message = await requestAnthropicMessage(args)
+  return message?.content || ''
+}
+
+async function callThirdPartyChatMessage({
+  provider,
+  apiKey,
+  baseUrl,
+  model,
+  system,
+  user,
+  maxTokens = TITLE_REQUEST_MAX_TOKENS,
+  jsonMode = false,
+}) {
   const resolvedModel = model || AI_PROVIDERS[provider]?.defaultModel
   const resolvedBaseUrl = baseUrl || AI_PROVIDERS[provider]?.defaultBaseUrl
   if (!apiKey) throw new Error('请先填写 API Key')
   if (!resolvedBaseUrl) throw new Error('请先填写 Base URL')
   if (!resolvedModel) throw new Error('请先填写模型名称')
 
+  const args = {
+    baseUrl: resolvedBaseUrl,
+    apiKey,
+    model: resolvedModel,
+    system,
+    user,
+    maxTokens,
+    jsonMode,
+  }
+
   if (provider === 'openai') {
-    return requestOpenAi({ baseUrl: resolvedBaseUrl, apiKey, model: resolvedModel, system, user })
+    return requestOpenAiMessage(args)
   }
   if (provider === 'anthropic') {
-    return requestAnthropic({ baseUrl: resolvedBaseUrl, apiKey, model: resolvedModel, system, user })
+    return requestAnthropicMessage(args)
   }
   throw new Error('不支持的服务商')
 }
 
-export async function generateTitleViaThirdParty(settings, systemPrompt, userContent) {
-  const content = await callThirdPartyChat({
+export async function callThirdPartyChat({
+  provider,
+  apiKey,
+  baseUrl,
+  model,
+  system,
+  user,
+}) {
+  const resolvedModel = model || AI_PROVIDERS[provider]?.defaultModel
+  const resolvedBaseUrl = baseUrl || AI_PROVIDERS[provider]?.defaultBaseUrl
+  if (!apiKey) throw new Error('请先填写 API Key')
+  if (!resolvedBaseUrl) throw new Error('请先填写 Base URL')
+  if (!resolvedModel) throw new Error('请先填写模型名称')
+
+  const args = {
+    baseUrl: resolvedBaseUrl,
+    apiKey,
+    model: resolvedModel,
+    system,
+    user,
+  }
+
+  if (provider === 'openai') {
+    return requestOpenAi(args)
+  }
+  if (provider === 'anthropic') {
+    return requestAnthropic(args)
+  }
+  throw new Error('不支持的服务商')
+}
+
+function buildStrictTitlePrompt(systemPrompt) {
+  return `${systemPrompt}
+
+最后提醒：不要输出思考过程、不要 reasoning、不要解释。立即直接输出 {"title":"标签"}。`
+}
+
+async function requestTitleMessage(settings, systemPrompt, userContent, attempt) {
+  return callThirdPartyChatMessage({
     provider: settings.provider,
     apiKey: settings.apiKey,
     baseUrl: getResolvedBaseUrl(settings),
     model: getResolvedModel(settings),
-    system: systemPrompt,
+    system: attempt.strict ? buildStrictTitlePrompt(systemPrompt) : systemPrompt,
     user: userContent,
+    maxTokens: attempt.maxTokens,
+    jsonMode: attempt.jsonMode,
   })
-  return parseTitleFromContent(content)
+}
+
+export async function generateTitleViaThirdParty(settings, systemPrompt, userContent) {
+  const attempts = [
+    { maxTokens: TITLE_REQUEST_MAX_TOKENS, jsonMode: true, strict: false },
+    { maxTokens: TITLE_RETRY_MAX_TOKENS, jsonMode: true, strict: true },
+    { maxTokens: TITLE_RETRY_MAX_TOKENS, jsonMode: false, strict: true },
+  ]
+
+  let lastMessage = null
+
+  for (const attempt of attempts) {
+    try {
+      const message = await requestTitleMessage(
+        settings,
+        systemPrompt,
+        userContent,
+        attempt,
+      )
+      lastMessage = message
+      const title = parseTitleFromAssistantMessage(message)
+      if (title) return title
+    } catch (error) {
+      console.warn('[烂笔头] AI 标题请求失败，准备重试', error)
+    }
+  }
+
+  if (lastMessage) {
+    console.warn('[烂笔头] AI 标题解析失败', {
+      content: String(lastMessage.content ?? '').slice(0, 120),
+      reasoning: String(
+        lastMessage.reasoning_content ?? lastMessage.reasoning ?? '',
+      ).slice(0, 120),
+    })
+  }
+
+  return null
 }
 
 export async function testThirdPartyConnection(settings) {
