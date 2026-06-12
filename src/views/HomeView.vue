@@ -173,8 +173,9 @@
             >
               <NoteCard
                 :note="note"
-                :selectable="showNoteSelectable"
+                :selectable="showNoteSelectable && !isNoteBulkAiTagBusy(note.id)"
                 :selected="showNoteSelectable && isNoteSelected(note.id)"
+                :tag-ai-loading="isNoteBulkAiTagBusy(note.id)"
                 @edit-save="handleEditSave"
                 @delete="handleDelete"
                 @copied="handleCopied"
@@ -198,8 +199,9 @@
               <NoteCard
                 :note="note"
                 :highlight="searchKeyword"
-                :selectable="showNoteSelectable"
+                :selectable="showNoteSelectable && !isNoteBulkAiTagBusy(note.id)"
                 :selected="showNoteSelectable && isNoteSelected(note.id)"
+                :tag-ai-loading="isNoteBulkAiTagBusy(note.id)"
                 @edit-save="handleEditSave"
                 @delete="handleDelete"
                 @copied="handleCopied"
@@ -229,8 +231,9 @@
             >
               <NoteCard
                 :note="note"
-                :selectable="showNoteSelectable"
+                :selectable="showNoteSelectable && !isNoteBulkAiTagBusy(note.id)"
                 :selected="showNoteSelectable && isNoteSelected(note.id)"
+                :tag-ai-loading="isNoteBulkAiTagBusy(note.id)"
                 @edit-save="handleEditSave"
                 @delete="handleDelete"
                 @copied="handleCopied"
@@ -271,7 +274,14 @@
           :visible="bulkTagMenuOpen"
           :anchor-el="bulkTagAnchorEl"
           @select="handleBulkApplyTag"
+          @ai-tag="startBulkAiTag"
           @close="bulkTagMenuOpen = false"
+        />
+
+        <BulkAiTagProgress
+          :visible="bulkAiTagSession.active"
+          :done="bulkAiTagDone"
+          :total="bulkAiTagTotal"
         />
 
         <NoteTagCloud
@@ -354,13 +364,14 @@ import AiSettingsPanel from '../components/settings/AiSettingsPanel.vue'
 import SidePanel from '../components/layout/SidePanel.vue'
 import NoteBulkActionBar from '../components/note/NoteBulkActionBar.vue'
 import NoteBulkTagMenu from '../components/note/NoteBulkTagMenu.vue'
+import BulkAiTagProgress from '../components/note/BulkAiTagProgress.vue'
 import NoteCard from '../components/note/NoteCard.vue'
 import NoteTagCloud from '../components/note/NoteTagCloud.vue'
 import NoteViewSwitcher from '../components/note/NoteViewSwitcher.vue'
 import { isUntaggedTag } from '../constants/noteTag'
 import { invalidateTagList } from '../composables/tagListSync'
 import { useCopyNote } from '../composables/useCopyNote'
-import { generateNoteTitle, shouldAutoTagContent } from '../ai/aiService'
+import { generateNoteTitle, isUtoolsAiAvailable, shouldAutoTagContent } from '../ai/aiService'
 import { isUtoolsMode } from '../storage/env'
 import { loadAiSettings } from '../storage/utools/aiSettings'
 import { ApiError } from '../api/http'
@@ -399,6 +410,27 @@ const bulkActionBarRef = ref(null)
 const noteTagCloudRef = ref(null)
 
 const bulkTagAnchorEl = computed(() => bulkActionBarRef.value?.tagAnchorEl ?? null)
+
+const bulkAiTagSession = reactive({
+  active: false,
+  total: 0,
+})
+const bulkAiTagProcessedIds = ref(new Set())
+const bulkAiTagQueue = ref([])
+const bulkAiTagProcessingId = ref(null)
+let bulkAiTagWorkerToken = 0
+let bulkAiTagWorkerRunning = false
+
+const bulkAiTagTotal = computed(() => bulkAiTagSession.total)
+
+const bulkAiTagDone = computed(() => bulkAiTagProcessedIds.value.size)
+
+const isNoteBulkAiTagBusy = (id) => {
+  if (!bulkAiTagSession.active) return false
+  const key = String(id)
+  if (bulkAiTagProcessingId.value === key) return true
+  return bulkAiTagQueue.value.includes(key)
+}
 let searchToken = 0
 
 const searchState = reactive({
@@ -543,6 +575,7 @@ const clearNoteSelection = () => {
 const isNoteSelected = (id) => selectedNoteIds.value.has(id)
 
 const toggleNoteSelect = (id) => {
+  if (isNoteBulkAiTagBusy(id)) return
   const next = new Set(selectedNoteIds.value)
   if (next.has(id)) next.delete(id)
   else next.add(id)
@@ -727,8 +760,154 @@ const getNoteRetainedImageIds = (note) =>
     .filter((id) => id != null)
 
 const openBulkTagMenu = () => {
-  if (bulkActionBusy.value || !selectedNotesList.value.length) return
-  bulkTagMenuOpen.value = true
+  if (bulkActionBusy.value) return
+  if (!selectedNotesList.value.length) return
+  bulkTagMenuOpen.value = !bulkTagMenuOpen.value
+}
+
+const isBulkAiTagAvailable = () => {
+  if (!isUtoolsMode()) return false
+  const settings = loadAiSettings()
+  if (settings.provider === 'utools') return isUtoolsAiAvailable()
+  return Boolean(String(settings.apiKey ?? '').trim() && String(settings.baseUrl ?? '').trim())
+}
+
+const markBulkAiTagProcessed = (id) => {
+  const next = new Set(bulkAiTagProcessedIds.value)
+  next.add(String(id))
+  bulkAiTagProcessedIds.value = next
+}
+
+const findNoteForBulkAiTag = (id) => {
+  const targetId = String(id)
+  const byId = new Map()
+  for (const note of assistantStore.visibleNotes) {
+    if (note?.id) byId.set(String(note.id), note)
+  }
+  for (const note of searchState.list) {
+    if (note?.id) byId.set(String(note.id), note)
+  }
+  for (const note of tagFilterState.list) {
+    if (note?.id) byId.set(String(note.id), note)
+  }
+  return byId.get(targetId) ?? null
+}
+
+const enqueueBulkAiTagNotes = (ids) => {
+  let added = 0
+  for (const id of ids) {
+    const key = String(id)
+    if (bulkAiTagProcessedIds.value.has(key)) continue
+    if (isNoteBulkAiTagBusy(key)) continue
+    bulkAiTagQueue.value.push(key)
+    added += 1
+  }
+  if (added) bulkAiTagSession.total += added
+  return added
+}
+
+const isBulkAiTagSettled = () =>
+  bulkAiTagQueue.value.length === 0 && !bulkAiTagProcessingId.value
+
+const finishBulkAiTagSession = async (token) => {
+  if (token !== bulkAiTagWorkerToken || !bulkAiTagSession.active) return
+
+  bulkAiTagSession.active = false
+  bulkAiTagSession.total = 0
+  bulkAiTagProcessedIds.value = new Set()
+  bulkAiTagQueue.value = []
+  bulkAiTagProcessingId.value = null
+
+  invalidateTagList()
+  noteTagCloudRef.value?.reload?.()
+  if (tagFilterState.active) {
+    await reloadActiveTagFilter()
+  }
+
+  openToast('AI自动打标完成！', 'success', { duration: 1800 })
+}
+
+const tagNoteWithAi = async (note) => {
+  const content = getNoteContent(note)
+  if (!shouldAutoTagContent(content)) return
+
+  const tagName = await generateNoteTitle(content)
+  if (!tagName) return
+
+  await assistantStore.updateNote(note.id, tagName, content, {
+    tagName,
+    retainedImageIds: getNoteRetainedImageIds(note),
+  })
+}
+
+const runBulkAiTagWorker = async (token) => {
+  bulkAiTagWorkerRunning = true
+  try {
+    while (token === bulkAiTagWorkerToken && bulkAiTagSession.active) {
+      const nextId = bulkAiTagQueue.value.shift()
+      if (!nextId) {
+        if (isBulkAiTagSettled()) break
+        await new Promise((resolve) => window.setTimeout(resolve, 300))
+        continue
+      }
+
+      bulkAiTagProcessingId.value = nextId
+      const note = findNoteForBulkAiTag(nextId)
+
+      try {
+        if (note) await tagNoteWithAi(note)
+      } catch (error) {
+        console.warn('[烂笔头] 批量 AI 打标失败', error)
+      } finally {
+        markBulkAiTagProcessed(nextId)
+        bulkAiTagProcessingId.value = null
+      }
+    }
+
+    if (token !== bulkAiTagWorkerToken || !bulkAiTagSession.active) return
+    await finishBulkAiTagSession(token)
+  } finally {
+    if (token === bulkAiTagWorkerToken) {
+      bulkAiTagWorkerRunning = false
+    }
+  }
+}
+
+const startBulkAiTag = () => {
+  if (!selectedNoteIds.value.size) return
+  if (!isBulkAiTagAvailable()) {
+    openToast('请先在设置中配置 AI 服务', 'error', { duration: 2200 })
+    return
+  }
+
+  bulkTagMenuOpen.value = false
+
+  const newIds = [...selectedNoteIds.value]
+    .map(String)
+    .filter(
+      (id) =>
+        !bulkAiTagProcessedIds.value.has(id) && !isNoteBulkAiTagBusy(id),
+    )
+
+  if (!newIds.length && !bulkAiTagSession.active) return
+
+  if (!bulkAiTagSession.active) {
+    bulkAiTagSession.active = true
+    bulkAiTagSession.total = 0
+    bulkAiTagProcessedIds.value = new Set()
+    bulkAiTagQueue.value = []
+    bulkAiTagProcessingId.value = null
+  }
+
+  enqueueBulkAiTagNotes(newIds)
+  exitNoteSelectingSession()
+  noteViewMode.value = 'list'
+
+  if (bulkAiTagWorkerRunning) return
+
+  bulkAiTagWorkerToken += 1
+  const token = bulkAiTagWorkerToken
+  void runBulkAiTagWorker(token)
 }
 
 const handleBulkApplyTag = async (tag) => {
@@ -1260,6 +1439,7 @@ onMounted(async () => {
 onBeforeUnmount(() => {
   deleteTimers.forEach((timer) => clearTimeout(timer))
   deleteTimers.clear()
+  bulkAiTagWorkerToken += 1
 })
 </script>
 

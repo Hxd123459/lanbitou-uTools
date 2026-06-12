@@ -1,13 +1,13 @@
-export const TITLE_MAX_LEN = 5
+import { isTagNameWithinLimit, truncateTagNameToLimit } from '../utils/tagName'
 
 export function sanitizeNoteTitle(value) {
   const title = String(value ?? '').trim()
   if (!title) return null
   if (/[{}\[\]"\\/:]/.test(title)) return null
   const normalized = title.replace(/\s+/g, '')
-  if (!normalized || normalized.length > TITLE_MAX_LEN) {
-    if (!normalized) return null
-    return normalized.slice(0, TITLE_MAX_LEN)
+  if (!normalized) return null
+  if (!isTagNameWithinLimit(normalized)) {
+    return truncateTagNameToLimit(normalized)
   }
   return normalized
 }

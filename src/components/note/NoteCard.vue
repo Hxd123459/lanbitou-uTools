@@ -73,7 +73,29 @@
     <div class="note-card-main">
     <div class="note-meta">
       <div class="meta-left">
-        <span v-if="titleText && !isEditing" class="note-tag">{{ titleText }}</span>
+        <span v-if="tagAiLoading && !isEditing" class="note-tag note-tag-ai-loading">
+          <svg
+            class="note-tag-ai-spinner"
+            viewBox="0 0 24 24"
+            width="12"
+            height="12"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2.2"
+            aria-hidden="true"
+          >
+            <path d="M12 2v4" />
+            <path d="M12 18v4" opacity="0.3" />
+            <path d="m4.93 4.93 2.83 2.83" opacity="0.5" />
+            <path d="m16.24 16.24 2.83 2.83" opacity="0.15" />
+            <path d="M2 12h4" opacity="0.7" />
+            <path d="M18 12h4" opacity="0.2" />
+            <path d="m4.93 19.07 2.83-2.83" opacity="0.85" />
+            <path d="m16.24 7.76 2.83-2.83" opacity="0.4" />
+          </svg>
+          <span class="note-tag-ai-loading-text">打标中</span>
+        </span>
+        <span v-else-if="titleText && !isEditing" class="note-tag">{{ titleText }}</span>
         <span v-if="isPinnedTop" class="pin-badge pin-badge-top">置顶</span>
         <span v-else-if="isPinnedBottom" class="pin-badge pin-badge-bottom"
           >置底</span
@@ -551,6 +573,10 @@ const props = defineProps({
     default: false,
   },
   selectionRemovable: {
+    type: Boolean,
+    default: false,
+  },
+  tagAiLoading: {
     type: Boolean,
     default: false,
   },
@@ -1257,6 +1283,28 @@ function formatTime(dateValue) {
   line-height: 1.5;
   letter-spacing: 0.2px;
   white-space: nowrap;
+}
+
+.note-tag-ai-loading {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--color-secondary-text);
+}
+
+.note-tag-ai-spinner {
+  flex: 0 0 auto;
+  animation: note-tag-ai-spin 0.85s linear infinite;
+}
+
+.note-tag-ai-loading-text {
+  font-size: 12px;
+}
+
+@keyframes note-tag-ai-spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .pin-badge {
