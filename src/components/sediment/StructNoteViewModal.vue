@@ -28,6 +28,12 @@
             </svg>
           </motion.button>
 
+          <StructNoteFolderBreadcrumb
+            ref="folderBreadcrumbRef"
+            v-model:path-stack="pathStack"
+            :disabled="saving || fetching"
+          />
+
           <div class="note-view-header-actions">
             <motion.button
               type="button"
@@ -163,17 +169,28 @@
 <script setup>
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { AnimatePresence, motion } from 'motion-v'
-import { getStructNote, updateStructNote } from '../../api/structNote'
+import { getStructNote, updateStructNote, findStructFolderItemByNoteId } from '../../api/structNote'
+import { fetchFolderPathStack, moveStructItem } from '../../api/structFolder'
 import { fetchNotesByIds, restoreArchivedFragment } from '../../api/note'
 import { appendFragmentToContent } from '../../composables/useStructNoteFragments'
 import { useMotionPresets } from '../../composables/useMotionPresets'
+import StructNoteFolderBreadcrumb from './StructNoteFolderBreadcrumb.vue'
 import StructNoteMarkdownEditor from './StructNoteMarkdownEditor.vue'
 
 const AUTO_SAVE_DELAY_MS = 1200
 
+function normalizeParentId(parentId) {
+  if (parentId == null || parentId === '' || parentId === 0 || parentId === '0') return 0
+  return parentId
+}
+
 const props = defineProps({
   visible: { type: Boolean, default: false },
   noteItem: { type: Object, default: null },
+  initialPathStack: {
+    type: Array,
+    default: () => [],
+  },
 })
 
 const emit = defineEmits(['close', 'saved', 'fragment-restored'])
@@ -187,9 +204,12 @@ const saving = ref(false)
 const saveStatus = ref('idle')
 const draftTitle = ref('')
 const draftContent = ref('')
-const lastSaved = ref({ title: '', content: '' })
+const lastSaved = ref({ title: '', content: '', parentId: 0 })
 const titleInputRef = ref(null)
 const contentEditorRef = ref(null)
+const folderBreadcrumbRef = ref(null)
+const pathStack = ref([])
+const folderItemId = ref('')
 const localFragmentNotes = ref([])
 const insertedFragmentIds = ref(new Set())
 const fragmentsOpen = ref(false)
@@ -202,10 +222,20 @@ let loadToken = 0
 
 const canSave = computed(() => draftTitle.value.trim().length > 0)
 
+const currentParentId = computed(() => {
+  const last = pathStack.value[pathStack.value.length - 1]
+  return normalizeParentId(last?.id ?? 0)
+})
+
+const isFolderDirty = computed(
+  () => currentParentId.value !== normalizeParentId(lastSaved.value.parentId),
+)
+
 const isDirty = computed(
   () =>
     draftTitle.value.trim() !== lastSaved.value.title
-    || draftContent.value.trim() !== lastSaved.value.content,
+    || draftContent.value.trim() !== lastSaved.value.content
+    || isFolderDirty.value,
 )
 
 const saveButtonDisabled = computed(
@@ -216,6 +246,33 @@ const syncLastSavedFromDraft = () => {
   lastSaved.value = {
     title: draftTitle.value.trim(),
     content: draftContent.value.trim(),
+    parentId: currentParentId.value,
+  }
+}
+
+const resolveFolderContext = async (item) => {
+  let folderItem = item?.type === 'note' && item?.id ? item : null
+  const noteId = item?.noteId ?? item?.id ?? ''
+
+  if (!folderItem?.id && noteId) {
+    folderItem = await findStructFolderItemByNoteId(noteId)
+  }
+
+  folderItemId.value = folderItem?.id ? String(folderItem.id) : ''
+  const parentId = normalizeParentId(folderItem?.parentId ?? 0)
+
+  let stack = await fetchFolderPathStack(parentId)
+  if (!stack.length && props.initialPathStack.length) {
+    stack = props.initialPathStack.map((entry) => ({
+      id: entry.id,
+      name: entry.name,
+    }))
+  }
+
+  pathStack.value = stack
+  lastSaved.value = {
+    ...lastSaved.value,
+    parentId,
   }
 }
 
@@ -300,6 +357,12 @@ const handleSave = async (isAuto = false) => {
       title: draftTitle.value.trim(),
       content: draftContent.value.trim(),
     })
+    if (isFolderDirty.value && folderItemId.value) {
+      await moveStructItem({
+        id: folderItemId.value,
+        targetParentId: currentParentId.value,
+      })
+    }
     const title = draftTitle.value.trim()
     const content = draftContent.value.trim()
     note.value = { ...note.value, title, name: title, content }
@@ -328,6 +391,7 @@ const fetchDetail = async () => {
     sourceFragmentIds.value = Array.isArray(data?.sourceFragmentIds)
       ? [...data.sourceFragmentIds]
       : []
+    await resolveFolderContext(props.noteItem)
     applyDraftFromNote()
     await loadSourceFragments(sourceFragmentIds.value)
     await nextTick()
@@ -345,6 +409,7 @@ const fetchDetail = async () => {
 
 const emitClose = () => {
   if (saving.value) return
+  folderBreadcrumbRef.value?.closeFolderMenu()
   emit('close')
 }
 
@@ -352,6 +417,7 @@ const onKeydown = (e) => {
   if (!props.visible || saving.value) return
   if (e.key === 'Escape') {
     e.preventDefault()
+    if (folderBreadcrumbRef.value?.handleEscape()) return
     emitClose()
     return
   }
@@ -361,7 +427,7 @@ const onKeydown = (e) => {
   }
 }
 
-watch([draftTitle, draftContent], () => {
+watch([draftTitle, draftContent, pathStack], () => {
   if (!props.visible || fetching.value || loadError.value) return
   if (isDirty.value && saveStatus.value === 'saved') {
     saveStatus.value = 'idle'
@@ -377,7 +443,9 @@ watch(
       note.value = { ...props.noteItem, content: '' }
       draftTitle.value = ''
       draftContent.value = ''
-      lastSaved.value = { title: '', content: '' }
+      lastSaved.value = { title: '', content: '', parentId: 0 }
+      pathStack.value = []
+      folderItemId.value = ''
       localFragmentNotes.value = []
       insertedFragmentIds.value = new Set()
       fragmentsOpen.value = false

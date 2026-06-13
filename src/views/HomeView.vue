@@ -333,11 +333,13 @@
       />
 
       <!-- 设置 -->
-      <AiSettingsPanel
+      <SettingsPanel
         v-show="activeTab === 'settings'"
         :active="activeTab === 'settings'"
         :pending-auto-tag-setup="pendingAutoTagSetup"
         @auto-tag-enabled="handleAutoTagEnabled"
+        @imported="handleBackupImported"
+        @error="notifyError"
       />
     </template>
   </MainFrame>
@@ -364,7 +366,7 @@ import SedimentPanel from '../components/sediment/SedimentPanel.vue'
 import HeatmapPanel from '../components/heatmap/HeatmapPanel.vue'
 import TrashPanel from '../components/trash/TrashPanel.vue'
 import AiChatPanel from '../components/ai/AiChatPanel.vue'
-import AiSettingsPanel from '../components/settings/AiSettingsPanel.vue'
+import SettingsPanel from '../components/settings/SettingsPanel.vue'
 import SidePanel from '../components/layout/SidePanel.vue'
 import NoteBulkActionBar from '../components/note/NoteBulkActionBar.vue'
 import NoteBulkTagMenu from '../components/note/NoteBulkTagMenu.vue'
@@ -1203,6 +1205,16 @@ const handleRecycleRestored = async (note) => {
     return
   }
   activeTab.value = 'home'
+}
+
+const handleBackupImported = async () => {
+  refreshNotesOnHomeEnter.value = true
+  noteTagCloudRef.value?.reload?.()
+  sedimentPanelRef.value?.reload?.()
+  if (activeTab.value === 'home') {
+    await flushHomeNotesRefresh()
+  }
+  openToast('数据导入完成', 'success', { duration: 1800 })
 }
 
 const onTabChange = (tab) => {

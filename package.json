@@ -21,6 +21,7 @@
     "@tiptap/pm": "^3.24.0",
     "@tiptap/starter-kit": "^3.24.0",
     "@tiptap/vue-3": "^3.24.0",
+    "fflate": "^0.8.3",
     "lowlight": "^3.3.0",
     "motion-v": "^2.2.1",
     "pinia": "^3.0.4",

@@ -15,6 +15,13 @@ function mapStructItem(item) {
   }
 }
 
+export async function fetchFolderPathStack(parentId = 0) {
+  if (isUtoolsMode()) {
+    return utoolsStruct.getFolderPathStack(parentId)
+  }
+  return []
+}
+
 export async function fetchFolderList(parentId = 0) {
   if (isUtoolsMode()) {
     const data = await utoolsStruct.listFolder(parentId)

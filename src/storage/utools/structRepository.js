@@ -199,6 +199,29 @@ export async function removeSourceFragmentFromStructNote(structNoteId, fragmentI
   return true
 }
 
+export async function getFolderPathStack(parentId = 0) {
+  let currentId = normalizeParentId(parentId)
+  if (!currentId) return []
+
+  const docs = (await dbAllDocs(STRUCT_FOLDER_PREFIX) || [])
+    .map(stripDoc)
+    .filter(Boolean)
+  const byId = new Map(docs.map((doc) => [String(doc.id), doc]))
+
+  const stack = []
+  const guard = new Set()
+
+  while (currentId && !guard.has(String(currentId))) {
+    guard.add(String(currentId))
+    const folder = byId.get(String(currentId))
+    if (!folder || folder.type !== 'folder') break
+    stack.unshift({ id: folder.id, name: folder.name || '未命名文件夹' })
+    currentId = normalizeParentId(folder.parentId)
+  }
+
+  return stack
+}
+
 export async function findFolderItemByNoteId(noteId) {
   const targetId = String(noteId ?? '').trim()
   if (!targetId) return null

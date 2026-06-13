@@ -429,6 +429,7 @@
     <StructNoteViewModal
       :visible="noteViewVisible"
       :note-item="activeNoteItem"
+      :initial-path-stack="pathStack"
       @close="closeNoteView"
       @saved="loadCurrentList"
       @fragment-restored="(note) => emit('fragment-restored', note)"
@@ -933,7 +934,7 @@ onBeforeUnmount(() => {
   document.removeEventListener('pointerdown', onDocumentPointerdown)
 })
 
-defineExpose({ openCreateNoteModal, openNoteViewByNoteId })
+defineExpose({ openCreateNoteModal, openNoteViewByNoteId, reload: loadCurrentList })
 </script>
 
 <style scoped>

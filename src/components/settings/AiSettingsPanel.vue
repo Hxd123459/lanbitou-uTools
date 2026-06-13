@@ -1,20 +1,30 @@
 <template>
-  <motion.section
+  <component
+    :is="embedded ? 'div' : motion.section"
     class="ai-settings"
-    aria-label="AI 设置"
-    :initial="panelMotion.initial"
-    :animate="panelMotion.animate"
-    :transition="panelMotion.transition"
+    :class="{ 'ai-settings--embedded': embedded }"
+    :aria-label="embedded ? undefined : 'AI 设置'"
+    :initial="embedded ? undefined : panelMotion.initial"
+    :animate="embedded ? undefined : panelMotion.animate"
+    :transition="embedded ? undefined : panelMotion.transition"
   >
-    <motion.header
-      class="ai-settings-header"
-      :initial="headerMotion.initial"
-      :animate="headerMotion.animate"
-      :transition="headerMotion.transition"
-    >
-      <h2 class="ai-settings-title">AI 设置</h2>
-      <p class="ai-settings-desc">配置 AI 服务来源与自动打标签。第三方 Key 将加密保存在本机。</p>
-    </motion.header>
+    <template v-if="!embedded">
+      <motion.header
+        class="ai-settings-header"
+        :initial="headerMotion.initial"
+        :animate="headerMotion.animate"
+        :transition="headerMotion.transition"
+      >
+        <h2 class="ai-settings-title">AI 设置</h2>
+        <p class="ai-settings-desc">配置 AI 服务来源与自动打标签。第三方 Key 将加密保存在本机。</p>
+      </motion.header>
+    </template>
+    <template v-else>
+      <h3 class="ai-settings-subtitle">AI 设置</h3>
+      <p class="ai-settings-desc ai-settings-desc--embedded">
+        配置 AI 服务来源与自动打标签。第三方 Key 将加密保存在本机。
+      </p>
+    </template>
 
     <motion.div
       class="ai-settings-card"
@@ -142,7 +152,7 @@
         {{ autoTagStatusMessage }}
       </p>
     </motion.div>
-  </motion.section>
+  </component>
 </template>
 
 <script setup>
@@ -165,6 +175,10 @@ const props = defineProps({
     default: false,
   },
   pendingAutoTagSetup: {
+    type: Boolean,
+    default: false,
+  },
+  embedded: {
     type: Boolean,
     default: false,
   },
@@ -330,6 +344,23 @@ onMounted(hydrate)
   min-height: 0;
   overflow-y: auto;
   padding: 8px 4px 28px;
+}
+
+.ai-settings--embedded {
+  flex: none;
+  overflow: visible;
+  padding: 0;
+}
+
+.ai-settings-subtitle {
+  margin: 0 0 8px;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--color-primary);
+}
+
+.ai-settings-desc--embedded {
+  margin: 0 0 16px;
 }
 
 .ai-settings-header {
