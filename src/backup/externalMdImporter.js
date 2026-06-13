@@ -1,78 +1,42 @@
-import { NOTE_PREFIX } from '../storage/utools/constants'
-import { dbPut } from '../storage/utools/dbClient'
-import { pinTypeToWeight } from '../storage/utools/pin'
-import { ensureTag } from '../storage/utools/tagRepository'
-import { createId, formatDateTime } from '../storage/utools/utils'
-import { isPlatformMarkdown, parseFrontmatter } from './format'
+import { insertNote } from '../storage/utools/noteRepository'
+import { parseFrontmatter } from './format'
 
-function extractTitle(body, filename, meta = {}) {
-  const fromMeta = String(meta.title || '').trim()
-  if (fromMeta) return fromMeta.slice(0, 80)
-  const heading = body
-    .split('\n')
-    .map((line) => line.trim())
-    .find((line) => line.startsWith('#'))
-  if (heading) return heading.replace(/^#+\s*/, '').slice(0, 80)
-  return String(filename || '未命名').replace(/\.md$/i, '').slice(0, 80) || '未命名'
+function isMarkdownFile(file) {
+  const name = String(file?.name || '')
+  if (/\.(md|markdown)$/i.test(name)) return true
+  return String(file?.type || '').toLowerCase() === 'text/markdown'
 }
 
-async function importExternalMarkdownFile(file, summary) {
+async function importExternalMarkdownFile(file) {
   const text = await file.text()
   const { meta, body } = parseFrontmatter(text)
-  if (isPlatformMarkdown(meta)) {
-    summary.skipped += 1
-    return
-  }
-
-  const tagName = String(meta.tag || meta.lb_tag || '').trim()
-  let tagId = null
-  if (tagName) {
-    const tag = await ensureTag(tagName)
-    tagId = tag?.id ?? null
-  }
-
-  const noteId = createId()
-  const now = formatDateTime()
-  const title = extractTitle(body, file.name, meta)
-
-  await dbPut({
-    _id: `${NOTE_PREFIX}${noteId}`,
-    id: noteId,
-    title,
-    fineTitle: '',
-    summary: '',
-    rawContent: body,
-    markdownContent: body,
-    tagId,
-    pinWeight: pinTypeToWeight('DEFAULT'),
-    images: [],
-    createTime: now,
-    updateTime: now,
-    deletedAt: null,
-    archivedAt: null,
-    archivedByStructNoteId: null,
-  })
-
-  summary.added += 1
+  const content = String(body ?? '').trim() ? body : text
+  const tagName = String(meta.tag || '').trim()
+  await insertNote(content, [], null, { tagName })
 }
 
-export async function importExternalMarkdownFiles(files = []) {
-  const list = Array.from(files).filter((file) => /\.md$/i.test(file?.name || ''))
+export async function importExternalMarkdownFiles(files = [], { onProgress } = {}) {
+  const picked = Array.from(files)
+  const list = picked.filter(isMarkdownFile)
   const summary = {
+    picked: picked.length,
+    total: list.length,
+    processed: 0,
     added: 0,
-    skipped: 0,
     errors: [],
   }
 
-  for (const file of list) {
+  for (let i = 0; i < list.length; i += 1) {
+    const file = list[i]
     try {
-      await importExternalMarkdownFile(file, summary)
+      await importExternalMarkdownFile(file)
+      summary.added += 1
     } catch (error) {
-      summary.errors.push({
-        path: file.name,
-        message: error?.message || '导入失败',
-      })
+      summary.errors.push({ path: file.name, message: error?.message || '导入失败' })
     }
+    summary.processed = i + 1
+    onProgress?.({ current: summary.processed, total: summary.total, fileName: file.name })
+    await new Promise((r) => requestAnimationFrame(r))
   }
 
   return summary

@@ -36,7 +36,14 @@
       </AppButton>
     </div>
 
-    <p v-if="progressText" class="data-backup-progress">{{ progressText }}</p>
+    <div v-if="mdImporting" class="data-backup-md-progress">
+      <div class="data-backup-bar">
+        <div class="data-backup-bar-fill" :style="{ width: `${mdPercent}%` }" />
+      </div>
+      <p class="data-backup-bar-text">{{ mdProgressText }}</p>
+    </div>
+
+    <p v-if="progressText && busyType !== 'import-md'" class="data-backup-progress">{{ progressText }}</p>
     <p v-if="resultText" class="data-backup-result">{{ resultText }}</p>
 
     <input
@@ -48,9 +55,8 @@
     />
     <input
       ref="mdInputRef"
-      class="data-backup-input"
+      class="data-backup-file-input"
       type="file"
-      accept=".md,text/markdown"
       multiple
       @change="onMdSelected"
     />
@@ -104,9 +110,26 @@ const formatBackupSummary = (summary) => {
   return parts.join('，')
 }
 
+const mdImporting = ref(false)
+const mdCurrent = ref(0)
+const mdTotal = ref(0)
+const mdFileName = ref('')
+
+const mdPercent = computed(() => {
+  if (!mdTotal.value) return 0
+  return Math.round((mdCurrent.value / mdTotal.value) * 100)
+})
+
+const mdProgressText = computed(() => {
+  if (!mdTotal.value) return '准备导入…'
+  const tail = mdFileName.value ? `：${mdFileName.value}` : ''
+  return `${mdCurrent.value} / ${mdTotal.value}${tail}`
+})
+
 const formatMdSummary = (summary) => {
+  if (!summary.picked) return '未选择文件'
+  if (!summary.total) return `已选 ${summary.picked} 个文件，但没有有效的 .md / .markdown 文件`
   const parts = [`新增 ${summary.added} 条碎片`]
-  if (summary.skipped) parts.push(`跳过 ${summary.skipped}`)
   if (summary.errors?.length) parts.push(`失败 ${summary.errors.length}`)
   return parts.join('，')
 }
@@ -162,22 +185,36 @@ const onZipSelected = async (event) => {
 
 const onMdSelected = async (event) => {
   const files = event.target.files
-  event.target.value = ''
-  if (!files?.length || busy.value) return
+  if (!files?.length || busy.value) {
+    event.target.value = ''
+    return
+  }
   busy.value = true
   busyType.value = 'import-md'
-  progressText.value = `正在导入 ${files.length} 个 Markdown 文件…`
+  mdImporting.value = true
+  mdCurrent.value = 0
+  mdTotal.value = files.length
+  mdFileName.value = ''
   resultText.value = ''
   try {
-    const summary = await importExternalMarkdownFiles(files)
+    const summary = await importExternalMarkdownFiles(files, {
+      onProgress: ({ current, total, fileName }) => {
+        mdCurrent.value = current
+        mdTotal.value = total
+        mdFileName.value = fileName
+      },
+    })
     resultText.value = formatMdSummary(summary)
-    emit('imported')
+    if (summary.added > 0) emit('imported', { type: 'markdown', summary })
+    else if (summary.errors?.length) emit('error', summary.errors[0].message)
+    else emit('error', resultText.value)
   } catch (error) {
     emit('error', error?.message || '导入 Markdown 失败')
   } finally {
     busy.value = false
     busyType.value = ''
-    progressText.value = ''
+    mdImporting.value = false
+    event.target.value = ''
   }
 }
 </script>
@@ -205,7 +242,9 @@ const onMdSelected = async (event) => {
 }
 
 .data-backup-btn {
+  box-sizing: border-box;
   min-width: 148px;
+  height: 30px;
 }
 
 .data-backup-progress,
@@ -220,7 +259,37 @@ const onMdSelected = async (event) => {
   color: var(--color-primary);
 }
 
-.data-backup-input {
-  display: none;
+.data-backup-md-progress {
+  margin-top: 10px;
+  width: 100%;
+}
+
+.data-backup-bar {
+  height: 6px;
+  border-radius: 999px;
+  background: rgba(24, 24, 27, 0.08);
+  overflow: hidden;
+}
+
+.data-backup-bar-fill {
+  height: 100%;
+  background: var(--color-accent);
+  transition: width 0.15s ease;
+}
+
+.data-backup-bar-text {
+  margin: 6px 0 0;
+  font-size: 12px;
+  color: var(--color-secondary-text);
+}
+
+.data-backup-input,
+.data-backup-file-input {
+  position: fixed;
+  left: -9999px;
+  width: 0;
+  height: 0;
+  opacity: 0;
+  pointer-events: none;
 }
 </style>

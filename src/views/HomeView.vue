@@ -1207,14 +1207,15 @@ const handleRecycleRestored = async (note) => {
   activeTab.value = 'home'
 }
 
-const handleBackupImported = async () => {
+const handleBackupImported = async (payload) => {
   refreshNotesOnHomeEnter.value = true
   noteTagCloudRef.value?.reload?.()
   sedimentPanelRef.value?.reload?.()
   if (activeTab.value === 'home') {
     await flushHomeNotesRefresh()
   }
-  openToast('数据导入完成', 'success', { duration: 1800 })
+  const n = payload?.summary?.added ?? payload?.summary?.fragmentsAdded ?? 0
+  openToast(payload?.type === 'markdown' ? `已导入 ${n} 条碎片` : '数据导入完成', 'success', { duration: 1800 })
 }
 
 const onTabChange = (tab) => {
