@@ -43,6 +43,7 @@ const editor = useEditor({
   extensions: createTiptapExtensions({
     placeholder: '',
     slashCommand: false,
+    markdownPaste: false,
   }),
   onCreate: () => {
     notifyUpdated()
