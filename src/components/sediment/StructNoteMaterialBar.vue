@@ -6,21 +6,20 @@
 
     <div class="struct-note-material-chips" role="list">
       <button
-        v-for="(note, index) in fragmentNotes"
+        v-for="note in fragmentNotes"
         :key="note.id"
-        :ref="(el) => setChipRef(index, el)"
         type="button"
         class="struct-note-material-chip"
         :class="{
-          'is-active': popoverIndex === index,
+          'is-active': panelOpen && activeFragmentId === String(note.id),
           'is-inserted': insertedIds.has(note.id),
         }"
         role="listitem"
-        :aria-pressed="popoverIndex === index"
+        :aria-pressed="panelOpen && activeFragmentId === String(note.id)"
         :disabled="disabled"
-        @click="openPopover(index)"
+        @click="onChipClick(note)"
       >
-        <span class="struct-note-material-chip-text">{{ getFragmentTitle(note) }}</span>
+        <span class="struct-note-material-chip-text">{{ getFragmentChipLabel(note) }}</span>
         <svg
           v-if="insertedIds.has(note.id)"
           class="struct-note-material-chip-check"
@@ -39,52 +38,20 @@
       </button>
     </div>
 
-    <div class="struct-note-material-actions">
-      <button
-        v-if="mode === 'compose'"
-        type="button"
-        class="struct-note-material-action"
-        :disabled="disabled"
-        aria-label="添加碎片"
-        @click="pickerVisible = true"
-      >
-        <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true">
-          <path d="M12 5v14M5 12h14" />
-        </svg>
-        添加
-      </button>
-      <button
-        type="button"
-        class="struct-note-material-action struct-note-material-action--expand"
-        :disabled="disabled || !fragmentNotes.length"
-        aria-label="展开碎片面板"
-        @click="emit('expand')"
-      >
-        展开
-        <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
-          <path d="M9 6l6 6-6 6" />
-        </svg>
-      </button>
-    </div>
-
-    <StructNoteFragmentPopover
-      :visible="popoverIndex >= 0"
-      :anchor-el="activeChipEl"
-      :fragment-notes="fragmentNotes"
-      :active-index="popoverIndex >= 0 ? popoverIndex : 0"
-      :inserted-ids="insertedIds"
+    <button
+      type="button"
+      class="struct-note-material-add-chip"
       :disabled="disabled"
-      :mode="mode"
-      :restoring-id="restoringId"
-      @close="closePopover"
-      @insert="onInsert"
-      @remove="onRemove"
-      @restore="emit('restore', $event)"
-      @navigate="onNavigate"
-    />
+      aria-label="添加碎片"
+      title="添加碎片"
+      @click="pickerVisible = true"
+    >
+      <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true">
+        <path d="M12 5v14M5 12h14" />
+      </svg>
+    </button>
 
     <StructNoteFragmentPickerModal
-      v-if="mode === 'compose'"
       :visible="pickerVisible"
       :selected-notes="fragmentNotes"
       @close="pickerVisible = false"
@@ -94,10 +61,9 @@
 </template>
 
 <script setup>
-import { computed, ref, watch } from 'vue'
-import { getFragmentTitle } from '../../composables/useStructNoteFragments'
+import { ref } from 'vue'
+import { getFragmentChipLabel } from '../../composables/useStructNoteFragments'
 import StructNoteFragmentPickerModal from './StructNoteFragmentPickerModal.vue'
-import StructNoteFragmentPopover from './StructNoteFragmentPopover.vue'
 
 const props = defineProps({
   fragmentNotes: { type: Array, default: () => [] },
@@ -108,81 +74,30 @@ const props = defineProps({
     default: 'compose',
     validator: (value) => ['compose', 'source'].includes(value),
   },
-  restoringId: { type: String, default: '' },
+  panelOpen: { type: Boolean, default: false },
+  activeFragmentId: { type: String, default: '' },
 })
 
-const emit = defineEmits([
-  'update:fragmentNotes',
-  'insert',
-  'restore',
-  'expand',
-])
+const emit = defineEmits(['update:fragmentNotes', 'toggle-fragment'])
 
-const popoverIndex = ref(-1)
 const pickerVisible = ref(false)
-const chipRefs = ref([])
 
-const activeChipEl = computed(() => {
-  if (popoverIndex.value < 0) return null
-  return chipRefs.value[popoverIndex.value] ?? null
-})
-
-const setChipRef = (index, el) => {
-  chipRefs.value[index] = el
-}
-
-const openPopover = (index) => {
-  popoverIndex.value = index
-}
-
-const closePopover = () => {
-  popoverIndex.value = -1
-}
-
-const onNavigate = (delta) => {
-  const next = popoverIndex.value + delta
-  if (next >= 0 && next < props.fragmentNotes.length) {
-    popoverIndex.value = next
-  }
-}
-
-const onInsert = (note) => {
-  emit('insert', note)
-}
-
-const onRemove = (note) => {
-  emit(
-    'update:fragmentNotes',
-    props.fragmentNotes.filter((item) => item.id !== note.id),
-  )
-  if (popoverIndex.value >= props.fragmentNotes.length - 1) {
-    popoverIndex.value = Math.max(0, props.fragmentNotes.length - 2)
-  }
-  if (props.fragmentNotes.length <= 1) {
-    closePopover()
-  }
+const onChipClick = (note) => {
+  if (props.disabled || !note?.id) return
+  emit('toggle-fragment', note)
 }
 
 const onPickerConfirm = (notes) => {
   emit('update:fragmentNotes', notes)
   pickerVisible.value = false
 }
-
-watch(
-  () => props.fragmentNotes.length,
-  (length) => {
-    if (popoverIndex.value >= length) {
-      popoverIndex.value = length > 0 ? length - 1 : -1
-    }
-  },
-)
 </script>
 
 <style scoped>
 .struct-note-material-bar {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   min-height: 36px;
   margin-bottom: 14px;
   flex: 0 0 auto;
@@ -192,6 +107,7 @@ watch(
   flex: 0 0 auto;
   font-size: 12px;
   font-weight: 600;
+  line-height: 1.5;
   font-variant-numeric: tabular-nums;
   color: var(--color-secondary-text);
   white-space: nowrap;
@@ -218,7 +134,7 @@ watch(
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  max-width: 140px;
+  max-width: 180px;
   height: 28px;
   padding: 0 10px;
   border: 1px solid var(--color-border);
@@ -269,41 +185,30 @@ watch(
   color: var(--color-success);
 }
 
-.struct-note-material-actions {
+.struct-note-material-add-chip {
   flex: 0 0 auto;
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-}
-
-.struct-note-material-action {
-  display: inline-flex;
-  align-items: center;
-  gap: 3px;
-  height: 28px;
-  padding: 0 8px;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  padding: 0;
   border: 0;
-  border-radius: 7px;
-  background: transparent;
-  color: var(--color-secondary-text);
-  font-family: inherit;
-  font-size: 12px;
-  font-weight: 600;
-  white-space: nowrap;
+  border-radius: 5px;
+  background: var(--btn-primary-bg);
+  color: var(--btn-primary-fg);
+  box-shadow: var(--btn-primary-shadow);
   cursor: pointer;
 }
 
-.struct-note-material-action:hover:not(:disabled) {
-  background: rgba(24, 24, 27, 0.06);
-  color: var(--color-primary);
+.struct-note-material-add-chip:hover:not(:disabled) {
+  background: var(--btn-primary-bg-hover);
+  box-shadow: var(--btn-primary-shadow-hover);
 }
 
-.struct-note-material-action:disabled {
-  opacity: 0.45;
+.struct-note-material-add-chip:disabled {
+  opacity: var(--btn-disabled-opacity);
   cursor: not-allowed;
-}
-
-.struct-note-material-action--expand {
-  padding-right: 4px;
+  box-shadow: none;
 }
 </style>

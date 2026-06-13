@@ -29,6 +29,7 @@
       :disabled="disabled"
       :mode="fragmentsMode"
       :restoring-id="restoringId"
+      :active-fragment-id="activeFragmentId"
       @update:fragment-notes="emit('update:fragmentNotes', $event)"
       @insert="emit('insert', $event)"
       @restore="emit('restore', $event)"
@@ -51,6 +52,10 @@ const props = defineProps({
     default: 'compose',
   },
   restoringId: {
+    type: String,
+    default: '',
+  },
+  activeFragmentId: {
     type: String,
     default: '',
   },

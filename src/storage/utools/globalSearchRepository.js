@@ -128,7 +128,7 @@ export async function globalSearch({
     const noteDocs = await dbAllDocs(NOTE_PREFIX)
     ;(noteDocs || [])
       .map(stripDoc)
-      .filter((doc) => doc?.id && !doc.deletedAt)
+      .filter((doc) => doc?.id && !doc.deletedAt && !doc.archivedAt)
       .forEach((doc) => {
         if (!matchesTag(doc, tagId)) return
         if (!matchesDateRange(doc.createTime, dateFrom, dateTo)) return

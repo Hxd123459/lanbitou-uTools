@@ -239,11 +239,25 @@ import { AnimatePresence, motion } from 'motion-v'
 import { useMotionPresets } from '../../composables/useMotionPresets'
 import { useNoteAtPicker, noteTagLabel } from '../../composables/useNoteAtPicker'
 import { sendChatMessage } from '../../ai/chatService'
+import { archiveFragmentNotes } from '../../api/note'
 import { createNoteInFolder } from '../../api/structFolder'
 import TiptapPreview from '../common/TiptapPreview.vue'
 import '../../assets/styles/tiptap-slash-menu.css'
 
 const emit = defineEmits(['sediment-error', 'sediment-success'])
+
+function collectFragmentIdsBeforeMessage(allMessages, targetMsgId) {
+  const targetIdx = allMessages.findIndex((item) => item.id === targetMsgId)
+  if (targetIdx < 0) return []
+  const ids = new Set()
+  for (const item of allMessages.slice(0, targetIdx + 1)) {
+    if (item.role !== 'user') continue
+    for (const note of item.attachedNotes || []) {
+      if (note?.id) ids.add(String(note.id))
+    }
+  }
+  return [...ids]
+}
 
 const props = defineProps({
   active: {
@@ -331,13 +345,19 @@ async function handleSediment(msg) {
   errorMsg.value = ''
 
   try {
-    await createNoteInFolder({
+    const sourceFragmentIds = collectFragmentIdsBeforeMessage(messages.value, msg.id)
+    const structNoteId = await createNoteInFolder({
       parentId: 0,
       title: buildSedimentTitle(content),
       content,
+      sourceFragmentIds,
     })
+    let archivedIds = []
+    if (sourceFragmentIds.length) {
+      archivedIds = await archiveFragmentNotes(sourceFragmentIds, structNoteId)
+    }
     patchMessage(msg.id, { sedimentSaving: false, sedimented: true })
-    emit('sediment-success')
+    emit('sediment-success', { archivedIds, sourceFragmentIds })
   } catch (error) {
     patchMessage(msg.id, { sedimentSaving: false })
     const message = error?.message || '沉淀失败，请稍后重试'

@@ -9,6 +9,7 @@
     :show-expand-button="showExpandButton"
     :fragments-mode="fragmentsMode"
     :restoring-id="restoringId"
+    :active-fragment-id="activeFragmentId"
     @insert="emit('insert', $event)"
     @restore="emit('restore', $event)"
   >
@@ -18,11 +19,10 @@
       :inserted-ids="insertedIds"
       :disabled="disabled"
       :mode="fragmentsMode"
-      :restoring-id="restoringId"
+      :panel-open="fragmentsOpenModel"
+      :active-fragment-id="activeFragmentId"
       @update:fragment-notes="fragmentNotesModel = $event"
-      @insert="emit('insert', $event)"
-      @restore="emit('restore', $event)"
-      @expand="fragmentsOpenModel = true"
+      @toggle-fragment="onToggleFragment"
     />
     <div class="struct-note-material-divider" aria-hidden="true" />
     <div
@@ -134,6 +134,24 @@ const fragmentsOpenModel = computed({
   get: () => props.fragmentsOpen,
   set: (value) => emit('update:fragmentsOpen', value),
 })
+
+const activeFragmentId = ref(null)
+
+watch(fragmentsOpenModel, (open) => {
+  if (!open) activeFragmentId.value = null
+})
+
+const onToggleFragment = (note) => {
+  const id = note?.id ? String(note.id) : ''
+  if (!id) return
+  if (fragmentsOpenModel.value && activeFragmentId.value === id) {
+    fragmentsOpenModel.value = false
+    activeFragmentId.value = null
+    return
+  }
+  activeFragmentId.value = id
+  fragmentsOpenModel.value = true
+}
 
 const rootStyle = computed(() => ({
   '--struct-note-md-min-height': `${Number(props.minHeight) || 320}px`,

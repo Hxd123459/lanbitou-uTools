@@ -227,7 +227,6 @@ const applyDraftFromNote = () => {
 }
 
 const insertFragment = (fragmentNote) => {
-  if (fragmentsMode.value === 'source') return
   if (insertedFragmentIds.value.has(fragmentNote.id)) return
   draftContent.value = appendFragmentToContent(draftContent.value, fragmentNote)
   insertedFragmentIds.value = new Set([...insertedFragmentIds.value, fragmentNote.id])

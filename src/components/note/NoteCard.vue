@@ -123,12 +123,21 @@
           :transition="presets.button.transition"
           @click="onTogglePin('TOP')"
         >
-          <svg viewBox="0 0 24 24" width="14" height="14" fill="none"
-            stroke="currentColor" stroke-width="1.8" stroke-linecap="round"
-            stroke-linejoin="round" aria-hidden="true">
-            <path d="M12 17v5" />
-            <path d="M5 9l7-7 7 7" />
-            <path d="M9 9h6v6H9z" />
+          <svg
+            class="pin-icon pin-icon-top"
+            viewBox="0 0 24 24"
+            width="14"
+            height="14"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.8"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+          >
+            <path d="M12 3v12" />
+            <path d="m8 11 4 4 4-4" />
+            <path d="M4 21h16" />
           </svg>
         </motion.button>
         <motion.button
@@ -142,12 +151,21 @@
           :transition="presets.button.transition"
           @click="onTogglePin('BOTTOM')"
         >
-          <svg viewBox="0 0 24 24" width="14" height="14" fill="none"
-            stroke="currentColor" stroke-width="1.8" stroke-linecap="round"
-            stroke-linejoin="round" aria-hidden="true">
-            <path d="M12 2v5" />
-            <path d="M5 15l7 7 7-7" />
-            <path d="M9 9h6v6H9z" />
+          <svg
+            class="pin-icon"
+            viewBox="0 0 24 24"
+            width="14"
+            height="14"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.8"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+          >
+            <path d="M12 3v12" />
+            <path d="m8 11 4 4 4-4" />
+            <path d="M4 21h16" />
           </svg>
         </motion.button>
         <motion.button
@@ -1391,6 +1409,10 @@ button.note-tag:focus-visible {
 .icon-btn.is-active:hover {
   background: rgba(37, 99, 235, 0.18);
   color: var(--color-accent);
+}
+
+.pin-icon-top {
+  transform: rotate(180deg);
 }
 
 .tag-chip {

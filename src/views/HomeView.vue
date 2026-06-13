@@ -549,6 +549,15 @@ function removeNotesFromHomeLists(ids = []) {
     }
   }
 
+  if (searchState.list.length) {
+    const nextSearch = searchState.list.filter((note) => !idSet.has(String(note.id)))
+    const removedCount = searchState.list.length - nextSearch.length
+    if (removedCount > 0) {
+      searchState.list = nextSearch
+      searchState.total = Math.max(0, searchState.total - removedCount)
+    }
+  }
+
   if (noteSelectingActive.value) {
     const nextSelected = new Set(
       [...selectedNoteIds.value].filter((id) => !idSet.has(String(id))),
@@ -1250,7 +1259,12 @@ const {
   triggerToastAction,
 } = useCopyNote()
 
-const handleAiSedimentSuccess = () => {
+const handleAiSedimentSuccess = (payload) => {
+  const archivedIds = payload?.archivedIds ?? []
+  if (archivedIds.length) {
+    handleFragmentsArchived(archivedIds)
+    return
+  }
   openToast('已保存到沉淀', 'success', { duration: 1600 })
 }
 
