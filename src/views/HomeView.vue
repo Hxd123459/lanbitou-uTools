@@ -158,6 +158,7 @@
                 selection-removable
                 selected
                 @toggle-select="toggleNoteSelect(note.id)"
+                @tag-select="handleTagSelect"
               />
             </li>
           </ul>
@@ -183,6 +184,7 @@
                 @pin="handlePin"
                 @image-too-large="handleImageTooLarge"
                 @toggle-select="toggleNoteSelect(note.id)"
+                @tag-select="handleTagSelect"
               />
             </li>
           </ul>
@@ -209,6 +211,7 @@
                 @pin="handlePin"
                 @image-too-large="handleImageTooLarge"
                 @toggle-select="toggleNoteSelect(note.id)"
+                @tag-select="handleTagSelect"
               />
             </li>
           </ul>
@@ -241,6 +244,7 @@
                 @pin="handlePin"
                 @image-too-large="handleImageTooLarge"
                 @toggle-select="toggleNoteSelect(note.id)"
+                @tag-select="handleTagSelect"
               />
             </motion.li>
           </AnimatePresence>

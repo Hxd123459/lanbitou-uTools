@@ -95,7 +95,15 @@
           </svg>
           <span class="note-tag-ai-loading-text">打标中</span>
         </span>
-        <span v-else-if="titleText && !isEditing" class="note-tag">{{ titleText }}</span>
+        <button
+          v-else-if="titleText && !isEditing"
+          type="button"
+          class="note-tag"
+          :title="`查看标签「${titleText}」下的笔记`"
+          @click.stop="onTagClick"
+        >
+          {{ titleText }}
+        </button>
         <span v-if="isPinnedTop" class="pin-badge pin-badge-top">置顶</span>
         <span v-else-if="isPinnedBottom" class="pin-badge pin-badge-bottom"
           >置底</span
@@ -590,6 +598,7 @@ const emit = defineEmits([
   'pin',
   'image-too-large',
   'toggle-select',
+  'tag-select',
 ])
 
 const assistantStore = useAssistantStore()
@@ -1145,6 +1154,13 @@ function legacyCopy(text) {
   }
 }
 
+const onTagClick = () => {
+  const tagId = originalTagId.value
+  const tagName = titleText.value
+  if (!tagId || !tagName) return
+  emit('tag-select', { tagId, tagName })
+}
+
 const onSelectableCardClick = (event) => {
   if (!props.selectable || props.note?.isPending) return
   if (event.target.closest('a, button, input, textarea, label, .thumb-strip')) return
@@ -1276,13 +1292,29 @@ function formatTime(dateValue) {
 .note-tag {
   display: inline-block;
   padding: 2px 8px;
+  border: 0;
   border-radius: 999px;
   background: rgba(24, 24, 27, 0.08);
   color: var(--color-secondary-text);
+  font: inherit;
   font-size: 12px;
   line-height: 1.5;
   letter-spacing: 0.2px;
   white-space: nowrap;
+  cursor: pointer;
+  transition:
+    background-color 0.15s ease,
+    color 0.15s ease;
+}
+
+button.note-tag:hover {
+  background: rgba(37, 99, 235, 0.12);
+  color: var(--color-accent);
+}
+
+button.note-tag:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
 }
 
 .note-tag-ai-loading {
