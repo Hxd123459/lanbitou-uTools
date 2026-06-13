@@ -7,6 +7,12 @@ import TaskList from '@tiptap/extension-task-list'
 import { common, createLowlight } from 'lowlight'
 import { MarkdownPasteExtension } from '../extensions/tiptapMarkdownPaste'
 import { SlashCommandExtension } from '../extensions/tiptapSlashCommand'
+import {
+  CodeSafeBold,
+  CodeSafeItalic,
+  CodeSafeLink,
+  CodeSafeStrike,
+} from '../utils/tiptapCodeSafeMarkdown'
 
 const lowlight = createLowlight(common)
 
@@ -19,11 +25,19 @@ export function createTiptapExtensions(options = {}) {
 
   const extensions = [
     StarterKit.configure({
+      bold: false,
       codeBlock: false,
       heading: {
         levels: [1, 2, 3],
       },
+      italic: false,
+      link: false,
+      strike: false,
     }),
+    CodeSafeBold,
+    CodeSafeItalic,
+    CodeSafeStrike,
+    CodeSafeLink,
     CodeBlockLowlight.configure({
       lowlight,
       defaultLanguage: 'plaintext',
