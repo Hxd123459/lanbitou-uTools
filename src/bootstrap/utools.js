@@ -1,3 +1,4 @@
+import { notifyClipboardEnter } from '../composables/useUtoolsClipboardEnter'
 import { setupUtoolsWindow, syncUtoolsWindowLayout } from '../composables/useUtoolsWindow'
 
 export function setupUtools() {
@@ -8,6 +9,7 @@ export function setupUtools() {
   window.utools.onPluginEnter((action) => {
     window.__utoolsEnterAction = action
     syncUtoolsWindowLayout()
+    notifyClipboardEnter(action)
   })
 
   window.utools.onPluginOut(() => {

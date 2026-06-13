@@ -377,6 +377,12 @@ import NoteViewSwitcher from '../components/note/NoteViewSwitcher.vue'
 import { isUntaggedTag } from '../constants/noteTag'
 import { invalidateTagList } from '../composables/tagListSync'
 import { useCopyNote } from '../composables/useCopyNote'
+import {
+  isClipboardEnterAction,
+  onClipboardEnter,
+  payloadToImageFile,
+  takePendingClipboardAction,
+} from '../composables/useUtoolsClipboardEnter'
 import { generateNoteTitle, isUtoolsAiAvailable, shouldAutoTagContent } from '../ai/aiService'
 import { isUtoolsMode } from '../storage/env'
 import { loadAiSettings } from '../storage/utools/aiSettings'
@@ -1223,6 +1229,30 @@ const onTabChange = (tab) => {
   activeTab.value = tab
 }
 
+const applyClipboardEnter = async (action) => {
+  if (!isClipboardEnterAction(action)) return
+
+  activeTab.value = 'home'
+  await nextTick()
+
+  if (action.type === 'over' && typeof action.payload === 'string') {
+    const text = action.payload.trim()
+    if (text) {
+      inputValue.value = inputValue.value.trim()
+        ? `${inputValue.value}\n${text}`
+        : text
+    }
+  } else if (action.type === 'img') {
+    const file = await payloadToImageFile(action.payload)
+    if (file) inputBarRef.value?.addImages([file])
+  }
+
+  await nextTick()
+  inputBarRef.value?.focus()
+}
+
+let stopClipboardEnterListener = null
+
 const scrollToNote = async (id) => {
   const tryScroll = () => {
     const el = document.querySelector(`[data-note-id="${id}"]`)
@@ -1458,6 +1488,11 @@ watch(
 )
 
 onMounted(async () => {
+  stopClipboardEnterListener = onClipboardEnter((action) => {
+    takePendingClipboardAction()
+    applyClipboardEnter(action)
+  })
+
   try {
     await assistantStore.loadInitialNotes()
   } catch (error) {
@@ -1468,6 +1503,8 @@ onMounted(async () => {
 })
 
 onBeforeUnmount(() => {
+  stopClipboardEnterListener?.()
+  stopClipboardEnterListener = null
   deleteTimers.forEach((timer) => clearTimeout(timer))
   deleteTimers.clear()
   bulkAiTagWorkerToken += 1

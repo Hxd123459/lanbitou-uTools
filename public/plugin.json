@@ -11,7 +11,15 @@
       "cmds": [
         "烂笔头",
         "笔记",
-        "lanbitou"
+        "lanbitou",
+        {
+          "type": "over",
+          "label": "记录到烂笔头"
+        },
+        {
+          "type": "img",
+          "label": "记录图片到烂笔头"
+        }
       ]
     }
   ]
