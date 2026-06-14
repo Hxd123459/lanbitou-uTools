@@ -223,7 +223,22 @@ const focus = () => {
   editor.value?.commands.focus('end')
 }
 
-defineExpose({ focus })
+const setMarkdownContent = (value, { emitUpdate = true } = {}) => {
+  if (!editor.value || editor.value.isDestroyed) return
+  editor.value.commands.setContent(value || '', {
+    contentType: 'markdown',
+    emitUpdate,
+  })
+}
+
+const appendMarkdownChunk = (chunk) => {
+  if (!editor.value || editor.value.isDestroyed) return
+  const addition = String(chunk ?? '')
+  if (!addition) return
+  editor.value.commands.insertContent(addition, { contentType: 'markdown' })
+}
+
+defineExpose({ focus, setMarkdownContent, appendMarkdownChunk })
 
 onBeforeUnmount(() => {
   unmountStructNoteDragHandle(editor.value, dragHandleApi)

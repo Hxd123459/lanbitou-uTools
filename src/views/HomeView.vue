@@ -265,7 +265,6 @@
           <NoteBulkActionBar
             ref="bulkActionBarRef"
             :busy="bulkActionBusy"
-            @ask-ai="handleBulkAskAi"
             @tag="openBulkTagMenu"
             @clear-tags="handleBulkClearTags"
             @clear="handleBulkClearSelection"
@@ -303,8 +302,6 @@
         ref="aiChatPanelRef"
         v-show="activeTab === 'ai'"
         :active="activeTab === 'ai'"
-        @sediment-error="notifyError"
-        @sediment-success="handleAiSedimentSuccess"
       />
 
       <!-- 沉淀 -->
@@ -756,19 +753,6 @@ const handleBulkSediment = () => {
   noteViewMode.value = 'list'
   nextTick(() => {
     sedimentPanelRef.value?.openCreateNoteModal(notes)
-  })
-}
-
-const handleBulkAskAi = () => {
-  const notes = selectedNotesList.value
-  if (!notes.length || bulkActionBusy.value) return
-
-  bulkTagMenuOpen.value = false
-  exitNoteSelectingSession()
-  noteViewMode.value = 'list'
-  activeTab.value = 'ai'
-  nextTick(() => {
-    aiChatPanelRef.value?.attachNotes(notes)
   })
 }
 
@@ -1301,15 +1285,6 @@ const {
   openToast,
   triggerToastAction,
 } = useCopyNote()
-
-const handleAiSedimentSuccess = (payload) => {
-  const archivedIds = payload?.archivedIds ?? []
-  if (archivedIds.length) {
-    handleFragmentsArchived(archivedIds)
-    return
-  }
-  openToast('已保存到沉淀', 'success', { duration: 1600 })
-}
 
 const deleteTimers = new Map()
 

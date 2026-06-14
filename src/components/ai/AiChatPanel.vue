@@ -31,30 +31,11 @@
           :animate="presets.reveal.animate"
           :exit="presets.listItemExit"
         >
-          <div v-if="msg.role === 'assistant'" class="ai-chat-assistant-stack">
-            <div class="ai-chat-bubble is-assistant">
-              <span class="ai-chat-bubble-role">AI</span>
-              <div class="ai-chat-bubble-md">
-                <TiptapPreview :content="msg.content" :show-fallback="false" />
-              </div>
+          <div v-if="msg.role === 'assistant'" class="ai-chat-bubble is-assistant">
+            <span class="ai-chat-bubble-role">AI</span>
+            <div class="ai-chat-bubble-md">
+              <TiptapPreview :content="msg.content" :show-fallback="false" />
             </div>
-            <motion.button
-              type="button"
-              class="ai-chat-sediment-btn"
-              :disabled="msg.sedimentSaving || msg.sedimented || streaming"
-              :while-hover="!msg.sedimented && !msg.sedimentSaving ? presets.button.hover : undefined"
-              :while-tap="!msg.sedimented && !msg.sedimentSaving ? presets.button.tap : undefined"
-              :transition="presets.button.transition"
-              @click="handleSediment(msg)"
-            >
-              <span class="ai-chat-sediment-icon" aria-hidden="true">
-                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-                  <path d="M12 2 2 7l10 5 10-5-10-5z" />
-                  <path d="M2 17l10 5 10-5M2 12l10 5 10-5" />
-                </svg>
-              </span>
-              {{ msg.sedimented ? '已沉淀' : msg.sedimentSaving ? '保存中…' : '沉淀' }}
-            </motion.button>
           </div>
           <div v-else class="ai-chat-bubble is-user">
             <span class="ai-chat-bubble-role">你</span>
@@ -239,25 +220,8 @@ import { AnimatePresence, motion } from 'motion-v'
 import { useMotionPresets } from '../../composables/useMotionPresets'
 import { useNoteAtPicker, noteTagLabel } from '../../composables/useNoteAtPicker'
 import { sendChatMessage } from '../../ai/chatService'
-import { archiveFragmentNotes } from '../../api/note'
-import { createNoteInFolder } from '../../api/structFolder'
 import TiptapPreview from '../common/TiptapPreview.vue'
 import '../../assets/styles/tiptap-slash-menu.css'
-
-const emit = defineEmits(['sediment-error', 'sediment-success'])
-
-function collectFragmentIdsBeforeMessage(allMessages, targetMsgId) {
-  const targetIdx = allMessages.findIndex((item) => item.id === targetMsgId)
-  if (targetIdx < 0) return []
-  const ids = new Set()
-  for (const item of allMessages.slice(0, targetIdx + 1)) {
-    if (item.role !== 'user') continue
-    for (const note of item.attachedNotes || []) {
-      if (note?.id) ids.add(String(note.id))
-    }
-  }
-  return [...ids]
-}
 
 const props = defineProps({
   active: {
@@ -320,50 +284,8 @@ function noteChipLabel(note) {
   return text ? text.slice(0, 16) + (text.length > 16 ? '…' : '') : '无标题'
 }
 
-function buildSedimentTitle(content) {
-  const line = String(content ?? '')
-    .trim()
-    .split('\n')
-    .map((item) => item.trim())
-    .find(Boolean)
-  if (!line) return 'AI 回答'
-  const clean = line.replace(/^#+\s*/, '').trim()
-  return clean.slice(0, 30) || 'AI 回答'
-}
-
-function patchMessage(id, patch) {
-  const index = messages.value.findIndex((item) => item.id === id)
-  if (index === -1) return
-  messages.value[index] = { ...messages.value[index], ...patch }
-}
-
-async function handleSediment(msg) {
-  const content = String(msg?.content ?? '').trim()
-  if (!content || msg.sedimented || msg.sedimentSaving) return
-
-  patchMessage(msg.id, { sedimentSaving: true })
-  errorMsg.value = ''
-
-  try {
-    const sourceFragmentIds = collectFragmentIdsBeforeMessage(messages.value, msg.id)
-    const structNoteId = await createNoteInFolder({
-      parentId: 0,
-      title: buildSedimentTitle(content),
-      content,
-      sourceFragmentIds,
-    })
-    let archivedIds = []
-    if (sourceFragmentIds.length) {
-      archivedIds = await archiveFragmentNotes(sourceFragmentIds, structNoteId)
-    }
-    patchMessage(msg.id, { sedimentSaving: false, sedimented: true })
-    emit('sediment-success', { archivedIds, sourceFragmentIds })
-  } catch (error) {
-    patchMessage(msg.id, { sedimentSaving: false })
-    const message = error?.message || '沉淀失败，请稍后重试'
-    errorMsg.value = message
-    emit('sediment-error', error)
-  }
+function clearSelectedNotes() {
+  selectedNotes.value = []
 }
 
 function attachNotes(notes) {
@@ -378,10 +300,6 @@ function attachNotes(notes) {
   }
   selectedNotes.value = next
   nextTick(() => inputRef.value?.focus())
-}
-
-function clearSelectedNotes() {
-  selectedNotes.value = []
 }
 
 function resizeInput() {
@@ -478,8 +396,6 @@ function handleSend() {
           id: ++msgId,
           role: 'assistant',
           content: streamingContent.value,
-          sedimented: false,
-          sedimentSaving: false,
         })
       }
       streaming.value = false

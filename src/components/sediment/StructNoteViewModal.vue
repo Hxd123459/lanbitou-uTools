@@ -220,7 +220,7 @@ const restoringFragmentId = ref('')
 let autoSaveTimer = null
 let loadToken = 0
 
-const canSave = computed(() => draftTitle.value.trim().length > 0)
+const canSave = computed(() => draftContent.value.trim().length > 0)
 
 const currentParentId = computed(() => {
   const last = pathStack.value[pathStack.value.length - 1]
@@ -345,16 +345,30 @@ const scheduleAutoSave = () => {
   }, AUTO_SAVE_DELAY_MS)
 }
 
+const resolveTitleForSave = () => {
+  const trimmed = draftTitle.value.trim()
+  if (trimmed) return trimmed
+  const content = draftContent.value.trim()
+  if (content) {
+    const firstLine = content.split('\n').map((line) => line.trim()).find(Boolean)
+    if (firstLine) {
+      return firstLine.replace(/^#+\s*/, '').trim().slice(0, 80) || lastSaved.value.title
+    }
+  }
+  return lastSaved.value.title || note.value.title || note.value.name || '未命名长文'
+}
+
 const handleSave = async (isAuto = false) => {
   if (!canSave.value || saving.value) return
   if (!isDirty.value) return
 
   saving.value = true
   saveStatus.value = 'saving'
+  const title = resolveTitleForSave()
   try {
     await updateStructNote({
       id: props.noteItem.noteId ?? props.noteItem.id,
-      title: draftTitle.value.trim(),
+      title,
       content: draftContent.value.trim(),
     })
     if (isFolderDirty.value && folderItemId.value) {
@@ -363,8 +377,8 @@ const handleSave = async (isAuto = false) => {
         targetParentId: currentParentId.value,
       })
     }
-    const title = draftTitle.value.trim()
     const content = draftContent.value.trim()
+    draftTitle.value = title
     note.value = { ...note.value, title, name: title, content }
     syncLastSavedFromDraft()
     saveStatus.value = 'saved'

@@ -7,32 +7,6 @@
     :animate="presets.reveal.animate"
     :transition="presets.reveal.transition"
   >
-    <motion.button
-      type="button"
-      class="note-bulk-btn"
-      :disabled="busy"
-      :while-hover="presets.button.hover"
-      :while-tap="presets.button.tap"
-      :transition="presets.button.transition"
-      @click="$emit('ask-ai')"
-    >
-      <span class="note-bulk-btn-icon" aria-hidden="true">
-        <svg
-          viewBox="0 0 24 24"
-          width="18"
-          height="18"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="1.8"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-        >
-          <path d="M12 3c5 0 9 3.6 9 8s-4 8-9 8c-.9 0-1.8-.1-2.6-.3L3 21l1.8-4.2A7.7 7.7 0 0 1 3 11c0-4.4 4-8 9-8z" />
-          <path d="M9.5 11h.01M14.5 11h.01" />
-        </svg>
-      </span>
-      <span class="note-bulk-btn-label">问 AI</span>
-    </motion.button>
     <div class="note-bulk-actions">
       <span ref="tagAnchorRef" class="note-bulk-tag-anchor">
         <motion.button
@@ -181,7 +155,7 @@ defineProps({
   },
 })
 
-defineEmits(['ask-ai', 'tag', 'clear-tags', 'sediment', 'delete', 'clear'])
+defineEmits(['tag', 'clear-tags', 'sediment', 'delete', 'clear'])
 
 const { presets } = useMotionPresets()
 

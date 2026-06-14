@@ -424,6 +424,8 @@
       :fragment-notes="pendingFragmentNotes"
       @close="closeCreateNoteModal"
       @save="handleCreateNote"
+      @ai-unavailable="handleAiUnavailable"
+      @error="(error) => emit('error', error)"
     />
 
     <StructNoteViewModal
@@ -452,6 +454,7 @@ import {
 } from '../../api/structFolder'
 import { archiveFragmentNotes } from '../../api/note'
 import { findStructFolderItemByNoteId } from '../../api/structNote'
+import { loadStructFolderPrefs, saveStructFolderPrefs } from '../../storage/utools/structFolderPrefs'
 import { useMotionPresets } from '../../composables/useMotionPresets'
 import AppButton from '../motion/AppButton.vue'
 import StructNoteCreateModal from './StructNoteCreateModal.vue'
@@ -870,10 +873,22 @@ const onDropToFolder = async (folder) => {
 const openCreateNoteModal = (fragmentNotes = []) => {
   const notes = Array.isArray(fragmentNotes) ? fragmentNotes : []
   pendingFragmentNotes.value = notes
-  createNoteInitialPathStack.value = notes.length > 0
-    ? []
-    : pathStack.value.map((item) => ({ id: item.id, name: item.name }))
+  if (notes.length > 0) {
+    const prefs = loadStructFolderPrefs()
+    createNoteInitialPathStack.value = prefs.lastPathStack.length
+      ? prefs.lastPathStack.map((item) => ({ id: item.id, name: item.name }))
+      : []
+  } else {
+    createNoteInitialPathStack.value = pathStack.value.map((item) => ({
+      id: item.id,
+      name: item.name,
+    }))
+  }
   createNoteVisible.value = true
+}
+
+const handleAiUnavailable = () => {
+  emit('error', new Error('请先在设置中配置 AI 服务'))
 }
 
 const closeCreateNoteModal = () => {
@@ -882,18 +897,23 @@ const closeCreateNoteModal = () => {
   pendingFragmentNotes.value = []
 }
 
-const handleCreateNote = async ({ title, content, parentId, sourceFragmentIds = [] }) => {
+const handleCreateNote = async ({ title, content, parentId, pathStack: savedPathStack = [], sourceFragmentIds = [] }) => {
   if (noteSaving.value) return
   noteSaving.value = true
   try {
     const fragmentIds = (Array.isArray(sourceFragmentIds) ? sourceFragmentIds : [])
       .map((id) => String(id))
       .filter(Boolean)
+    const resolvedParentId = parentId ?? currentParentId.value
     const structNoteId = await createNoteInFolder({
-      parentId: parentId ?? currentParentId.value,
+      parentId: resolvedParentId,
       title,
       content,
       sourceFragmentIds: fragmentIds,
+    })
+    saveStructFolderPrefs({
+      parentId: resolvedParentId,
+      pathStack: savedPathStack,
     })
     let archivedIds = []
     if (fragmentIds.length) {
