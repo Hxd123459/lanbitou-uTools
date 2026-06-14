@@ -14,9 +14,10 @@
             <path d="M9.5 11h.01M14.5 11h.01" />
           </svg>
         </div>
-        <p class="ai-chat-empty-title">选择笔记后开始</p>
+        <p class="ai-chat-empty-title">问我关于你的笔记</p>
         <div class="ai-chat-empty-hint">
-          <p>使用 <kbd>@</kbd> 引用碎片，然后告诉我你想做什么。</p>
+          <p>可直接提问，例如「我记过哪些关于 Vue 的内容？」</p>
+          <p>也可用 <kbd>@</kbd> 手动引用碎片。</p>
         </div>
       </div>
 

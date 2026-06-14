@@ -22,5 +22,62 @@
         }
       ]
     }
-  ]
+  ],
+  "tools": {
+    "search_fragments": {
+      "description": "按关键词搜索用户的碎片笔记或沉淀长文",
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "keywords": {
+            "type": "string",
+            "description": "搜索关键词，多个词用空格分隔"
+          },
+          "tagName": {
+            "type": "string",
+            "description": "按标签名筛选"
+          },
+          "type": {
+            "type": "string",
+            "enum": ["fragment", "sediment", "all"],
+            "description": "笔记类型：fragment 碎片、sediment 沉淀长文、all 全部"
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 20,
+            "description": "返回条数，默认 10，最大 20"
+          }
+        },
+        "required": ["keywords"]
+      }
+    },
+    "get_fragment": {
+      "description": "获取单条碎片或沉淀长文的完整内容",
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "笔记 ID"
+          },
+          "type": {
+            "type": "string",
+            "enum": ["fragment", "sediment"],
+            "description": "笔记类型，不确定时可省略"
+          }
+        },
+        "required": ["id"]
+      }
+    },
+    "list_tags": {
+      "description": "列出用户所有标签及笔记数量",
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false
+      }
+    }
+  }
 }
