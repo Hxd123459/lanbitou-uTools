@@ -265,6 +265,7 @@
           <NoteBulkActionBar
             ref="bulkActionBarRef"
             :busy="bulkActionBusy"
+            @ask-ai="handleBulkAskAi"
             @tag="openBulkTagMenu"
             @clear-tags="handleBulkClearTags"
             @clear="handleBulkClearSelection"
@@ -537,6 +538,51 @@ function appendNoteToTagFilter(note) {
   tagFilterState.total += 1
 }
 
+function stashAndRemoveFromFilterLists(id) {
+  const sid = String(id)
+  const snapshot = deleteSnapshots.get(id) || {}
+
+  if (tagFilterState.active) {
+    const index = tagFilterState.list.findIndex((note) => String(note.id) === sid)
+    if (index >= 0) {
+      snapshot.tagNote = tagFilterState.list[index]
+      tagFilterState.list = tagFilterState.list.filter((note) => String(note.id) !== sid)
+      tagFilterState.total = Math.max(0, tagFilterState.total - 1)
+    }
+  }
+
+  if (isSearchActive.value) {
+    const index = searchState.list.findIndex((note) => String(note.id) === sid)
+    if (index >= 0) {
+      snapshot.searchNote = searchState.list[index]
+      searchState.list = searchState.list.filter((note) => String(note.id) !== sid)
+      searchState.total = Math.max(0, searchState.total - 1)
+    }
+  }
+
+  if (snapshot.tagNote || snapshot.searchNote) {
+    deleteSnapshots.set(id, snapshot)
+  }
+}
+
+function restoreFromDeleteSnapshot(id) {
+  const snapshot = deleteSnapshots.get(id)
+  if (!snapshot) return
+
+  if (snapshot.tagNote) {
+    appendNoteToTagFilter(snapshot.tagNote)
+  }
+
+  if (snapshot.searchNote && isSearchActive.value) {
+    if (!searchState.list.some((note) => note.id === snapshot.searchNote.id)) {
+      searchState.list = [snapshot.searchNote, ...searchState.list]
+      searchState.total += 1
+    }
+  }
+
+  deleteSnapshots.delete(id)
+}
+
 function removeNotesFromHomeLists(ids = []) {
   const idSet = new Set((Array.isArray(ids) ? ids : []).map(String))
   if (!idSet.size) return
@@ -753,6 +799,19 @@ const handleBulkSediment = () => {
   noteViewMode.value = 'list'
   nextTick(() => {
     sedimentPanelRef.value?.openCreateNoteModal(notes)
+  })
+}
+
+const handleBulkAskAi = () => {
+  const notes = selectedNotesList.value
+  if (!notes.length || bulkActionBusy.value) return
+
+  bulkTagMenuOpen.value = false
+  exitNoteSelectingSession()
+  noteViewMode.value = 'list'
+  activeTab.value = 'ai'
+  nextTick(() => {
+    aiChatPanelRef.value?.attachNotes(notes)
   })
 }
 
@@ -1287,6 +1346,7 @@ const {
 } = useCopyNote()
 
 const deleteTimers = new Map()
+const deleteSnapshots = new Map()
 
 const handleAutoTagEnabled = () => {
   pendingAutoTagSetup.value = false
@@ -1387,15 +1447,18 @@ const handleDelete = ({ id }) => {
     assistantStore.setEditingNoteId(null)
   }
   assistantStore.setNotePendingDelete(id, true)
+  stashAndRemoveFromFilterLists(id)
 
   const timer = window.setTimeout(async () => {
     deleteTimers.delete(id)
     try {
       await deleteBlock(id)
-      assistantStore.removeNoteLocal(id)
+      deleteSnapshots.delete(id)
+      removeNotesFromHomeLists([id])
       trashPanelRef.value?.reload()
     } catch (error) {
       assistantStore.setNotePendingDelete(id, false)
+      restoreFromDeleteSnapshot(id)
       notifyError(error)
     }
   }, 3000)
@@ -1416,6 +1479,7 @@ const handleUndoDelete = (id) => {
     deleteTimers.delete(id)
   }
   assistantStore.setNotePendingDelete(id, false)
+  restoreFromDeleteSnapshot(id)
 }
 
 const handlePin = async ({ id, pinWeightValue }) => {
@@ -1482,6 +1546,7 @@ onBeforeUnmount(() => {
   stopClipboardEnterListener = null
   deleteTimers.forEach((timer) => clearTimeout(timer))
   deleteTimers.clear()
+  deleteSnapshots.clear()
   bulkAiTagWorkerToken += 1
 })
 </script>

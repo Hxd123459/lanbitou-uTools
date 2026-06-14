@@ -232,12 +232,15 @@ export async function findFolderItemByNoteId(noteId) {
   return doc ? toFolderItem(doc) : null
 }
 
-export async function updateStructNote({ id, title, content, tagId = null }) {
+export async function updateStructNote({ id, title, content, tagId = null, sourceFragmentIds = undefined }) {
   const doc = stripDoc(await dbGet(structNoteDocId(id)))
   if (!doc) throw new Error('结构化笔记不存在')
   doc.title = String(title ?? '').trim() || '无标题'
   doc.content = String(content ?? '')
   if (tagId != null) doc.tagId = tagId
+  if (sourceFragmentIds !== undefined) {
+    doc.sourceFragmentIds = normalizeSourceFragmentIds(sourceFragmentIds)
+  }
   doc.updateTime = formatDateTime()
   await saveDoc(STRUCT_NOTE_PREFIX, doc)
 

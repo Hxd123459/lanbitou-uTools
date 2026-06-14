@@ -171,7 +171,7 @@ import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { AnimatePresence, motion } from 'motion-v'
 import { getStructNote, updateStructNote, findStructFolderItemByNoteId } from '../../api/structNote'
 import { fetchFolderPathStack, moveStructItem } from '../../api/structFolder'
-import { fetchNotesByIds, restoreArchivedFragment } from '../../api/note'
+import { fetchNotesByIds, restoreArchivedFragment, archiveFragmentNotes } from '../../api/note'
 import { appendFragmentToContent } from '../../composables/useStructNoteFragments'
 import { useMotionPresets } from '../../composables/useMotionPresets'
 import StructNoteFolderBreadcrumb from './StructNoteFolderBreadcrumb.vue'
@@ -193,7 +193,7 @@ const props = defineProps({
   },
 })
 
-const emit = defineEmits(['close', 'saved', 'fragment-restored'])
+const emit = defineEmits(['close', 'saved', 'fragment-restored', 'fragments-archived'])
 
 const { presets } = useMotionPresets()
 
@@ -215,6 +215,7 @@ const insertedFragmentIds = ref(new Set())
 const fragmentsOpen = ref(false)
 const fragmentsMode = ref('compose')
 const sourceFragmentIds = ref([])
+const baselineFragmentIds = ref([])
 const restoringFragmentId = ref('')
 
 let autoSaveTimer = null
@@ -231,11 +232,22 @@ const isFolderDirty = computed(
   () => currentParentId.value !== normalizeParentId(lastSaved.value.parentId),
 )
 
+const isFragmentsDirty = computed(() => {
+  const current = localFragmentNotes.value
+    .map((note) => String(note?.id ?? ''))
+    .filter(Boolean)
+    .sort()
+    .join(',')
+  const baseline = [...baselineFragmentIds.value].sort().join(',')
+  return current !== baseline
+})
+
 const isDirty = computed(
   () =>
     draftTitle.value.trim() !== lastSaved.value.title
     || draftContent.value.trim() !== lastSaved.value.content
-    || isFolderDirty.value,
+    || isFolderDirty.value
+    || isFragmentsDirty.value,
 )
 
 const saveButtonDisabled = computed(
@@ -305,6 +317,7 @@ const handleRestoreFragment = async (fragmentNote) => {
     sourceFragmentIds.value = sourceFragmentIds.value.filter(
       (id) => String(id) !== String(fragmentId),
     )
+    baselineFragmentIds.value = [...sourceFragmentIds.value]
     localFragmentNotes.value = localFragmentNotes.value.filter(
       (item) => String(item.id) !== String(fragmentId),
     )
@@ -320,11 +333,44 @@ const handleRestoreFragment = async (fragmentNote) => {
 }
 
 const loadSourceFragments = async (ids = []) => {
-  const list = await fetchNotesByIds(ids)
+  const normalizedIds = (Array.isArray(ids) ? ids : [])
+    .map((id) => String(id))
+    .filter(Boolean)
+  const list = normalizedIds.length ? await fetchNotesByIds(normalizedIds) : []
   localFragmentNotes.value = list
+  baselineFragmentIds.value = normalizedIds
   fragmentsMode.value = list.length ? 'source' : 'compose'
   fragmentsOpen.value = false
   insertedFragmentIds.value = new Set()
+}
+
+const persistSourceFragments = async (noteId) => {
+  const allFragmentIds = localFragmentNotes.value
+    .map((note) => note?.id)
+    .filter(Boolean)
+    .map(String)
+  const previousSet = new Set(sourceFragmentIds.value.map(String))
+  const newIds = allFragmentIds.filter((id) => !previousSet.has(id))
+
+  let archivedIds = []
+  if (newIds.length) {
+    archivedIds = await archiveFragmentNotes(newIds, noteId)
+  }
+
+  sourceFragmentIds.value = allFragmentIds
+  if (allFragmentIds.length) {
+    await loadSourceFragments(allFragmentIds)
+  } else {
+    localFragmentNotes.value = []
+    baselineFragmentIds.value = []
+    fragmentsMode.value = 'compose'
+  }
+
+  if (archivedIds.length) {
+    emit('fragments-archived', archivedIds)
+  }
+
+  return allFragmentIds
 }
 
 const clearAutoSaveTimer = () => {
@@ -365,11 +411,18 @@ const handleSave = async (isAuto = false) => {
   saving.value = true
   saveStatus.value = 'saving'
   const title = resolveTitleForSave()
+  const noteId = props.noteItem.noteId ?? props.noteItem.id
   try {
+    const allFragmentIds = localFragmentNotes.value
+      .map((note) => note?.id)
+      .filter(Boolean)
+      .map(String)
+
     await updateStructNote({
-      id: props.noteItem.noteId ?? props.noteItem.id,
+      id: noteId,
       title,
       content: draftContent.value.trim(),
+      sourceFragmentIds: allFragmentIds,
     })
     if (isFolderDirty.value && folderItemId.value) {
       await moveStructItem({
@@ -377,6 +430,7 @@ const handleSave = async (isAuto = false) => {
         targetParentId: currentParentId.value,
       })
     }
+    await persistSourceFragments(noteId)
     const content = draftContent.value.trim()
     draftTitle.value = title
     note.value = { ...note.value, title, name: title, content }
@@ -441,7 +495,7 @@ const onKeydown = (e) => {
   }
 }
 
-watch([draftTitle, draftContent, pathStack], () => {
+watch([draftTitle, draftContent, pathStack, localFragmentNotes], () => {
   if (!props.visible || fetching.value || loadError.value) return
   if (isDirty.value && saveStatus.value === 'saved') {
     saveStatus.value = 'idle'
@@ -465,6 +519,7 @@ watch(
       fragmentsOpen.value = false
       fragmentsMode.value = 'compose'
       sourceFragmentIds.value = []
+      baselineFragmentIds.value = []
       restoringFragmentId.value = ''
       clearAutoSaveTimer()
       fetchDetail()

@@ -435,6 +435,7 @@
       @close="closeNoteView"
       @saved="loadCurrentList"
       @fragment-restored="(note) => emit('fragment-restored', note)"
+      @fragments-archived="(ids) => emit('fragments-archived', ids)"
     />
   </section>
 </template>

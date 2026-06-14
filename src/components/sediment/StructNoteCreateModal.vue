@@ -21,7 +21,7 @@
             :while-hover="presets.button.hover"
             :while-tap="presets.button.tap"
             :transition="presets.button.transition"
-            :disabled="aiGenerating"
+            :disabled="saving"
             @click="emitClose"
           >
             <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
@@ -193,9 +193,17 @@ const closeFolderMenu = () => {
 }
 
 const emitClose = () => {
-  if (props.saving || aiGenerating.value) return
+  if (props.saving) return
+  stopAiDraftGeneration()
   closeFolderMenu()
   emit('close')
+}
+
+const stopAiDraftGeneration = () => {
+  cancelDraft?.()
+  cancelDraft = null
+  aiGenerating.value = false
+  activePreset.value = ''
 }
 
 const markAllFragmentsInserted = () => {
@@ -293,10 +301,19 @@ const handleDraftRequest = ({ preset, customPrompt }) => {
   let streamRenderTimer = null
 
   const renderStreamingDraft = (accumulated) => {
-    const { content } = parseDraftTitleAndContent(accumulated)
-    const body = content || accumulated
-    draftContent.value = body
-    contentEditorRef.value?.setStreamingMarkdown(body)
+    try {
+      const { content } = parseDraftTitleAndContent(accumulated)
+      const body = content || accumulated
+      draftContent.value = body
+      contentEditorRef.value?.setStreamingMarkdown(body)
+    } catch (error) {
+      if (streamRenderTimer) {
+        window.clearTimeout(streamRenderTimer)
+        streamRenderTimer = null
+      }
+      stopAiDraftGeneration()
+      emit('error', error instanceof Error ? error : new Error('AI 整理渲染失败'))
+    }
   }
 
   cancelDraft = generateSedimentDraft({
@@ -322,8 +339,7 @@ const handleDraftRequest = ({ preset, customPrompt }) => {
         window.clearTimeout(streamRenderTimer)
         streamRenderTimer = null
       }
-      aiGenerating.value = false
-      activePreset.value = ''
+      stopAiDraftGeneration()
 
       if (!titleTouched.value && title) {
         draftTitle.value = title
@@ -333,9 +349,13 @@ const handleDraftRequest = ({ preset, customPrompt }) => {
       const body =
         content || parseDraftTitleAndContent(draftAccumulated).content || draftAccumulated
       draftContent.value = body
-      contentEditorRef.value?.setMarkdownContent(body, { emitUpdate: true })
+      try {
+        contentEditorRef.value?.setMarkdownContent(body, { emitUpdate: true })
+      } catch (error) {
+        emit('error', error instanceof Error ? error : new Error('AI 整理渲染失败'))
+        return
+      }
       markAllFragmentsInserted()
-      cancelDraft = null
       nextTick(() => contentEditorRef.value?.focus())
     },
     onError: (error) => {
@@ -343,19 +363,21 @@ const handleDraftRequest = ({ preset, customPrompt }) => {
         window.clearTimeout(streamRenderTimer)
         streamRenderTimer = null
       }
-      aiGenerating.value = false
-      activePreset.value = ''
-      cancelDraft = null
+      stopAiDraftGeneration()
       emit('error', error)
     },
   })
 }
 
 const onKeydown = (event) => {
-  if (!props.visible || props.saving || aiGenerating.value) return
+  if (!props.visible || props.saving) return
   if (event.key === 'Escape') {
     event.preventDefault()
     if (folderBreadcrumbRef.value?.handleEscape()) return
+    if (aiGenerating.value) {
+      stopAiDraftGeneration()
+      return
+    }
     emitClose()
   }
 }
