@@ -72,17 +72,12 @@
           with-fragments
           :disabled="saving || aiGenerating"
           :inserted-ids="insertedFragmentIds"
+          :all-fragments-inserted="allFragmentsInserted"
           :min-height="240"
           @insert="insertFragment"
+          @insert-all="insertAllFragments"
         >
           <template #prefix>
-            <p
-              v-if="localFragmentNotes.length"
-              class="struct-note-source-summary"
-            >
-              将由 {{ localFragmentNotes.length }} 条碎片沉淀 · 保存后移出碎片列表
-            </p>
-
             <input
               ref="titleInputRef"
               v-model="draftTitle"
@@ -94,17 +89,6 @@
               :disabled="saving || aiGenerating"
               @input="titleTouched = true"
             />
-
-            <div v-if="localFragmentNotes.length" class="struct-note-create-actions">
-              <button
-                type="button"
-                class="struct-note-insert-all-btn"
-                :disabled="saving || aiGenerating || allFragmentsInserted"
-                @click="insertAllFragments"
-              >
-                全部插入
-              </button>
-            </div>
 
             <StructNoteAiDraftBar
               v-if="localFragmentNotes.length"
@@ -201,7 +185,7 @@ const resetDraft = () => {
   aiDraftTitle.value = ''
   insertedFragmentIds.value = new Set()
   localFragmentNotes.value = props.fragmentNotes.map((note) => ({ ...note }))
-  fragmentsOpen.value = localFragmentNotes.value.length > 0
+  fragmentsOpen.value = false
 }
 
 const closeFolderMenu = () => {
@@ -306,14 +290,26 @@ const handleDraftRequest = ({ preset, customPrompt }) => {
   contentEditorRef.value?.setMarkdownContent('', { emitUpdate: false })
 
   let draftAccumulated = ''
+  let streamRenderTimer = null
+
+  const renderStreamingDraft = (accumulated) => {
+    const { content } = parseDraftTitleAndContent(accumulated)
+    const body = content || accumulated
+    draftContent.value = body
+    contentEditorRef.value?.setStreamingMarkdown(body)
+  }
 
   cancelDraft = generateSedimentDraft({
     fragments: localFragmentNotes.value,
     preset: preset || 'compose',
     customPrompt,
-    onDelta: (chunk, accumulated) => {
+    onDelta: (_chunk, accumulated) => {
       draftAccumulated = accumulated
-      contentEditorRef.value?.appendMarkdownChunk(chunk)
+      if (streamRenderTimer) window.clearTimeout(streamRenderTimer)
+      streamRenderTimer = window.setTimeout(() => {
+        renderStreamingDraft(accumulated)
+        streamRenderTimer = null
+      }, 80)
     },
     onTitle: (title) => {
       if (!titleTouched.value && title) {
@@ -322,6 +318,10 @@ const handleDraftRequest = ({ preset, customPrompt }) => {
       }
     },
     onDone: ({ title, content }) => {
+      if (streamRenderTimer) {
+        window.clearTimeout(streamRenderTimer)
+        streamRenderTimer = null
+      }
       aiGenerating.value = false
       activePreset.value = ''
 
@@ -339,6 +339,10 @@ const handleDraftRequest = ({ preset, customPrompt }) => {
       nextTick(() => contentEditorRef.value?.focus())
     },
     onError: (error) => {
+      if (streamRenderTimer) {
+        window.clearTimeout(streamRenderTimer)
+        streamRenderTimer = null
+      }
       aiGenerating.value = false
       activePreset.value = ''
       cancelDraft = null
@@ -448,43 +452,6 @@ defineExpose({ resetDraft })
 
 .struct-note-modal-editor :deep(.struct-note-md-editor) {
   padding-bottom: 8px;
-}
-
-.struct-note-source-summary {
-  margin: 0 0 10px;
-  font-size: 12px;
-  color: var(--color-secondary-text);
-  line-height: 1.5;
-}
-
-.struct-note-create-actions {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 8px;
-}
-
-.struct-note-insert-all-btn {
-  height: 28px;
-  padding: 0 10px;
-  border: 1px solid var(--color-border);
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.82);
-  color: var(--color-primary);
-  font-family: inherit;
-  font-size: 12px;
-  font-weight: 500;
-  cursor: pointer;
-}
-
-.struct-note-insert-all-btn:hover:not(:disabled) {
-  border-color: rgba(37, 99, 235, 0.28);
-  background: #fff;
-}
-
-.struct-note-insert-all-btn:disabled {
-  opacity: 0.55;
-  cursor: not-allowed;
 }
 
 .struct-note-title-input {

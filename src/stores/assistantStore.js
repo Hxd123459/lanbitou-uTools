@@ -30,7 +30,13 @@ export const useAssistantStore = defineStore('assistant', () => {
     notes.value
       .filter((note) => !note.pendingDelete)
       .slice()
-      .sort((a, b) => pinRank(a.pinWeightType) - pinRank(b.pinWeightType)),
+      .sort((a, b) => {
+        const pinDiff = pinRank(a.pinWeightType) - pinRank(b.pinWeightType)
+        if (pinDiff !== 0) return pinDiff
+        return String(b.createdAt || b.createTime || '').localeCompare(
+          String(a.createdAt || a.createTime || ''),
+        )
+      }),
   )
 
   const setEditingNoteId = (id) => {
@@ -109,7 +115,12 @@ export const useAssistantStore = defineStore('assistant', () => {
   const insertRestoredNote = (note) => {
     if (!note?.id || noteIdSet.value.has(note.id)) return
     noteIdSet.value.add(note.id)
-    notes.value = [{ ...note, pendingDelete: false }, ...notes.value]
+    const normalized = {
+      ...note,
+      pendingDelete: false,
+      createdAt: note.createdAt || note.createTime || '',
+    }
+    notes.value = [normalized, ...notes.value.filter((item) => item.id !== note.id)]
   }
 
   const loadMoreNotes = async () => {

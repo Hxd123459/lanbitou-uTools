@@ -1,6 +1,7 @@
 import { isUtoolsMode } from '../storage/env'
 import { loadAiSettings, getResolvedBaseUrl, getResolvedModel } from '../storage/utools/aiSettings'
 import { isUtoolsAiAvailable } from './aiService'
+import { resolveWritingStylePromptSection } from './writingStyleService'
 import { getFragmentContent } from '../composables/useStructNoteFragments'
 
 export const SEDIMENT_DRAFT_PRESETS = {
@@ -35,12 +36,16 @@ const DRAFT_SYSTEM_BASE = `你是烂笔头的笔记整理助手。根据用户�
 4. 不要重复罗列原始碎片编号，直接整合成文
 5. 若碎片信息不足，基于已有内容尽力整理，不要编造事实`
 
-function buildSystemPrompt(preset, customPrompt) {
+function buildSystemPrompt(preset, customPrompt, styleSection = '') {
   const presetConfig = SEDIMENT_DRAFT_PRESETS[preset] || SEDIMENT_DRAFT_PRESETS.compose
   let prompt = `${DRAFT_SYSTEM_BASE}\n\n整理方式：${presetConfig.instruction}`
   const custom = String(customPrompt ?? '').trim()
   if (custom) {
     prompt += `\n\n用户补充要求：${custom}`
+  }
+  const style = String(styleSection ?? '').trim()
+  if (style) {
+    prompt += `\n\n${style}`
   }
   return prompt
 }
@@ -293,7 +298,6 @@ export function generateSedimentDraft({
   onError,
 }) {
   const userContent = buildFragmentsUserMessage(fragments)
-  const systemPrompt = buildSystemPrompt(preset, customPrompt)
   let accumulated = ''
   let cancelled = false
   let innerCancel = () => {}
@@ -317,9 +321,15 @@ export function generateSedimentDraft({
   }
 
   const settings = loadAiSettings()
+  const excludeIds = (Array.isArray(fragments) ? fragments : [])
+    .map((note) => note?.id)
+    .filter(Boolean)
 
   ;(async () => {
     try {
+      const styleSection = await resolveWritingStylePromptSection({ excludeIds })
+      const systemPrompt = buildSystemPrompt(preset, customPrompt, styleSection)
+
       if (settings.provider === 'utools') {
         const content = await requestUtoolsDraft(systemPrompt, userContent, settings.model)
         if (cancelled) return

@@ -455,6 +455,7 @@ import {
 import { archiveFragmentNotes } from '../../api/note'
 import { findStructFolderItemByNoteId } from '../../api/structNote'
 import { loadStructFolderPrefs, saveStructFolderPrefs } from '../../storage/utools/structFolderPrefs'
+import { requestUtoolsDetachIfNeeded } from '../../composables/useUtoolsWindow'
 import { useMotionPresets } from '../../composables/useMotionPresets'
 import AppButton from '../motion/AppButton.vue'
 import StructNoteCreateModal from './StructNoteCreateModal.vue'
@@ -870,8 +871,11 @@ const onDropToFolder = async (folder) => {
 }
 
 // ---- 新建文件 ----
-const openCreateNoteModal = (fragmentNotes = []) => {
+const openCreateNoteModal = async (fragmentNotes = []) => {
   const notes = Array.isArray(fragmentNotes) ? fragmentNotes : []
+  if (notes.length > 0) {
+    await requestUtoolsDetachIfNeeded()
+  }
   pendingFragmentNotes.value = notes
   if (notes.length > 0) {
     const prefs = loadStructFolderPrefs()

@@ -10,7 +10,9 @@
     :fragments-mode="fragmentsMode"
     :restoring-id="restoringId"
     :active-fragment-id="activeFragmentId"
+    :all-fragments-inserted="allFragmentsInserted"
     @insert="emit('insert', $event)"
+    @insert-all="emit('insert-all')"
     @restore="emit('restore', $event)"
   >
     <slot name="prefix" />
@@ -115,6 +117,10 @@ const props = defineProps({
     type: String,
     default: '',
   },
+  allFragmentsInserted: {
+    type: Boolean,
+    default: false,
+  },
 })
 
 const emit = defineEmits([
@@ -122,6 +128,7 @@ const emit = defineEmits([
   'update:fragmentNotes',
   'update:fragmentsOpen',
   'insert',
+  'insert-all',
   'restore',
 ])
 
@@ -224,21 +231,35 @@ const focus = () => {
 }
 
 const setMarkdownContent = (value, { emitUpdate = true } = {}) => {
-  if (!editor.value || editor.value.isDestroyed) return
-  editor.value.commands.setContent(value || '', {
-    contentType: 'markdown',
-    emitUpdate,
-  })
+  if (!editor.value || editor.value.isDestroyed) return false
+  try {
+    editor.value.commands.setContent(value || '', {
+      contentType: 'markdown',
+      emitUpdate,
+    })
+    return true
+  } catch (error) {
+    console.warn('[烂笔头] markdown 解析失败', error)
+    return false
+  }
 }
 
 const appendMarkdownChunk = (chunk) => {
   if (!editor.value || editor.value.isDestroyed) return
   const addition = String(chunk ?? '')
   if (!addition) return
-  editor.value.commands.insertContent(addition, { contentType: 'markdown' })
+  try {
+    editor.value.commands.insertContent(addition, { contentType: 'markdown' })
+  } catch (error) {
+    console.warn('[烂笔头] markdown 流式插入失败', error)
+  }
 }
 
-defineExpose({ focus, setMarkdownContent, appendMarkdownChunk })
+const setStreamingMarkdown = (value, { emitUpdate = false } = {}) => {
+  setMarkdownContent(value, { emitUpdate })
+}
+
+defineExpose({ focus, setMarkdownContent, appendMarkdownChunk, setStreamingMarkdown })
 
 onBeforeUnmount(() => {
   unmountStructNoteDragHandle(editor.value, dragHandleApi)

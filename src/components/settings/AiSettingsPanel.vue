@@ -130,6 +130,32 @@
       :transition="autoTagCardMotion.transition"
     >
       <label class="ai-settings-toggle-row">
+        <span class="ai-settings-label">AI 整理时模仿我的文风</span>
+        <span class="ai-switch" :class="{ 'is-on': form.mimicWritingStyle }">
+          <input
+            v-model="form.mimicWritingStyle"
+            type="checkbox"
+            class="ai-switch-input"
+            aria-label="AI 整理时模仿我的文风"
+            @change="handleMimicStyleToggle"
+          />
+          <span class="ai-switch-track" aria-hidden="true">
+            <span class="ai-switch-thumb" />
+          </span>
+        </span>
+      </label>
+      <p class="ai-settings-hint">
+        从你的手写碎片中抽取样本，让 AI 整理初稿时更接近你的表达习惯。样本不足时自动跳过。
+      </p>
+    </motion.div>
+
+    <motion.div
+      class="ai-settings-card ai-settings-card--auto-tag"
+      :initial="autoTagCardMotion.initial"
+      :animate="autoTagCardMotion.animate"
+      :transition="{ ...autoTagCardMotion.transition, delay: 0.04 }"
+    >
+      <label class="ai-settings-toggle-row">
         <span class="ai-settings-label">AI 自动打标签</span>
         <span
           class="ai-switch"
@@ -166,6 +192,7 @@ import {
   loadAiSettings,
   saveAiSettings,
   saveAutoTagEnabled,
+  saveMimicWritingStyle,
   saveProviderAndAutoTagEnabled,
 } from '../../storage/utools/aiSettings'
 
@@ -228,6 +255,7 @@ const form = reactive({
   baseUrl: '',
   apiKey: '',
   autoTagEnabled: false,
+  mimicWritingStyle: true,
 })
 
 const saving = ref(false)
@@ -248,6 +276,7 @@ const hydrate = () => {
   form.baseUrl = saved.baseUrl
   form.apiKey = saved.apiKey
   form.autoTagEnabled = saved.autoTagEnabled
+  form.mimicWritingStyle = saved.mimicWritingStyle !== false
 }
 
 const setProviderStatus = (message, type = 'info') => {
@@ -298,6 +327,15 @@ const getConnectionParams = () => ({
   baseUrl: form.baseUrl,
   apiKey: form.apiKey,
 })
+
+const handleMimicStyleToggle = () => {
+  try {
+    saveMimicWritingStyle(form.mimicWritingStyle)
+  } catch (error) {
+    form.mimicWritingStyle = !form.mimicWritingStyle
+    console.warn('[烂笔头] 文风模仿设置保存失败', error)
+  }
+}
 
 const handleAutoTagToggle = async () => {
   const next = form.autoTagEnabled
@@ -411,6 +449,13 @@ onMounted(hydrate)
   font-size: 12px;
   line-height: 1.5;
   color: var(--color-error);
+}
+
+.ai-settings-hint {
+  margin: 10px 0 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--color-secondary-text);
 }
 
 .ai-switch.is-busy {

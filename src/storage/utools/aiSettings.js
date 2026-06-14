@@ -21,6 +21,7 @@ const DEFAULT_SETTINGS = {
   provider: 'utools',
   model: '',
   autoTagEnabled: false,
+  mimicWritingStyle: true,
 }
 
 function getStorage() {
@@ -56,11 +57,22 @@ export function loadAiSettings() {
   const apiKey = crypto?.getItem(API_KEY_KEY) || ''
 
   const autoTagEnabled = saved?.autoTagEnabled === true
+  const mimicWritingStyle =
+    saved?.mimicWritingStyle === undefined
+      ? DEFAULT_SETTINGS.mimicWritingStyle
+      : saved.mimicWritingStyle === true
 
-  return { provider, model, baseUrl, apiKey, autoTagEnabled }
+  return { provider, model, baseUrl, apiKey, autoTagEnabled, mimicWritingStyle }
 }
 
-export function saveAiSettings({ provider, model, baseUrl, apiKey, autoTagEnabled }) {
+export function saveAiSettings({
+  provider,
+  model,
+  baseUrl,
+  apiKey,
+  autoTagEnabled,
+  mimicWritingStyle,
+}) {
   const storage = getStorage()
   const crypto = getCryptoStorage()
   if (!storage) throw new Error('uTools 存储不可用')
@@ -88,6 +100,10 @@ export function saveAiSettings({ provider, model, baseUrl, apiKey, autoTagEnable
         : String(prev.baseUrl ?? AI_PROVIDERS[nextProvider]?.defaultBaseUrl ?? ''),
     autoTagEnabled:
       autoTagEnabled === undefined ? prev.autoTagEnabled === true : autoTagEnabled === true,
+    mimicWritingStyle:
+      mimicWritingStyle === undefined
+        ? prev.mimicWritingStyle !== false
+        : mimicWritingStyle === true,
   })
 
   if (crypto && apiKey !== undefined) {
@@ -99,6 +115,10 @@ export function saveAiSettings({ provider, model, baseUrl, apiKey, autoTagEnable
 
 export function saveAutoTagEnabled(enabled) {
   saveAiSettings({ autoTagEnabled: enabled === true })
+}
+
+export function saveMimicWritingStyle(enabled) {
+  saveAiSettings({ mimicWritingStyle: enabled === true })
 }
 
 /** 开启自动打标时一并持久化服务来源，供记录笔记时 generateNoteTitle 读取 */

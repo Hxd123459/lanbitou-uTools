@@ -468,6 +468,9 @@ export async function archiveFragmentsForStructNote(fragmentIds, structNoteId) {
   for (const id of idList) {
     const doc = await getNoteDoc(id)
     if (!doc || doc.deletedAt || doc.archivedAt) continue
+    if (!doc.archivedCreateTime && doc.createTime) {
+      doc.archivedCreateTime = doc.createTime
+    }
     doc.archivedAt = now
     doc.archivedByStructNoteId = String(structNoteId)
     doc.updateTime = now
@@ -483,8 +486,14 @@ export async function restoreFragmentFromArchive(fragmentId) {
   const doc = await getNoteDoc(id)
   if (!doc || doc.deletedAt) throw new Error('碎片不存在')
   if (!doc.archivedAt) return toApiNote(doc)
+
+  const preservedCreateTime = doc.archivedCreateTime || doc.createTime
   doc.archivedAt = null
   doc.archivedByStructNoteId = null
+  doc.archivedCreateTime = null
+  if (preservedCreateTime) {
+    doc.createTime = preservedCreateTime
+  }
   doc.updateTime = formatDateTime()
   await saveNoteDoc(doc)
   return toApiNote(doc)

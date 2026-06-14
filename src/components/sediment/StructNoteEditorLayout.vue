@@ -30,8 +30,10 @@
       :mode="fragmentsMode"
       :restoring-id="restoringId"
       :active-fragment-id="activeFragmentId"
+      :all-fragments-inserted="allFragmentsInserted"
       @update:fragment-notes="emit('update:fragmentNotes', $event)"
       @insert="emit('insert', $event)"
+      @insert-all="emit('insert-all')"
       @restore="emit('restore', $event)"
     />
   </div>
@@ -59,9 +61,13 @@ const props = defineProps({
     type: String,
     default: '',
   },
+  allFragmentsInserted: {
+    type: Boolean,
+    default: false,
+  },
 })
 
-const emit = defineEmits(['update:fragmentNotes', 'update:open', 'insert', 'restore'])
+const emit = defineEmits(['update:fragmentNotes', 'update:open', 'insert', 'insert-all', 'restore'])
 
 const fragmentsPanelLabel = computed(() =>
   props.fragmentsMode === 'source'

@@ -7,7 +7,7 @@
     :animate="presets.reveal.animate"
     :transition="presets.reveal.transition"
   >
-    <div class="note-bulk-actions">
+    <div class="note-bulk-actions note-bulk-actions--leading">
       <span ref="tagAnchorRef" class="note-bulk-tag-anchor">
         <motion.button
           type="button"
@@ -187,6 +187,11 @@ defineExpose({
   gap: 8px;
   padding-left: 8px;
   border-left: 1px solid var(--color-border);
+}
+
+.note-bulk-actions--leading {
+  padding-left: 0;
+  border-left: 0;
 }
 
 .note-bulk-tag-anchor {

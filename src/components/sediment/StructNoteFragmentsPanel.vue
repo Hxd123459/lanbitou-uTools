@@ -15,20 +15,54 @@
           <h3 class="struct-note-fragments-title">
             {{ panelTitle }}
           </h3>
-          <motion.button
-            type="button"
-            class="struct-note-fragments-action"
-            aria-label="收起碎片面板"
-            :while-hover="presets.button.hover"
-            :while-tap="presets.button.tap"
-            :transition="presets.button.transition"
-            @click="emit('update:open', false)"
-          >
-            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
-              <path d="M9 6l6 6-6 6" />
-            </svg>
-          </motion.button>
+          <div class="struct-note-fragments-head-actions">
+            <button
+              v-if="mode === 'compose' && fragmentNotes.length"
+              type="button"
+              class="struct-note-fragments-insert-all"
+              :disabled="disabled || allFragmentsInserted"
+              @click="emit('insert-all')"
+            >
+              全部插入
+            </button>
+            <motion.button
+              type="button"
+              class="struct-note-fragments-action"
+              aria-label="收起碎片面板"
+              :while-hover="presets.button.hover"
+              :while-tap="presets.button.tap"
+              :transition="presets.button.transition"
+              @click="emit('update:open', false)"
+            >
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+                <path d="M9 6l6 6-6 6" />
+              </svg>
+            </motion.button>
+          </div>
         </div>
+
+        <p
+          v-if="mode === 'compose' && fragmentNotes.length"
+          class="struct-note-fragments-summary"
+        >
+          <svg
+            class="struct-note-fragments-summary-icon"
+            viewBox="0 0 24 24"
+            width="14"
+            height="14"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+          >
+            <circle cx="12" cy="12" r="10" />
+            <path d="M12 16v-4" />
+            <path d="M12 8h.01" />
+          </svg>
+          <span>将由 {{ fragmentNotes.length }} 条碎片沉淀 · 保存后移出碎片列表</span>
+        </p>
 
         <p v-if="!fragmentNotes.length" class="struct-note-fragments-empty">
           {{ emptyText }}
@@ -193,9 +227,13 @@ const props = defineProps({
     type: String,
     default: '',
   },
+  allFragmentsInserted: {
+    type: Boolean,
+    default: false,
+  },
 })
 
-const emit = defineEmits(['update:open', 'update:fragmentNotes', 'insert', 'restore'])
+const emit = defineEmits(['update:open', 'update:fragmentNotes', 'insert', 'insert-all', 'restore'])
 
 const panelTitle = computed(() => {
   if (props.mode === 'source') {
@@ -308,11 +346,57 @@ watch(
   padding-right: 4px;
 }
 
+.struct-note-fragments-head-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.struct-note-fragments-insert-all {
+  height: 28px;
+  padding: 0 10px;
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.82);
+  color: var(--color-primary);
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.struct-note-fragments-insert-all:hover:not(:disabled) {
+  border-color: rgba(37, 99, 235, 0.28);
+  background: #fff;
+}
+
+.struct-note-fragments-insert-all:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
 .struct-note-fragments-title {
   margin: 0;
   font-size: 13px;
   font-weight: 600;
   color: var(--color-secondary-text);
+}
+
+.struct-note-fragments-summary {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  margin: 0 0 10px;
+  font-size: 11px;
+  line-height: 1.45;
+  color: var(--color-secondary-text);
+}
+
+.struct-note-fragments-summary-icon {
+  flex-shrink: 0;
+  margin-top: 1px;
+  opacity: 0.72;
 }
 
 .struct-note-fragments-action {
