@@ -40,9 +40,16 @@ function normalizeParentId(parentId) {
   return String(parentId)
 }
 
-async function docExists(prefix, id) {
+async function getDoc(prefix, id) {
   const doc = await dbGet(`${prefix}${id}`)
-  return Boolean(doc?.id || doc?._id)
+  if (!doc?.id && !doc?._id) return null
+  return doc
+}
+
+function isIncomingNewer(incomingTime, existingTime) {
+  if (!incomingTime) return false
+  if (!existingTime) return true
+  return String(incomingTime) > String(existingTime)
 }
 
 function collectMarkdownEntries(entries) {
@@ -88,10 +95,14 @@ async function importFolderTree(folders = [], summary, maps) {
   const sorted = sortFoldersForCreate(folders.filter((item) => item.type === 'folder'))
   for (const folder of sorted) {
     const folderId = String(folder.id)
-    if (await docExists(STRUCT_FOLDER_PREFIX, folderId)) {
+    const existingFolder = await getDoc(STRUCT_FOLDER_PREFIX, folderId)
+    if (existingFolder) {
       maps.folderIdMap.set(folderId, folderId)
-      summary.foldersSkipped += 1
-      continue
+      if (!isIncomingNewer(folder.updateTime, existingFolder.updateTime)) {
+        summary.foldersSkipped += 1
+        continue
+      }
+      summary.foldersUpdated += 1
     }
     const parentId =
       maps.folderIdMap.get(String(folder.parentId ?? '')) ?? normalizeParentId(folder.parentId)
@@ -108,7 +119,7 @@ async function importFolderTree(folders = [], summary, maps) {
       updateTime: folder.updateTime || now,
     })
     maps.folderIdMap.set(folderId, folderId)
-    summary.foldersAdded += 1
+    if (!existingFolder) summary.foldersAdded += 1
   }
 }
 
@@ -119,10 +130,12 @@ async function importFragment(item, summary, maps) {
   const noteId = String(meta.lb_id)
   maps.fragmentIdMap.set(noteId, noteId)
 
-  if (await docExists(NOTE_PREFIX, noteId)) {
+  const existingFragment = await getDoc(NOTE_PREFIX, noteId)
+  if (existingFragment && !isIncomingNewer(meta.lb_updated, existingFragment.updateTime)) {
     summary.fragmentsSkipped += 1
     return
   }
+  if (existingFragment) summary.fragmentsUpdated += 1
 
   const tagName = String(meta.lb_tag || '').trim()
   let tagId = null
@@ -175,7 +188,7 @@ async function importFragment(item, summary, maps) {
     archivedByStructNoteId: meta.lb_archived ? meta.lb_archived_by || null : null,
   })
 
-  summary.fragmentsAdded += 1
+  if (!existingFragment) summary.fragmentsAdded += 1
 }
 
 async function importSedimentNote(item, summary, maps) {
@@ -185,10 +198,12 @@ async function importSedimentNote(item, summary, maps) {
   const noteId = String(meta.lb_id)
   const folderItemId = String(meta.lb_folder_item_id || '')
 
-  if (await docExists(STRUCT_NOTE_PREFIX, noteId)) {
+  const existingSediment = await getDoc(STRUCT_NOTE_PREFIX, noteId)
+  if (existingSediment && !isIncomingNewer(meta.lb_updated, existingSediment.updateTime)) {
     summary.sedimentSkipped += 1
     return
   }
+  if (existingSediment) summary.sedimentUpdated += 1
 
   const tagName = String(meta.lb_tag || '').trim()
   let tagId = null
@@ -215,7 +230,7 @@ async function importSedimentNote(item, summary, maps) {
     updateTime: meta.lb_updated || now,
   })
 
-  if (folderItemId && !(await docExists(STRUCT_FOLDER_PREFIX, folderItemId))) {
+  if (folderItemId && !(await getDoc(STRUCT_FOLDER_PREFIX, folderItemId))) {
     const folderMeta = (maps.manifest.folders || []).find((entry) => String(entry.id) === folderItemId)
     const parentId =
       maps.folderIdMap.get(String(folderMeta?.parentId ?? '')) ??
@@ -234,7 +249,7 @@ async function importSedimentNote(item, summary, maps) {
     maps.folderIdMap.set(folderItemId, folderItemId)
   }
 
-  summary.sedimentAdded += 1
+  if (!existingSediment) summary.sedimentAdded += 1
 }
 
 export async function importLanbitouBackup(file) {
@@ -252,10 +267,13 @@ export async function importLanbitouBackup(file) {
   const tags = entries['tags.json'] ? JSON.parse(decodeText(entries['tags.json'])) : []
   const summary = {
     fragmentsAdded: 0,
+    fragmentsUpdated: 0,
     fragmentsSkipped: 0,
     foldersAdded: 0,
+    foldersUpdated: 0,
     foldersSkipped: 0,
     sedimentAdded: 0,
+    sedimentUpdated: 0,
     sedimentSkipped: 0,
     tags: 0,
     errors: [],

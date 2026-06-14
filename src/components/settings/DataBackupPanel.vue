@@ -100,10 +100,13 @@ const cardMotion = computed(() => {
 const formatBackupSummary = (summary) => {
   const parts = [
     `碎片 +${summary.fragmentsAdded}`,
+    summary.fragmentsUpdated ? `更新 ${summary.fragmentsUpdated}` : '',
     `跳过 ${summary.fragmentsSkipped}`,
     `沉淀 +${summary.sedimentAdded}`,
+    summary.sedimentUpdated ? `更新 ${summary.sedimentUpdated}` : '',
     `文件夹 +${summary.foldersAdded}`,
-  ]
+    summary.foldersUpdated ? `更新 ${summary.foldersUpdated}` : '',
+  ].filter(Boolean)
   if (summary.errors?.length) {
     parts.push(`失败 ${summary.errors.length}`)
   }
