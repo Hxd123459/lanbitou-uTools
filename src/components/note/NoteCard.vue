@@ -561,7 +561,10 @@ import '../../assets/styles/tiptap-slash-menu.css'
 import TiptapPreview from '../common/TiptapPreview.vue'
 import NoteImageGallery from './NoteImageGallery.vue'
 import NoteRecallModal from './NoteRecallModal.vue'
-import { findMergedHighlightRanges } from '../../utils/searchHighlight'
+import {
+  findMergedHighlightRanges,
+  normalizeHighlightKeywords,
+} from '../../utils/searchHighlight'
 
 const { presets, reduced } = useMotionPresets()
 

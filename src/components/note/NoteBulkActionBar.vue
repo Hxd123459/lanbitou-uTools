@@ -188,7 +188,9 @@ const { presets } = useMotionPresets()
 const tagAnchorRef = ref(null)
 
 defineExpose({
-  tagAnchorEl: tagAnchorRef,
+  get tagAnchorEl() {
+    return tagAnchorRef.value
+  },
 })
 </script>
 

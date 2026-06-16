@@ -419,7 +419,15 @@ const bulkBarWrapRef = ref(null)
 const bulkActionBarRef = ref(null)
 const noteTagCloudRef = ref(null)
 
-const bulkTagAnchorEl = computed(() => bulkActionBarRef.value?.tagAnchorEl ?? null)
+const bulkTagAnchorEl = computed(() => {
+  const anchor = bulkActionBarRef.value?.tagAnchorEl
+  if (!anchor) return null
+  if (anchor instanceof HTMLElement) return anchor
+  const raw = anchor.value ?? anchor
+  if (raw instanceof HTMLElement) return raw
+  if (raw?.$el instanceof HTMLElement) return raw.$el
+  return null
+})
 
 const bulkAiTagSession = reactive({
   active: false,
@@ -460,21 +468,38 @@ const displayedNotes = computed(() => {
   return assistantStore.visibleNotes
 })
 
+const registerSelectedNote = (note, byId) => {
+  if (!note?.id) return
+  byId.set(String(note.id), note)
+}
+
 const selectedNotesList = computed(() => {
   const ids = [...selectedNoteIds.value]
   if (!ids.length) return []
   const byId = new Map()
   for (const note of assistantStore.visibleNotes) {
-    if (note?.id) byId.set(note.id, note)
+    registerSelectedNote(note, byId)
   }
   for (const note of searchState.list) {
-    if (note?.id) byId.set(note.id, note)
+    registerSelectedNote(note, byId)
   }
   for (const note of tagFilterState.list) {
-    if (note?.id) byId.set(note.id, note)
+    registerSelectedNote(note, byId)
   }
-  return ids.map((id) => byId.get(id)).filter(Boolean)
+  return ids.map((id) => byId.get(String(id))).filter(Boolean)
 })
+
+const applyTagFieldsToNote = (note, { tagId, tagName } = {}) => {
+  if (!note) return
+  const hasTag = tagId != null && tagId !== ''
+  if (hasTag) {
+    note.title = tagName || note.title || ''
+    note.tagId = tagId
+    return
+  }
+  note.title = ''
+  note.tagId = null
+}
 
 const showNoteSelectable = computed(
   () => noteSelectingActive.value && noteViewMode.value !== 'selected',
@@ -992,6 +1017,7 @@ const handleBulkApplyTag = async (tag) => {
           retainedImageIds: getNoteRetainedImageIds(note),
         },
       )
+      applyTagFieldsToNote(note, tag)
     }
     invalidateTagList()
     noteTagCloudRef.value?.reload?.()
@@ -1023,6 +1049,7 @@ const handleBulkClearTags = async () => {
         tagName: '',
         retainedImageIds: getNoteRetainedImageIds(note),
       })
+      applyTagFieldsToNote(note, { tagId: null, tagName: '' })
     }
     invalidateTagList()
     noteTagCloudRef.value?.reload?.()
