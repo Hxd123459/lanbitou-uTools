@@ -109,6 +109,8 @@ const formatBackupSummary = (summary) => {
   ].filter(Boolean)
   if (summary.errors?.length) {
     parts.push(`失败 ${summary.errors.length}`)
+    const firstError = summary.errors[0]?.message
+    if (firstError) parts.push(firstError)
   }
   return parts.join('，')
 }

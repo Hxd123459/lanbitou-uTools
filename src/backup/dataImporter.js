@@ -1,11 +1,12 @@
 import { unzipSync } from 'fflate'
-import { saveImageFiles } from '../storage/utools/attachment'
+import { saveImageFiles, removeAttachments } from '../storage/utools/attachment'
 import { NOTE_PREFIX, STRUCT_FOLDER_PREFIX, STRUCT_NOTE_PREFIX } from '../storage/utools/constants'
 import { dbGet, dbPut } from '../storage/utools/dbClient'
 import { pinTypeToWeight } from '../storage/utools/pin'
 import { ensureTag } from '../storage/utools/tagRepository'
 import { formatDateTime } from '../storage/utools/utils'
 import {
+  ATTACHMENTS_DIR,
   BACKUP_FORMAT,
   FRAGMENTS_DIR,
   LB_TYPE_FRAGMENT,
@@ -13,6 +14,7 @@ import {
   SEDIMENT_DIR,
   isLanbitouBackup,
   joinZipPath,
+  mimeToExtension,
   parseFrontmatter,
 } from './format'
 
@@ -33,6 +35,121 @@ function readZipEntries(file) {
 
 function decodeText(bytes) {
   return new TextDecoder('utf-8').decode(bytes)
+}
+
+function normalizeZipEntryKey(key) {
+  const text = String(key ?? '').replace(/\\/g, '/').replace(/^\/+/, '')
+  try {
+    return decodeURIComponent(text)
+  } catch {
+    return text
+  }
+}
+
+function buildZipEntryIndex(entries) {
+  const index = {}
+  Object.entries(entries || {}).forEach(([key, bytes]) => {
+    const normalized = normalizeZipEntryKey(key)
+    index[normalized] = bytes
+    if (!normalized.startsWith(`${FRAGMENTS_DIR}/`)) {
+      index[joinZipPath(FRAGMENTS_DIR, normalized)] = bytes
+    }
+  })
+  return index
+}
+
+function lookupZipEntry(entryIndex, filePath) {
+  const normalized = joinZipPath(filePath)
+  if (entryIndex[normalized]) return entryIndex[normalized]
+
+  const basename = normalized.split('/').pop()
+  if (!basename) return null
+
+  for (const [key, bytes] of Object.entries(entryIndex)) {
+    if (key === basename || key.endsWith(`/${basename}`)) return bytes
+  }
+  return null
+}
+
+function extensionToMime(ext = '') {
+  const map = {
+    png: 'image/png',
+    jpg: 'image/jpeg',
+    jpeg: 'image/jpeg',
+    webp: 'image/webp',
+    gif: 'image/gif',
+  }
+  return map[String(ext).toLowerCase()] || 'application/octet-stream'
+}
+
+function normalizeImageBytes(bytes) {
+  if (!bytes) return null
+  if (bytes instanceof Uint8Array) return bytes
+  if (bytes instanceof ArrayBuffer) return new Uint8Array(bytes)
+  if (typeof bytes.length === 'number') return new Uint8Array(bytes)
+  return null
+}
+
+function discoverFragmentImages(entryIndex, noteId, imagesMeta = []) {
+  const normalizedMeta = imagesMeta
+    .filter((img) => img && typeof img === 'object' && !Array.isArray(img))
+    .map((img) => ({
+      id: img.id != null ? String(img.id) : '',
+      file: img.file ? String(img.file) : '',
+      mime: img.mime || img.mimeType || 'application/octet-stream',
+      sort: img.sort ?? img.sortOrder ?? 0,
+    }))
+    .filter((img) => img.file)
+
+  if (normalizedMeta.length) return normalizedMeta
+
+  const prefix = `${joinZipPath(FRAGMENTS_DIR, ATTACHMENTS_DIR, noteId)}/`
+  const discovered = []
+
+  for (const [key] of Object.entries(entryIndex)) {
+    const normalized = normalizeZipEntryKey(key)
+    if (!normalized.startsWith(prefix)) continue
+    const filename = normalized.slice(prefix.length)
+    if (!filename || filename.includes('/')) continue
+    const dot = filename.lastIndexOf('.')
+    const imageId = dot > 0 ? filename.slice(0, dot) : filename
+    const ext = dot > 0 ? filename.slice(dot + 1) : ''
+    discovered.push({
+      id: imageId,
+      file: normalized,
+      mime: extensionToMime(ext),
+      sort: discovered.length,
+    })
+  }
+
+  return discovered.sort((a, b) => (a.sort ?? 0) - (b.sort ?? 0))
+}
+
+function buildImageFiles(entryIndex, noteId, imagesMeta = []) {
+  return imagesMeta
+    .map((img) => {
+      const ext = mimeToExtension(img.mime || img.mimeType)
+      const candidates = [
+        img.file,
+        joinZipPath(FRAGMENTS_DIR, ATTACHMENTS_DIR, noteId, `${img.id}.${ext}`),
+      ]
+
+      let fileBytes = null
+      for (const candidate of candidates) {
+        if (!candidate) continue
+        fileBytes = lookupZipEntry(entryIndex, candidate)
+        if (fileBytes) break
+      }
+      if (!fileBytes) return null
+
+      const bytes = normalizeImageBytes(fileBytes)
+      if (!bytes?.length) return null
+
+      return new File([bytes], String(img.id || 'image'), {
+        type: img.mime || img.mimeType || 'application/octet-stream',
+      })
+    })
+    .filter(Boolean)
 }
 
 function normalizeParentId(parentId) {
@@ -145,23 +262,20 @@ async function importFragment(item, summary, maps) {
   }
 
   const now = meta.lb_created || formatDateTime()
-  const imagesMeta = Array.isArray(meta.lb_images) ? meta.lb_images.slice() : []
+  const imagesMeta = discoverFragmentImages(
+    maps.entryIndex,
+    noteId,
+    Array.isArray(meta.lb_images) ? meta.lb_images : [],
+  )
   imagesMeta.sort((a, b) => (a.sort ?? 0) - (b.sort ?? 0))
 
-  const files = imagesMeta
-    .map((img) => {
-      if (!img?.file) return null
-      const filePath = joinZipPath(img.file)
-      const fileBytes = maps.entries[filePath]
-      if (!fileBytes) return null
-      return new File([fileBytes], String(img.id || 'image'), {
-        type: img.mime || 'application/octet-stream',
-      })
-    })
-    .filter(Boolean)
+  const files = buildImageFiles(maps.entryIndex, noteId, imagesMeta)
 
   let images = []
   if (files.length) {
+    if (existingFragment?.images?.length) {
+      await removeAttachments(existingFragment.images)
+    }
     images = await saveImageFiles(noteId, files)
     images = images.map((img, index) => ({
       ...img,
@@ -281,6 +395,7 @@ export async function importLanbitouBackup(file) {
 
   const maps = {
     entries,
+    entryIndex: buildZipEntryIndex(entries),
     manifest,
     fragmentIdMap: new Map(),
     folderIdMap: new Map(),

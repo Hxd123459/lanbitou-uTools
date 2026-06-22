@@ -76,6 +76,22 @@ export function dbGetAttachment(id) {
   return getDb().getAttachment(id)
 }
 
+export async function dbGetAttachmentAsync(id) {
+  const db = getDb()
+  if (db.promises?.getAttachment) {
+    return db.promises.getAttachment(id)
+  }
+  return db.getAttachment(id)
+}
+
 export function dbGetAttachmentType(id) {
   return getDb().getAttachmentType(id)
+}
+
+export async function dbGetAttachmentTypeAsync(id) {
+  const db = getDb()
+  if (db.promises?.getAttachmentType) {
+    return db.promises.getAttachmentType(id)
+  }
+  return db.getAttachmentType(id)
 }

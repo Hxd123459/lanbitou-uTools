@@ -25,31 +25,36 @@ export function parseFrontmatter(text) {
     if (idx === -1) continue
     const key = line.slice(0, idx).trim()
     const value = line.slice(idx + 1).trim()
-
-    if (value.startsWith('[') && value.endsWith(']')) {
-      meta[key] = parseInlineList(value)
-    } else {
-      meta[key] = parseScalar(value)
-    }
-  }
-
-  if (typeof meta.lb_images === 'string' && meta.lb_images.startsWith('[')) {
-    try {
-      meta.lb_images = JSON.parse(meta.lb_images)
-    } catch {
-      meta.lb_images = []
-    }
-  }
-
-  if (typeof meta.lb_source_fragments === 'string' && meta.lb_source_fragments.startsWith('[')) {
-    try {
-      meta.lb_source_fragments = JSON.parse(meta.lb_source_fragments)
-    } catch {
-      meta.lb_source_fragments = []
-    }
+    meta[key] = parseMetaValue(key, value)
   }
 
   return { meta, body: match[2] }
+}
+
+function parseMetaValue(key, value) {
+  if (key === 'lb_images' || key === 'lb_source_fragments') {
+    const parsed = tryParseJsonArray(value)
+    if (parsed) return parsed
+  }
+
+  if (value.startsWith('[') && value.endsWith(']')) {
+    if (value.includes('{')) {
+      const parsed = tryParseJsonArray(value)
+      if (parsed) return parsed
+    }
+    return parseInlineList(value)
+  }
+
+  return parseScalar(value)
+}
+
+function tryParseJsonArray(value) {
+  try {
+    const parsed = JSON.parse(value)
+    return Array.isArray(parsed) ? parsed : null
+  } catch {
+    return null
+  }
 }
 
 function parseInlineList(value) {

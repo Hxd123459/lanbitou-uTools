@@ -1,11 +1,17 @@
 import { zipSync } from 'fflate'
 import { buildAttachmentId } from '../storage/utools/attachment'
 import {
+  ATTACHMENT_PREFIX,
   NOTE_PREFIX,
   STRUCT_FOLDER_PREFIX,
   STRUCT_NOTE_PREFIX,
 } from '../storage/utools/constants'
-import { dbAllDocs, dbGetAttachment } from '../storage/utools/dbClient'
+import {
+  dbAllDocs,
+  dbGet,
+  dbGetAttachmentAsync,
+  dbGetAttachmentTypeAsync,
+} from '../storage/utools/dbClient'
 import { pinWeightToType } from '../storage/utools/pin'
 import { listTagDocs } from '../storage/utools/tagRepository'
 import {
@@ -27,6 +33,15 @@ function stripDoc(doc) {
   return rest
 }
 
+function resolveNoteId(doc) {
+  if (doc?.id != null && doc.id !== '') return String(doc.id)
+  const rawId = String(doc?._id || '')
+  if (rawId.startsWith(NOTE_PREFIX)) {
+    return rawId.slice(NOTE_PREFIX.length)
+  }
+  return ''
+}
+
 function buildFolderPath(folderId, folderById) {
   const parts = []
   let current = folderById.get(String(folderId))
@@ -42,11 +57,25 @@ function buildFolderPath(folderId, folderById) {
   return parts.join('/')
 }
 
-async function loadNotes({ includeDeleted = false }) {
+async function loadNotes({ includeDeleted = false, includeArchived = false } = {}) {
   const docs = await dbAllDocs(NOTE_PREFIX)
-  return (docs || [])
-    .map(stripDoc)
-    .filter((doc) => doc?.id && (includeDeleted || !doc.deletedAt))
+  const notes = []
+
+  for (const rawDoc of docs || []) {
+    const noteId = resolveNoteId(rawDoc)
+    if (!noteId) continue
+
+    const fullDoc = stripDoc(await dbGet(`${NOTE_PREFIX}${noteId}`))
+    if (!fullDoc) continue
+
+    const doc = { ...fullDoc, id: noteId }
+    if (!includeDeleted && doc.deletedAt) continue
+    if (!includeArchived && doc.archivedAt) continue
+
+    notes.push(doc)
+  }
+
+  return notes
 }
 
 async function loadStructNotes() {
@@ -59,20 +88,83 @@ async function loadFolders() {
   return (docs || []).map(stripDoc).filter((doc) => doc?.id)
 }
 
-function buildFragmentMarkdown(note, tagName, attachmentWrites) {
-  const images = (note.images || []).map((img) => {
-    const imageId = img.id
-    const ext = mimeToExtension(img.mimeType)
-    const file = joinZipPath(FRAGMENTS_DIR, ATTACHMENTS_DIR, note.id, `${imageId}.${ext}`)
+function normalizeAttachmentBytes(bytes) {
+  if (!bytes) return null
+  if (bytes instanceof Uint8Array) return bytes
+  if (bytes instanceof ArrayBuffer) return new Uint8Array(bytes)
+  if (Array.isArray(bytes)) return new Uint8Array(bytes)
+  if (typeof bytes.length === 'number') return new Uint8Array(bytes)
+  return null
+}
+
+function resolveImageEntry(noteId, img, mimeType = '') {
+  let imageId = img?.id != null && img.id !== '' ? String(img.id) : ''
+  let attachmentId =
+    img?.attachmentId != null && img.attachmentId !== '' ? String(img.attachmentId) : ''
+
+  if (!attachmentId && imageId) {
+    attachmentId = buildAttachmentId(noteId, imageId)
+  }
+  if (!imageId && attachmentId) {
+    const prefix = `${ATTACHMENT_PREFIX}${noteId}/`
+    if (attachmentId.startsWith(prefix)) {
+      imageId = attachmentId.slice(prefix.length)
+    }
+  }
+  if (!imageId || !attachmentId) return null
+
+  return {
+    imageId,
+    attachmentId,
+    mimeType: mimeType || img?.mimeType || 'application/octet-stream',
+    sortOrder: img?.sortOrder ?? 0,
+  }
+}
+
+async function resolveNoteImages(note) {
+  const noteId = String(note.id)
+  const images = Array.isArray(note.images) ? [...note.images] : []
+  const knownAttachmentIds = new Set()
+
+  images.forEach((img) => {
+    const entry = resolveImageEntry(noteId, img)
+    if (entry?.attachmentId) knownAttachmentIds.add(entry.attachmentId)
+  })
+
+  const prefix = `${ATTACHMENT_PREFIX}${noteId}/`
+  const attachmentDocs = await dbAllDocs(prefix)
+  for (const doc of attachmentDocs || []) {
+    const attachmentId = String(doc?._id || doc?.id || '')
+    if (!attachmentId || knownAttachmentIds.has(attachmentId)) continue
+    const imageId = attachmentId.startsWith(prefix) ? attachmentId.slice(prefix.length) : ''
+    if (!imageId) continue
+    const mimeType = (await dbGetAttachmentTypeAsync(attachmentId)) || 'application/octet-stream'
+    images.push({
+      id: imageId,
+      attachmentId,
+      mimeType,
+      sortOrder: images.length,
+    })
+    knownAttachmentIds.add(attachmentId)
+  }
+
+  return images
+}
+
+function buildFragmentMarkdown(note, tagName, attachmentWrites, imageEntries) {
+  const noteId = String(note.id)
+  const images = imageEntries.map((entry) => {
+    const ext = mimeToExtension(entry.mimeType)
+    const file = joinZipPath(FRAGMENTS_DIR, ATTACHMENTS_DIR, noteId, `${entry.imageId}.${ext}`)
     attachmentWrites.push({
-      attachmentId: img.attachmentId || buildAttachmentId(note.id, imageId),
+      attachmentId: entry.attachmentId,
       file,
     })
     return {
-      id: imageId,
+      id: entry.imageId,
       file,
-      mime: img.mimeType || 'application/octet-stream',
-      sort: img.sortOrder ?? 0,
+      mime: entry.mimeType,
+      sort: entry.sortOrder,
     }
   })
 
@@ -80,7 +172,7 @@ function buildFragmentMarkdown(note, tagName, attachmentWrites) {
   const meta = {
     lb_version: LB_VERSION,
     lb_type: LB_TYPE_FRAGMENT,
-    lb_id: note.id,
+    lb_id: noteId,
     lb_tag: tagName || '',
     lb_created: note.createTime || '',
     lb_updated: note.updateTime || '',
@@ -108,14 +200,31 @@ export async function exportLanbitouBackup({ includeDeleted = false } = {}) {
   const files = {}
   const attachmentWrites = []
 
-  notes.forEach((note) => {
+  for (const note of notes) {
+    const noteId = String(note.id)
+    const noteImages = await resolveNoteImages(note)
+    const imageEntries = []
+
+    for (const img of noteImages) {
+      const entry = resolveImageEntry(noteId, img)
+      if (!entry) continue
+      if (!entry.mimeType || entry.mimeType === 'application/octet-stream') {
+        entry.mimeType =
+          (await dbGetAttachmentTypeAsync(entry.attachmentId)) ||
+          entry.mimeType ||
+          'application/octet-stream'
+      }
+      imageEntries.push(entry)
+    }
+
     const md = buildFragmentMarkdown(
       note,
       tagNameById.get(String(note.tagId || '')) || '',
       attachmentWrites,
+      imageEntries,
     )
-    files[joinZipPath(FRAGMENTS_DIR, `${note.id}.md`)] = new TextEncoder().encode(md)
-  })
+    files[joinZipPath(FRAGMENTS_DIR, `${noteId}.md`)] = new TextEncoder().encode(md)
+  }
 
   folders
     .filter((item) => item.type === 'note' && item.noteId)
@@ -142,12 +251,12 @@ export async function exportLanbitouBackup({ includeDeleted = false } = {}) {
     })
 
   let attachmentsCount = 0
-  attachmentWrites.forEach((item) => {
-    const bytes = dbGetAttachment(item.attachmentId)
-    if (!bytes) return
-    files[item.file] = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes)
+  for (const item of attachmentWrites) {
+    const bytes = normalizeAttachmentBytes(await dbGetAttachmentAsync(item.attachmentId))
+    if (!bytes?.length) continue
+    files[item.file] = bytes
     attachmentsCount += 1
-  })
+  }
 
   const manifest = {
     format: BACKUP_FORMAT,
