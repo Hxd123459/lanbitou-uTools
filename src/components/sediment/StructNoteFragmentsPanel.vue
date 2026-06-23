@@ -99,7 +99,11 @@
                     :content="getFragmentContent(note)"
                     :show-fallback="false"
                   />
-                  <p v-else class="struct-note-fragment-empty">（暂无内容）</p>
+                  <p v-else-if="!getFragmentImages(note).length" class="struct-note-fragment-empty">（暂无内容）</p>
+                  <NoteImageGallery
+                    v-if="getFragmentImages(note).length"
+                    :images="getFragmentImages(note)"
+                  />
                 </div>
               </div>
 
@@ -208,9 +212,10 @@
 <script setup>
 import { computed, nextTick, ref, watch } from 'vue'
 import { AnimatePresence, motion } from 'motion-v'
-import { getFragmentContent, formatFragmentTime } from '../../composables/useStructNoteFragments'
+import { getFragmentContent, getFragmentImages, formatFragmentTime } from '../../composables/useStructNoteFragments'
 import { useMotionPresets } from '../../composables/useMotionPresets'
 import TiptapPreview from '../common/TiptapPreview.vue'
+import NoteImageGallery from '../note/NoteImageGallery.vue'
 
 const props = defineProps({
   fragmentNotes: { type: Array, default: () => [] },
@@ -502,6 +507,10 @@ watch(
 
 .struct-note-fragment-content :deep(.tiptap-content .ProseMirror > :last-child) {
   margin-bottom: 0;
+}
+
+.struct-note-fragment-content :deep(.gallery) {
+  margin-top: 8px;
 }
 
 .struct-note-fragment-empty {

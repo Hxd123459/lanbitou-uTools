@@ -2,8 +2,14 @@ export function getFragmentTitle(note) {
   return note?.title || note?.fineTitle || '无标题'
 }
 
+import { buildFragmentImageMarkdown } from '../utils/attachmentMarkdown'
+
 export function getFragmentContent(note) {
   return note?.markdownContent || note?.text || note?.summary || ''
+}
+
+export function getFragmentImages(note) {
+  return Array.isArray(note?.images) ? note.images : []
 }
 
 export function getFragmentPreview(note) {
@@ -19,7 +25,12 @@ export function getFragmentChipLabel(note) {
 }
 
 export function buildFragmentBlock(note) {
-  return getFragmentContent(note).trim()
+  const text = getFragmentContent(note).trim()
+  const imagesMd = buildFragmentImageMarkdown(note)
+  if (!text && !imagesMd) return ''
+  if (!text) return imagesMd
+  if (!imagesMd) return text
+  return `${text}\n\n${imagesMd}`
 }
 
 export function appendFragmentToContent(content, note) {

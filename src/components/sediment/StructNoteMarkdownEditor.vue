@@ -66,6 +66,10 @@
 import NodeRange from '@tiptap/extension-node-range'
 import { EditorContent, useEditor } from '@tiptap/vue-3'
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
+import {
+  persistAttachmentRefsInMarkdown,
+  resolveAttachmentRefsInMarkdown,
+} from '../../utils/attachmentMarkdown'
 import { createTiptapExtensions } from '../../composables/useTiptapExtensions'
 import {
   mountStructNoteDragHandle,
@@ -168,7 +172,7 @@ const dragHandleRef = ref(null)
 let dragHandleApi = null
 
 const editor = useEditor({
-  content: props.modelValue || '',
+  content: resolveAttachmentRefsInMarkdown(props.modelValue || ''),
   contentType: 'markdown',
   editable: !props.disabled,
   immediatelyRender: false,
@@ -179,7 +183,7 @@ const editor = useEditor({
     },
   },
   onUpdate: ({ editor: currentEditor }) => {
-    emit('update:modelValue', currentEditor.getMarkdown())
+    emit('update:modelValue', persistAttachmentRefsInMarkdown(currentEditor.getMarkdown()))
   },
 })
 
@@ -201,9 +205,11 @@ watch(
   () => props.modelValue,
   (value) => {
     if (!editor.value) return
+    const resolved = resolveAttachmentRefsInMarkdown(value || '')
     const current = editor.value.getMarkdown()
     if ((value || '') === (current || '')) return
-    editor.value.commands.setContent(value || '', {
+    if (resolved === (current || '')) return
+    editor.value.commands.setContent(resolved || '', {
       contentType: 'markdown',
       emitUpdate: false,
     })
@@ -233,7 +239,7 @@ const focus = () => {
 const setMarkdownContent = (value, { emitUpdate = true } = {}) => {
   if (!editor.value || editor.value.isDestroyed) return false
   try {
-    editor.value.commands.setContent(value || '', {
+    editor.value.commands.setContent(resolveAttachmentRefsInMarkdown(value || ''), {
       contentType: 'markdown',
       emitUpdate,
     })
@@ -246,7 +252,7 @@ const setMarkdownContent = (value, { emitUpdate = true } = {}) => {
 
 const appendMarkdownChunk = (chunk) => {
   if (!editor.value || editor.value.isDestroyed) return
-  const addition = String(chunk ?? '')
+  const addition = resolveAttachmentRefsInMarkdown(String(chunk ?? ''))
   if (!addition) return
   try {
     editor.value.commands.insertContent(addition, { contentType: 'markdown' })

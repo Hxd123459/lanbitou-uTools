@@ -393,6 +393,10 @@ watch(
       }))
       closeFolderMenu()
       await nextTick()
+      if (localFragmentNotes.value.length) {
+        insertAllFragments()
+        fragmentsOpen.value = true
+      }
       titleInputRef.value?.focus()
       window.addEventListener('keydown', onKeydown)
     } else {

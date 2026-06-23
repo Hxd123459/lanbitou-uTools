@@ -245,6 +245,7 @@ import { AnimatePresence, motion } from 'motion-v'
 import { isImageFileSizeAllowed } from '../../constants/uploadLimits'
 import { useMotionPresets } from '../../composables/useMotionPresets'
 import { useTagHashPicker } from '../../composables/useTagHashPicker'
+import { markClipboardImageHandledByPaste } from '../../composables/useUtoolsClipboardEnter'
 import AppButton from '../motion/AppButton.vue'
 import '../../assets/styles/tiptap-slash-menu.css'
 
@@ -429,6 +430,7 @@ const onPaste = (event) => {
 
   if (!files.length) return
   event.preventDefault()
+  markClipboardImageHandledByPaste()
   addImages(files)
 }
 

@@ -2,6 +2,28 @@ import { ref } from 'vue'
 
 const pendingAction = ref(null)
 const listeners = new Set()
+let suppressNextClipboardImage = false
+let suppressClipboardImageTimer = null
+
+/** 输入框已通过 paste 事件处理图片，跳过 uTools 剪贴板回车重复添加 */
+export function markClipboardImageHandledByPaste() {
+  suppressNextClipboardImage = true
+  if (suppressClipboardImageTimer) clearTimeout(suppressClipboardImageTimer)
+  suppressClipboardImageTimer = setTimeout(() => {
+    suppressNextClipboardImage = false
+    suppressClipboardImageTimer = null
+  }, 400)
+}
+
+export function shouldSkipClipboardEnterImage() {
+  if (!suppressNextClipboardImage) return false
+  suppressNextClipboardImage = false
+  if (suppressClipboardImageTimer) {
+    clearTimeout(suppressClipboardImageTimer)
+    suppressClipboardImageTimer = null
+  }
+  return true
+}
 
 export function isClipboardEnterAction(action) {
   return !!action && (action.type === 'over' || action.type === 'img')

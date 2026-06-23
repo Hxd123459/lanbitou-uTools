@@ -94,17 +94,34 @@
           </svg>
         </motion.button>
 
-        <motion.img
-          v-if="current"
-          :key="current.id ?? active"
-          :src="current.url"
-          :alt="`图片 ${active + 1}`"
-          class="lb-img"
-          draggable="false"
-          :initial="presets.thumbPop.initial"
-          :animate="presets.thumbPop.animate"
-          :transition="presets.thumbPop.transition"
-        />
+        <div v-if="current" class="lb-stage">
+          <motion.img
+            :key="current.id ?? active"
+            :src="current.url"
+            :alt="`图片 ${active + 1}`"
+            class="lb-img"
+            draggable="false"
+            :initial="presets.thumbPop.initial"
+            :animate="presets.thumbPop.animate"
+            :transition="presets.thumbPop.transition"
+            @click.stop
+          />
+
+          <AnimatePresence>
+            <motion.div
+              v-if="copyFeedback"
+              key="copy-feedback"
+              class="lb-copy-feedback"
+              :class="copyFeedback === 'error' ? 'is-error' : 'is-success'"
+              :initial="{ opacity: 0, scale: 0.92, x: '-50%', y: '-50%' }"
+              :animate="{ opacity: 1, scale: 1, x: '-50%', y: '-50%' }"
+              :exit="{ opacity: 0, scale: 0.96, x: '-50%', y: '-50%' }"
+              :transition="{ duration: 0.18, ease: 'easeOut' }"
+            >
+              {{ copyFeedback === 'error' ? '复制失败' : '已复制' }}
+            </motion.div>
+          </AnimatePresence>
+        </div>
 
         <motion.button
           v-if="images.length > 1"
@@ -133,6 +150,14 @@
         <div v-if="images.length > 1" class="lb-counter">
           {{ active + 1 }} / {{ images.length }}
         </div>
+
+        <div
+          v-if="current && !copyFeedback"
+          class="lb-hint"
+          :class="{ 'has-counter': images.length > 1 }"
+        >
+          {{ copyHint }}
+        </div>
       </motion.div>
     </AnimatePresence>
   </Teleport>
@@ -152,7 +177,18 @@ const props = defineProps({
 
 const { presets } = useMotionPresets()
 
+const isMac = typeof navigator !== 'undefined'
+  && /Mac|iPhone|iPad|iPod/i.test(
+    navigator.userAgentData?.platform || navigator.platform || '',
+  )
+
+const copyHint = computed(() =>
+  `${isMac ? '⌘' : 'Ctrl'}+C 复制`,
+)
+
 const active = ref(-1)
+const copyFeedback = ref('')
+let copyFeedbackTimer = null
 
 const current = computed(() =>
   active.value >= 0 ? props.images[active.value] : null,
@@ -164,6 +200,24 @@ const open = (index) => {
 
 const close = () => {
   active.value = -1
+  clearCopyFeedback()
+}
+
+const clearCopyFeedback = () => {
+  copyFeedback.value = ''
+  if (copyFeedbackTimer) {
+    clearTimeout(copyFeedbackTimer)
+    copyFeedbackTimer = null
+  }
+}
+
+const showCopyFeedback = (type) => {
+  clearCopyFeedback()
+  copyFeedback.value = type
+  copyFeedbackTimer = setTimeout(() => {
+    copyFeedback.value = ''
+    copyFeedbackTimer = null
+  }, 1400)
 }
 
 const prev = () => {
@@ -177,6 +231,28 @@ const next = () => {
   active.value = (active.value + 1) % props.images.length
 }
 
+const copyCurrentImage = async () => {
+  const url = current.value?.url
+  if (!url) return false
+  try {
+    const res = await fetch(url)
+    if (!res.ok) throw new Error('fetch failed')
+    const blob = await res.blob()
+    const type = blob.type || 'image/png'
+    if (navigator.clipboard?.write && window.ClipboardItem) {
+      await navigator.clipboard.write([new ClipboardItem({ [type]: blob })])
+    } else {
+      throw new Error('clipboard unsupported')
+    }
+    showCopyFeedback('success')
+    return true
+  } catch (error) {
+    console.error('[NoteImageGallery] copy failed:', error)
+    showCopyFeedback('error')
+    return false
+  }
+}
+
 const onKey = (event) => {
   if (active.value === -1) return
   if (event.key === 'Escape') {
@@ -188,12 +264,16 @@ const onKey = (event) => {
   } else if (event.key === 'ArrowRight') {
     event.preventDefault()
     next()
+  } else if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'c') {
+    event.preventDefault()
+    copyCurrentImage()
   }
 }
 
 let prevBodyOverflow = ''
 watch(active, (val) => {
   if (val !== -1) {
+    clearCopyFeedback()
     document.addEventListener('keydown', onKey)
     prevBodyOverflow = document.body.style.overflow
     document.body.style.overflow = 'hidden'
@@ -205,6 +285,7 @@ watch(active, (val) => {
 
 onBeforeUnmount(() => {
   document.removeEventListener('keydown', onKey)
+  clearCopyFeedback()
   if (active.value !== -1) {
     document.body.style.overflow = prevBodyOverflow
   }
@@ -290,6 +371,15 @@ onBeforeUnmount(() => {
   padding: 24px;
 }
 
+.lb-stage {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  max-width: min(90vw, 1400px);
+  max-height: 86vh;
+}
+
 .lb-img {
   max-width: min(90vw, 1400px);
   max-height: 86vh;
@@ -297,6 +387,31 @@ onBeforeUnmount(() => {
   box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5);
   display: block;
   user-select: none;
+}
+
+.lb-copy-feedback {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  padding: 10px 20px;
+  border-radius: 10px;
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+  color: #fff;
+  pointer-events: none;
+  user-select: none;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.35);
+}
+
+.lb-copy-feedback.is-success {
+  background: rgba(24, 24, 27, 0.72);
+}
+
+.lb-copy-feedback.is-error {
+  background: rgba(185, 28, 28, 0.82);
 }
 
 .lb-btn {
@@ -356,6 +471,27 @@ onBeforeUnmount(() => {
   font-variant-numeric: tabular-nums;
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
+}
+
+.lb-hint {
+  position: fixed;
+  bottom: 18px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 4px 12px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.72);
+  font-size: 12px;
+  letter-spacing: 0.2px;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  pointer-events: none;
+  user-select: none;
+}
+
+.lb-hint.has-counter {
+  bottom: 48px;
 }
 
 @media (max-width: 480px) {
