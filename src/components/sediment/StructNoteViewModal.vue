@@ -141,12 +141,14 @@
             v-model:fragment-notes="localFragmentNotes"
             v-model:fragments-open="fragmentsOpen"
             with-fragments
+            :note-id="structNoteId"
             :inserted-ids="insertedFragmentIds"
             :fragments-mode="fragmentsMode"
             :restoring-id="restoringFragmentId"
             class="note-view-editor"
             @insert="insertFragment"
             @restore="handleRestoreFragment"
+            @image-too-large="emit('error', new Error('单张图片不能超过 10MB'))"
           >
             <template #prefix>
               <input

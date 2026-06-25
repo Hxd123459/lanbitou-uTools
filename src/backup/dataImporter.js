@@ -1,7 +1,11 @@
 import { unzipSync } from 'fflate'
-import { saveImageFiles, removeAttachments } from '../storage/utools/attachment'
+import {
+  buildAttachmentId,
+  saveImageFiles,
+  removeAttachments,
+} from '../storage/utools/attachment'
 import { NOTE_PREFIX, STRUCT_FOLDER_PREFIX, STRUCT_NOTE_PREFIX } from '../storage/utools/constants'
-import { dbGet, dbPut } from '../storage/utools/dbClient'
+import { dbGet, dbPostAttachment, dbPut } from '../storage/utools/dbClient'
 import { pinTypeToWeight } from '../storage/utools/pin'
 import { ensureTag } from '../storage/utools/tagRepository'
 import { formatDateTime } from '../storage/utools/utils'
@@ -51,8 +55,10 @@ function buildZipEntryIndex(entries) {
   Object.entries(entries || {}).forEach(([key, bytes]) => {
     const normalized = normalizeZipEntryKey(key)
     index[normalized] = bytes
-    if (!normalized.startsWith(`${FRAGMENTS_DIR}/`)) {
-      index[joinZipPath(FRAGMENTS_DIR, normalized)] = bytes
+    for (const rootDir of [FRAGMENTS_DIR, SEDIMENT_DIR]) {
+      if (!normalized.startsWith(`${rootDir}/`)) {
+        index[joinZipPath(rootDir, normalized)] = bytes
+      }
     }
   })
   return index
@@ -123,6 +129,62 @@ function discoverFragmentImages(entryIndex, noteId, imagesMeta = []) {
   }
 
   return discovered.sort((a, b) => (a.sort ?? 0) - (b.sort ?? 0))
+}
+
+function discoverSedimentImages(entryIndex, noteId, imagesMeta = []) {
+  const normalizedMeta = imagesMeta
+    .filter((img) => img && typeof img === 'object' && !Array.isArray(img))
+    .map((img) => ({
+      id: img.id != null ? String(img.id) : '',
+      file: img.file ? String(img.file) : '',
+      mime: img.mime || img.mimeType || 'application/octet-stream',
+      sort: img.sort ?? img.sortOrder ?? 0,
+    }))
+    .filter((img) => img.file)
+
+  if (normalizedMeta.length) return normalizedMeta
+
+  const prefix = `${joinZipPath(SEDIMENT_DIR, ATTACHMENTS_DIR, noteId)}/`
+  const discovered = []
+
+  for (const [key] of Object.entries(entryIndex)) {
+    const normalized = normalizeZipEntryKey(key)
+    if (!normalized.startsWith(prefix)) continue
+    const filename = normalized.slice(prefix.length)
+    if (!filename || filename.includes('/')) continue
+    const dot = filename.lastIndexOf('.')
+    const imageId = dot > 0 ? filename.slice(0, dot) : filename
+    const ext = dot > 0 ? filename.slice(dot + 1) : ''
+    discovered.push({
+      id: imageId,
+      file: normalized,
+      mime: extensionToMime(ext),
+      sort: discovered.length,
+    })
+  }
+
+  return discovered.sort((a, b) => (a.sort ?? 0) - (b.sort ?? 0))
+}
+
+async function restoreSedimentAttachments(entryIndex, noteId, imagesMeta = []) {
+  const images = discoverSedimentImages(entryIndex, noteId, imagesMeta)
+  for (const img of images) {
+    if (!img?.id) continue
+    const candidates = [
+      img.file,
+      joinZipPath(SEDIMENT_DIR, ATTACHMENTS_DIR, noteId, `${img.id}.${mimeToExtension(img.mime)}`),
+    ]
+    let fileBytes = null
+    for (const candidate of candidates) {
+      if (!candidate) continue
+      fileBytes = lookupZipEntry(entryIndex, candidate)
+      if (fileBytes) break
+    }
+    const bytes = normalizeImageBytes(fileBytes)
+    if (!bytes?.length) continue
+    const attachmentId = buildAttachmentId(noteId, img.id)
+    dbPostAttachment(attachmentId, bytes, img.mime || 'application/octet-stream')
+  }
 }
 
 function buildImageFiles(entryIndex, noteId, imagesMeta = []) {
@@ -332,6 +394,12 @@ async function importSedimentNote(item, summary, maps) {
 
   const now = meta.lb_created || formatDateTime()
   const title = String(meta.title || '无标题').trim() || '无标题'
+
+  await restoreSedimentAttachments(
+    maps.entryIndex,
+    noteId,
+    Array.isArray(meta.lb_images) ? meta.lb_images : [],
+  )
 
   await dbPut({
     _id: `${STRUCT_NOTE_PREFIX}${noteId}`,

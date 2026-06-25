@@ -422,6 +422,7 @@ const onKeydown = (event) => {
 
 const onPaste = (event) => {
   if (props.submitting) return
+  if (document.activeElement !== textareaRef.value) return
   const items = Array.from(event.clipboardData?.items || [])
   const files = items
     .filter((item) => item.kind === 'file' && item.type.startsWith('image/'))

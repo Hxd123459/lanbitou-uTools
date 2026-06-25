@@ -380,6 +380,7 @@ import {
   onClipboardEnter,
   payloadToImageFile,
   shouldSkipClipboardEnterImage,
+  isLocalImagePasteTargetActive,
   takePendingClipboardAction,
 } from '../composables/useUtoolsClipboardEnter'
 import { generateNoteTitle, isUtoolsAiAvailable, shouldAutoTagContent } from '../ai/aiService'
@@ -1315,6 +1316,7 @@ const applyClipboardEnter = async (action) => {
     }
   } else if (action.type === 'img') {
     if (shouldSkipClipboardEnterImage()) return
+    if (isLocalImagePasteTargetActive()) return
     const file = await payloadToImageFile(action.payload)
     if (file) inputBarRef.value?.addImages([file])
   }

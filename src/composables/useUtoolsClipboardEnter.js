@@ -12,7 +12,16 @@ export function markClipboardImageHandledByPaste() {
   suppressClipboardImageTimer = setTimeout(() => {
     suppressNextClipboardImage = false
     suppressClipboardImageTimer = null
-  }, 400)
+  }, 800)
+}
+
+/** 当前焦点在局部编辑器（碎片编辑 / TipTap 正文），不应把图片写入底部输入栏 */
+export function isLocalImagePasteTargetActive() {
+  const el = document.activeElement
+  if (!el) return false
+  if (el.classList?.contains('note-editor')) return true
+  if (el.closest?.('.struct-note-md-prosemirror, .ProseMirror')) return true
+  return false
 }
 
 export function shouldSkipClipboardEnterImage() {

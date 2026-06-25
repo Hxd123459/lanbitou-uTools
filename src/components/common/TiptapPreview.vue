@@ -44,6 +44,7 @@ const editor = useEditor({
     placeholder: '',
     slashCommand: false,
     markdownPaste: false,
+    enableImage: true,
   }),
   onCreate: () => {
     notifyUpdated()

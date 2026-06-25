@@ -454,7 +454,11 @@ import {
   updateStructSort,
 } from '../../api/structFolder'
 import { archiveFragmentNotes } from '../../api/note'
-import { findStructFolderItemByNoteId } from '../../api/structNote'
+import { findStructFolderItemByNoteId, updateStructNote } from '../../api/structNote'
+import {
+  finalizeInlineImagesInMarkdown,
+  hasPendingInlineImages,
+} from '../../utils/attachmentMarkdown'
 import { loadStructFolderPrefs, saveStructFolderPrefs } from '../../storage/utools/structFolderPrefs'
 import { requestUtoolsDetachIfNeeded } from '../../composables/useUtoolsWindow'
 import { useMotionPresets } from '../../composables/useMotionPresets'
@@ -916,6 +920,17 @@ const handleCreateNote = async ({ title, content, parentId, pathStack: savedPath
       content,
       sourceFragmentIds: fragmentIds,
     })
+    if (hasPendingInlineImages(content)) {
+      const finalizedContent = await finalizeInlineImagesInMarkdown(structNoteId, content)
+      if (finalizedContent !== content) {
+        await updateStructNote({
+          id: structNoteId,
+          title,
+          content: finalizedContent,
+          sourceFragmentIds: fragmentIds,
+        })
+      }
+    }
     saveStructFolderPrefs({
       parentId: resolvedParentId,
       pathStack: savedPathStack,

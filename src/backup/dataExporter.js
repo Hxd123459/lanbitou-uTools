@@ -1,5 +1,6 @@
 import { zipSync } from 'fflate'
 import { buildAttachmentId } from '../storage/utools/attachment'
+import { extractLbAttRefsFromMarkdown } from '../utils/attachmentMarkdown'
 import {
   ATTACHMENT_PREFIX,
   NOTE_PREFIX,
@@ -185,6 +186,34 @@ function buildFragmentMarkdown(note, tagName, attachmentWrites, imageEntries) {
   return serializeFrontmatter(meta, body)
 }
 
+async function buildSedimentImageEntries(noteId, content, attachmentWrites) {
+  const attachmentIds = extractLbAttRefsFromMarkdown(content)
+  if (!attachmentIds.length) return []
+
+  const prefix = `${ATTACHMENT_PREFIX}${noteId}/`
+  const images = []
+
+  for (const attachmentId of attachmentIds) {
+    if (!attachmentId.startsWith(prefix)) continue
+    const imageId = attachmentId.slice(prefix.length)
+    if (!imageId) continue
+
+    const mimeType =
+      (await dbGetAttachmentTypeAsync(attachmentId)) || 'application/octet-stream'
+    const ext = mimeToExtension(mimeType)
+    const file = joinZipPath(SEDIMENT_DIR, ATTACHMENTS_DIR, noteId, `${imageId}.${ext}`)
+    attachmentWrites.push({ attachmentId, file })
+    images.push({
+      id: imageId,
+      file,
+      mime: mimeType,
+      sort: images.length,
+    })
+  }
+
+  return images
+}
+
 export async function exportLanbitouBackup({ includeDeleted = false } = {}) {
   const [notes, structNotes, folders, tags] = await Promise.all([
     loadNotes({ includeDeleted }),
@@ -226,29 +255,33 @@ export async function exportLanbitouBackup({ includeDeleted = false } = {}) {
     files[joinZipPath(FRAGMENTS_DIR, `${noteId}.md`)] = new TextEncoder().encode(md)
   }
 
-  folders
-    .filter((item) => item.type === 'note' && item.noteId)
-    .forEach((folderItem) => {
-      const note = structNoteById.get(String(folderItem.noteId))
-      if (!note) return
-      const folderPath = buildFolderPath(folderItem.id, folderById)
-      const meta = {
-        lb_version: LB_VERSION,
-        lb_type: LB_TYPE_SEDIMENT,
-        lb_id: note.id,
-        lb_folder_item_id: folderItem.id,
-        title: note.title || folderItem.name || '无标题',
-        lb_tag: tagNameById.get(String(note.tagId || '')) || '',
-        lb_source_fragments: [...(note.sourceFragmentIds || [])],
-        lb_created: note.createTime || '',
-        lb_updated: note.updateTime || '',
-      }
-      const content = serializeFrontmatter(meta, note.content || '')
-      const path = folderPath
-        ? joinZipPath(SEDIMENT_DIR, folderPath, `${note.id}.md`)
-        : joinZipPath(SEDIMENT_DIR, `${note.id}.md`)
-      files[path] = new TextEncoder().encode(content)
-    })
+  const sedimentFolderItems = folders.filter((item) => item.type === 'note' && item.noteId)
+  for (const folderItem of sedimentFolderItems) {
+    const note = structNoteById.get(String(folderItem.noteId))
+    if (!note) continue
+    const noteId = String(note.id)
+    const folderPath = buildFolderPath(folderItem.id, folderById)
+    const imageEntries = await buildSedimentImageEntries(noteId, note.content || '', attachmentWrites)
+    const meta = {
+      lb_version: LB_VERSION,
+      lb_type: LB_TYPE_SEDIMENT,
+      lb_id: note.id,
+      lb_folder_item_id: folderItem.id,
+      title: note.title || folderItem.name || '无标题',
+      lb_tag: tagNameById.get(String(note.tagId || '')) || '',
+      lb_source_fragments: [...(note.sourceFragmentIds || [])],
+      lb_created: note.createTime || '',
+      lb_updated: note.updateTime || '',
+    }
+    if (imageEntries.length) {
+      meta.lb_images = imageEntries
+    }
+    const content = serializeFrontmatter(meta, note.content || '')
+    const path = folderPath
+      ? joinZipPath(SEDIMENT_DIR, folderPath, `${note.id}.md`)
+      : joinZipPath(SEDIMENT_DIR, `${note.id}.md`)
+    files[path] = new TextEncoder().encode(content)
+  }
 
   let attachmentsCount = 0
   for (const item of attachmentWrites) {

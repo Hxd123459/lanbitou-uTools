@@ -60,6 +60,7 @@ import {
   resolveAttachmentRefsInMarkdown,
 } from '../../utils/attachmentMarkdown'
 import { createTiptapExtensions } from '../../composables/useTiptapExtensions'
+import { createImagePasteExtension } from '../../extensions/tiptapImagePaste'
 import {
   mountStructNoteDragHandle,
   unmountStructNoteDragHandle,
@@ -113,6 +114,10 @@ const props = defineProps({
     type: Boolean,
     default: false,
   },
+  noteId: {
+    type: String,
+    default: '',
+  },
 })
 
 const emit = defineEmits([
@@ -122,6 +127,7 @@ const emit = defineEmits([
   'insert',
   'insert-all',
   'restore',
+  'image-too-large',
 ])
 
 const fragmentNotesModel = computed({
@@ -143,12 +149,21 @@ const rootStyle = computed(() => ({
 const dragHandleRef = ref(null)
 let dragHandleApi = null
 
+const getImagePasteContext = () => ({
+  noteId: props.noteId,
+  onImageTooLarge: () => emit('image-too-large'),
+})
+
 const editor = useEditor({
   content: resolveAttachmentRefsInMarkdown(props.modelValue || ''),
   contentType: 'markdown',
   editable: !props.disabled,
   immediatelyRender: false,
-  extensions: [...createTiptapExtensions(), NodeRange],
+  extensions: [
+    ...createTiptapExtensions({ enableImage: true }),
+    NodeRange,
+    createImagePasteExtension(getImagePasteContext),
+  ],
   editorProps: {
     attributes: {
       class: 'struct-note-md-prosemirror',

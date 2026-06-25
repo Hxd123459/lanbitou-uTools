@@ -1,5 +1,6 @@
 import { Markdown } from '@tiptap/markdown'
 import CodeBlockLowlight from '@tiptap/extension-code-block-lowlight'
+import Image from '@tiptap/extension-image'
 import Placeholder from '@tiptap/extension-placeholder'
 import StarterKit from '@tiptap/starter-kit'
 import TaskItem from '@tiptap/extension-task-item'
@@ -21,6 +22,7 @@ export function createTiptapExtensions(options = {}) {
     placeholder = '输入 "/" 唤起快捷命令…',
     slashCommand = true,
     markdownPaste = true,
+    enableImage = false,
   } = options
 
   const extensions = [
@@ -52,6 +54,18 @@ export function createTiptapExtensions(options = {}) {
       showOnlyWhenEditable: true,
     }),
   ]
+
+  if (enableImage) {
+    extensions.push(
+      Image.configure({
+        inline: false,
+        allowBase64: false,
+        HTMLAttributes: {
+          class: 'tiptap-image',
+        },
+      }),
+    )
+  }
 
   if (slashCommand) {
     extensions.push(SlashCommandExtension)

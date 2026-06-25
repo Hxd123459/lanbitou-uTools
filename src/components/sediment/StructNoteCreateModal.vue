@@ -76,6 +76,7 @@
           :min-height="240"
           @insert="insertFragment"
           @insert-all="insertAllFragments"
+          @image-too-large="emit('error', new Error('单张图片不能超过 10MB'))"
         >
           <template #prefix>
             <input

@@ -152,6 +152,15 @@
   pointer-events: none;
 }
 
+.tiptap-content .ProseMirror img,
+.tiptap-content .ProseMirror img.tiptap-image {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  margin: 0.75em 0;
+  border-radius: 8px;
+}
+
 .tiptap-preview-fallback {
   margin: 0;
   font-size: 15px;
