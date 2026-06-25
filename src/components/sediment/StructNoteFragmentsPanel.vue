@@ -4,20 +4,48 @@
       v-if="open"
       key="fragments-panel"
       class="struct-note-fragments"
-      aria-label="已选碎片笔记"
+      aria-label="碎片面板"
       :initial="{ width: 0, opacity: 0, x: 16 }"
-      :animate="{ width: FRAGMENTS_PANEL_WIDTH, opacity: 1, x: 0 }"
+      :animate="{ width: panelWidthPx, opacity: 1, x: 0 }"
       :exit="{ width: 0, opacity: 0, x: 16 }"
-      :transition="{ duration: 0.24, ease: [0.22, 1, 0.36, 1] }"
+      :transition="panelMotionTransition"
     >
       <div class="struct-note-fragments-inner">
         <div class="struct-note-fragments-head">
-          <h3 class="struct-note-fragments-title">
-            {{ panelTitle }}
+          <div v-if="mode === 'compose'" ref="tabsRef" class="struct-note-fragments-tabs" role="tablist" aria-label="碎片视图">
+            <motion.div
+              class="struct-note-fragments-tab-indicator"
+              :animate="tabIndicator"
+              :transition="{ type: 'spring', stiffness: 420, damping: 34 }"
+            />
+            <button
+              ref="allTabRef"
+              type="button"
+              class="struct-note-fragments-tab"
+              role="tab"
+              :aria-selected="panelTab === 'all'"
+              @click="setPanelTab('all')"
+            >
+              全部
+            </button>
+            <button
+              ref="selectedTabRef"
+              type="button"
+              class="struct-note-fragments-tab"
+              role="tab"
+              :aria-selected="panelTab === 'selected'"
+              @click="setPanelTab('selected')"
+            >
+              已选({{ fragmentNotes.length }})
+            </button>
+          </div>
+          <h3 v-else class="struct-note-fragments-title">
+            来源({{ fragmentNotes.length }})
           </h3>
+
           <div class="struct-note-fragments-head-actions">
             <button
-              v-if="mode === 'compose' && fragmentNotes.length"
+              v-if="mode === 'compose' && panelTab === 'selected' && fragmentNotes.length"
               type="button"
               class="struct-note-fragments-insert-all"
               :disabled="disabled || allFragmentsInserted"
@@ -41,8 +69,62 @@
           </div>
         </div>
 
+        <div
+          v-if="mode === 'compose'"
+          v-show="panelTab === 'all'"
+          class="struct-note-fragments-all-pane"
+        >
+          <GlobalSearchQueryBar
+            ref="queryBarRef"
+            compact
+            panel-mode
+            :active="open && panelTab === 'all'"
+            :scopes="fragmentOnlyScopes"
+            query-without-filters
+            placeholder="使用 # 选标签；Enter 添加关键词"
+            class="struct-note-fragments-search"
+            @results-change="onSearchResultsChange"
+          />
+
+          <div
+            ref="allListRef"
+            class="struct-note-fragments-all-list"
+            @scroll="onAllListScroll"
+          >
+            <p v-if="pickerLoading && !pickerList.length" class="struct-note-fragments-empty">
+              加载中…
+            </p>
+            <p v-else-if="searchError" class="struct-note-fragments-empty struct-note-fragments-empty--error">
+              {{ searchError }}
+            </p>
+            <p v-else-if="hasQueried && !pickerLoading && !pickerList.length" class="struct-note-fragments-empty">
+              未找到匹配碎片，试试减少关键词或放宽筛选
+            </p>
+
+            <div
+              v-for="note in pickerList"
+              :key="note.id"
+              class="struct-note-fragments-all-item"
+            >
+              <NoteCard
+                :note="note"
+                :highlight="searchKeywords"
+                selectable
+                compact
+                disable-edit
+                :selected="isNoteSelected(note.id)"
+                @toggle-select="toggleAllTabSelect(note)"
+              />
+            </div>
+
+            <p v-if="pickerLoadingMore" class="struct-note-fragments-empty struct-note-fragments-empty--more">
+              加载更多…
+            </p>
+          </div>
+        </div>
+
         <p
-          v-if="mode === 'compose' && fragmentNotes.length"
+          v-if="mode === 'compose' && panelTab === 'selected' && fragmentNotes.length"
           class="struct-note-fragments-summary"
         >
           <svg
@@ -64,146 +146,157 @@
           <span>将由 {{ fragmentNotes.length }} 条碎片沉淀 · 保存后移出碎片列表</span>
         </p>
 
-        <p v-if="!fragmentNotes.length" class="struct-note-fragments-empty">
-          {{ emptyText }}
-        </p>
+        <!-- 已选 Tab -->
+        <div v-show="panelTab === 'selected' || mode === 'source'" class="struct-note-fragments-selected-pane">
+          <p v-if="!fragmentNotes.length" class="struct-note-fragments-empty">
+            {{ emptyText }}
+          </p>
 
-        <ul v-else ref="listRef" class="struct-note-fragments-list">
-          <AnimatePresence mode="popLayout">
-            <motion.li
-              v-for="note in fragmentNotes"
-              :key="note.id"
-              :ref="(el) => setItemRef(note.id, el)"
-              class="struct-note-fragment-item"
-              :class="{
-                'is-active': activeFragmentId === String(note.id),
-                'is-restoring': restoringConfirmId === String(note.id),
-              }"
-              layout
-              :initial="itemMotion.initial"
-              :animate="itemMotion.animate"
-              :exit="itemMotion.exit"
-              :transition="itemMotion.transition"
-            >
-              <div class="struct-note-fragment-meta">
-                <span v-if="(note.title || '').trim()" class="struct-note-fragment-tag">
-                  {{ note.title }}
-                </span>
-                <time class="struct-note-fragment-time">{{ formatFragmentTime(note.createdAt) }}</time>
-              </div>
-
-              <div class="struct-note-fragment-main">
-                <div class="struct-note-fragment-content">
-                  <TiptapPreview
-                    v-if="getFragmentContent(note)"
-                    :content="getFragmentContent(note)"
-                    :show-fallback="false"
-                  />
-                  <p v-else-if="!getFragmentImages(note).length" class="struct-note-fragment-empty">（暂无内容）</p>
-                  <NoteImageGallery
-                    v-if="getFragmentImages(note).length"
-                    :images="getFragmentImages(note)"
-                  />
-                </div>
-              </div>
-
-              <div
-                v-if="restoringConfirmId === String(note.id)"
-                class="fragment-restore-confirm"
-                @click.stop
+          <ul v-else ref="listRef" class="struct-note-fragments-list">
+              <li
+                v-for="note in fragmentNotes"
+                :key="note.id"
+                class="struct-note-fragment-item"
+                :class="{
+                  'is-restoring': restoringConfirmId === String(note.id),
+                }"
               >
-                <span class="fragment-restore-text">还原至碎片列表？</span>
-                <div class="fragment-restore-actions">
+                <div class="struct-note-fragment-meta">
+                  <span v-if="(note.title || '').trim()" class="struct-note-fragment-tag">
+                    {{ note.title }}
+                  </span>
+                  <time class="struct-note-fragment-time">{{ formatFragmentTime(note.createdAt) }}</time>
+                </div>
+
+                <div class="struct-note-fragment-main">
+                  <div class="struct-note-fragment-content">
+                    <TiptapPreview
+                      v-if="getFragmentContent(note)"
+                      :content="getFragmentContent(note)"
+                      :show-fallback="false"
+                    />
+                    <p v-else-if="!getFragmentImages(note).length" class="struct-note-fragment-empty">（暂无内容）</p>
+                    <NoteImageGallery
+                      v-if="getFragmentImages(note).length"
+                      :images="getFragmentImages(note)"
+                    />
+                  </div>
+                </div>
+
+                <div
+                  v-if="restoringConfirmId === String(note.id)"
+                  class="fragment-restore-confirm"
+                  @click.stop
+                >
+                  <span class="fragment-restore-text">还原至碎片列表？</span>
+                  <div class="fragment-restore-actions">
+                    <motion.button
+                      type="button"
+                      class="fragment-restore-btn fragment-restore-btn--yes"
+                      :disabled="disabled || restoringId === note.id"
+                      :while-hover="presets.button.hover"
+                      :while-tap="presets.button.tap"
+                      :transition="presets.button.transition"
+                      @click="confirmRestore(note)"
+                    >
+                      {{ restoringId === note.id ? '还原中…' : '还原' }}
+                    </motion.button>
+                    <motion.button
+                      type="button"
+                      class="fragment-restore-btn fragment-restore-btn--no"
+                      :disabled="restoringId === note.id"
+                      :while-hover="presets.button.hover"
+                      :while-tap="presets.button.tap"
+                      :transition="presets.button.transition"
+                      @click="cancelRestoreConfirm"
+                    >
+                      取消
+                    </motion.button>
+                  </div>
+                </div>
+
+                <div v-else class="struct-note-fragment-footer">
                   <motion.button
                     type="button"
-                    class="fragment-restore-btn fragment-restore-btn--yes"
-                    :disabled="disabled || restoringId === note.id"
-                    :while-hover="presets.button.hover"
-                    :while-tap="presets.button.tap"
+                    class="fragment-item-action-btn"
+                    :class="{ 'is-added': insertedIds.has(note.id) }"
+                    :disabled="disabled || insertedIds.has(note.id)"
+                    :aria-label="insertedIds.has(note.id) ? '已加入正文' : '加入正文'"
+                    :title="insertedIds.has(note.id) ? '已加入正文' : '加入正文'"
+                    :while-hover="disabled || insertedIds.has(note.id) ? undefined : presets.button.hover"
+                    :while-tap="disabled || insertedIds.has(note.id) ? undefined : presets.button.tap"
                     :transition="presets.button.transition"
-                    @click="confirmRestore(note)"
+                    @click="emit('insert', note)"
                   >
-                    {{ restoringId === note.id ? '还原中…' : '还原' }}
+                    <svg
+                      v-if="insertedIds.has(note.id)"
+                      viewBox="0 0 24 24"
+                      width="14"
+                      height="14"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2.2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      aria-hidden="true"
+                    >
+                      <path d="M5 12l5 5L20 7" />
+                    </svg>
+                    <svg
+                      v-else
+                      viewBox="0 0 24 24"
+                      width="14"
+                      height="14"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      aria-hidden="true"
+                    >
+                      <path d="M19 12H5" />
+                      <path d="M12 19l-7-7 7-7" />
+                    </svg>
                   </motion.button>
+
                   <motion.button
+                    v-if="mode === 'source'"
                     type="button"
-                    class="fragment-restore-btn fragment-restore-btn--no"
-                    :disabled="restoringId === note.id"
-                    :while-hover="presets.button.hover"
-                    :while-tap="presets.button.tap"
+                    class="fragment-item-action-btn fragment-item-action-btn--restore"
+                    :disabled="disabled || restoringId === note.id"
+                    aria-label="还原至碎片列表"
+                    title="还原至碎片列表"
+                    :while-hover="disabled || restoringId === note.id ? undefined : presets.button.hover"
+                    :while-tap="disabled || restoringId === note.id ? undefined : presets.button.tap"
                     :transition="presets.button.transition"
-                    @click="cancelRestoreConfirm"
+                    @click="startRestoreConfirm(note)"
                   >
-                    取消
+                    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                      <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+                      <path d="M3 3v5h5" />
+                    </svg>
+                  </motion.button>
+
+                  <motion.button
+                    v-if="mode === 'compose'"
+                    type="button"
+                    class="fragment-item-action-btn fragment-item-action-btn--remove"
+                    :disabled="disabled"
+                    aria-label="移出已选"
+                    title="移出已选"
+                    :while-hover="disabled ? undefined : presets.button.hover"
+                    :while-tap="disabled ? undefined : presets.button.tap"
+                    :transition="presets.button.transition"
+                    @click="removeFromSelected(note)"
+                  >
+                    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+                      <path d="M18 6 6 18M6 6l12 12" />
+                    </svg>
                   </motion.button>
                 </div>
-              </div>
-
-              <div v-else class="struct-note-fragment-footer">
-                <motion.button
-                  type="button"
-                  class="fragment-item-action-btn"
-                  :class="{ 'is-added': insertedIds.has(note.id) }"
-                  :disabled="disabled || insertedIds.has(note.id)"
-                  :aria-label="insertedIds.has(note.id) ? '已加入正文' : '加入正文'"
-                  :title="insertedIds.has(note.id) ? '已加入正文' : '加入正文'"
-                  :while-hover="disabled || insertedIds.has(note.id) ? undefined : presets.button.hover"
-                  :while-tap="disabled || insertedIds.has(note.id) ? undefined : presets.button.tap"
-                  :transition="presets.button.transition"
-                  @click="emit('insert', note)"
-                >
-                  <svg
-                    v-if="insertedIds.has(note.id)"
-                    viewBox="0 0 24 24"
-                    width="14"
-                    height="14"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="2.2"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    aria-hidden="true"
-                  >
-                    <path d="M5 12l5 5L20 7" />
-                  </svg>
-                  <svg
-                    v-else
-                    viewBox="0 0 24 24"
-                    width="14"
-                    height="14"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="2"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    aria-hidden="true"
-                  >
-                    <path d="M19 12H5" />
-                    <path d="M12 19l-7-7 7-7" />
-                  </svg>
-                </motion.button>
-
-                <motion.button
-                  v-if="mode === 'source'"
-                  type="button"
-                  class="fragment-item-action-btn fragment-item-action-btn--restore"
-                  :disabled="disabled || restoringId === note.id"
-                  aria-label="还原至碎片列表"
-                  title="还原至碎片列表"
-                  :while-hover="disabled || restoringId === note.id ? undefined : presets.button.hover"
-                  :while-tap="disabled || restoringId === note.id ? undefined : presets.button.tap"
-                  :transition="presets.button.transition"
-                  @click="startRestoreConfirm(note)"
-                >
-                  <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                    <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
-                    <path d="M3 3v5h5" />
-                  </svg>
-                </motion.button>
-              </div>
-            </motion.li>
-          </AnimatePresence>
-        </ul>
+              </li>
+          </ul>
+        </div>
       </div>
     </motion.aside>
   </AnimatePresence>
@@ -212,17 +305,24 @@
 <script setup>
 import { computed, nextTick, ref, watch } from 'vue'
 import { AnimatePresence, motion } from 'motion-v'
+import { fetchNotesByIds } from '../../api/note'
 import { getFragmentContent, getFragmentImages, formatFragmentTime } from '../../composables/useStructNoteFragments'
 import { useMotionPresets } from '../../composables/useMotionPresets'
+import GlobalSearchQueryBar from '../search/GlobalSearchQueryBar.vue'
 import TiptapPreview from '../common/TiptapPreview.vue'
 import NoteImageGallery from '../note/NoteImageGallery.vue'
+import NoteCard from '../note/NoteCard.vue'
 
 const props = defineProps({
   fragmentNotes: { type: Array, default: () => [] },
   insertedIds: { type: Object, default: () => new Set() },
   disabled: { type: Boolean, default: false },
   open: { type: Boolean, default: false },
-  activeFragmentId: { type: String, default: '' },
+  panelTab: {
+    type: String,
+    default: 'selected',
+    validator: (value) => ['selected', 'all'].includes(value),
+  },
   mode: {
     type: String,
     default: 'compose',
@@ -238,54 +338,154 @@ const props = defineProps({
   },
 })
 
-const emit = defineEmits(['update:open', 'update:fragmentNotes', 'insert', 'insert-all', 'restore'])
-
-const panelTitle = computed(() => {
-  if (props.mode === 'source') {
-    return `来源碎片（${props.fragmentNotes.length}）`
-  }
-  return `已选碎片（${props.fragmentNotes.length}）`
-})
+const emit = defineEmits([
+  'update:open',
+  'update:fragmentNotes',
+  'update:panelTab',
+  'insert',
+  'insert-all',
+  'restore',
+])
 
 const emptyText = computed(() =>
   props.mode === 'source'
     ? '暂无关联的碎片'
-    : '暂无碎片，点击上方 + 添加',
+    : '暂无已选，切换到「全部」添加',
 )
 
-const FRAGMENTS_PANEL_WIDTH = 360
+const PANEL_WIDTH_SELECTED = 360
+const PANEL_WIDTH_ALL = 436
+const fragmentOnlyScopes = ['fragment']
 
-const { presets, reduced } = useMotionPresets()
-const listRef = ref(null)
-const itemRefs = ref(new Map())
-const restoringConfirmId = ref('')
-
-const itemMotion = computed(() => {
-  if (reduced.value) {
-    return { initial: {}, animate: {}, exit: {}, transition: { duration: 0 } }
-  }
-  return {
-    initial: { opacity: 0, x: 10 },
-    animate: { opacity: 1, x: 0 },
-    exit: presets.value.listItemExit,
-    transition: { duration: 0.18, ease: 'easeOut' },
-  }
+const panelWidthPx = computed(() => {
+  if (props.mode === 'compose' && props.panelTab === 'all') return PANEL_WIDTH_ALL
+  return PANEL_WIDTH_SELECTED
 })
 
-const setItemRef = (id, el) => {
-  const key = String(id)
-  if (el) {
-    itemRefs.value.set(key, el)
-  } else {
-    itemRefs.value.delete(key)
+const panelMotionTransition = {
+  width: { duration: 0.22, ease: [0.22, 1, 0.36, 1] },
+  opacity: { duration: 0.24, ease: [0.22, 1, 0.36, 1] },
+  x: { duration: 0.24, ease: [0.22, 1, 0.36, 1] },
+}
+
+const stripSnippetHtml = (html) => String(html || '').replace(/<[^>]+>/g, '')
+
+const mapSearchResultToNote = (item) => {
+  const snippetText = (item.snippets || [])
+    .map(stripSnippetHtml)
+    .filter(Boolean)
+    .join('\n\n')
+  return {
+    id: item.id,
+    title: item.tagName || item.title || '',
+    markdownContent: snippetText,
+    createdAt: item.createTime,
+    tagId: item.tagId ?? null,
+    images: [],
+    _searchPreview: true,
   }
 }
 
-const scrollToActiveFragment = async () => {
-  if (!props.activeFragmentId) return
-  await nextTick()
-  const el = itemRefs.value.get(props.activeFragmentId)
-  el?.scrollIntoView?.({ block: 'nearest', behavior: 'smooth' })
+const { presets } = useMotionPresets()
+const listRef = ref(null)
+const allListRef = ref(null)
+const queryBarRef = ref(null)
+const tabsRef = ref(null)
+const allTabRef = ref(null)
+const selectedTabRef = ref(null)
+const restoringConfirmId = ref('')
+const pickerList = ref([])
+const tabIndicator = ref({ left: 0, width: 0 })
+
+let syncPickerToken = 0
+
+const query = computed(() => queryBarRef.value?.query ?? null)
+const pickerLoading = computed(() => query.value?.loading.value ?? false)
+const pickerLoadingMore = computed(() => query.value?.loadingMore.value ?? false)
+const searchError = computed(() => query.value?.searchError.value ?? '')
+const hasQueried = computed(() => query.value?.hasQueried.value ?? false)
+const searchKeywords = computed(() => query.value?.keywords.value ?? [])
+
+const selectedIdSet = computed(
+  () => new Set(props.fragmentNotes.map((note) => note?.id).filter(Boolean)),
+)
+
+const setPanelTab = (tab) => {
+  if (props.panelTab === tab) return
+  emit('update:panelTab', tab)
+  nextTick(updateTabIndicator)
+}
+
+const updateTabIndicator = () => {
+  const tabsEl = tabsRef.value
+  const activeEl = props.panelTab === 'all' ? allTabRef.value : selectedTabRef.value
+  if (!tabsEl || !activeEl) return
+  const tabsRect = tabsEl.getBoundingClientRect()
+  const activeRect = activeEl.getBoundingClientRect()
+  tabIndicator.value = {
+    left: activeRect.left - tabsRect.left,
+    width: activeRect.width,
+  }
+}
+
+const onSearchResultsChange = async (records) => {
+  const myToken = ++syncPickerToken
+  const filtered = (Array.isArray(records) ? records : [])
+    .filter((item) => item?.type === 'fragment' && item?.id)
+  const previews = filtered.map(mapSearchResultToNote)
+  pickerList.value = previews
+
+  if (!filtered.length) return
+
+  const ids = filtered.map((item) => item.id)
+  try {
+    const notes = await fetchNotesByIds(ids)
+    if (myToken !== syncPickerToken) return
+    const byId = new Map(notes.map((note) => [String(note.id), note]))
+    pickerList.value = ids
+      .map((id) => {
+        const full = byId.get(String(id))
+        if (full) return { ...full, _searchPreview: false }
+        return previews.find((item) => String(item.id) === String(id))
+      })
+      .filter(Boolean)
+  } catch {
+    if (myToken !== syncPickerToken) return
+  }
+}
+
+const isNoteSelected = (id) => selectedIdSet.value.has(id)
+
+const toggleAllTabSelect = async (note) => {
+  if (props.disabled || !note?.id) return
+  const ids = selectedIdSet.value
+  if (ids.has(note.id)) {
+    emit(
+      'update:fragmentNotes',
+      props.fragmentNotes.filter((item) => item.id !== note.id),
+    )
+    return
+  }
+  let resolved = note
+  try {
+    const full = await fetchNotesByIds([note.id])
+    if (full?.[0]) resolved = full[0]
+  } catch {
+    /* 保留已有预览数据 */
+  }
+  emit('update:fragmentNotes', [...props.fragmentNotes, resolved])
+}
+
+const removeFromSelected = (note) => {
+  if (props.disabled || !note?.id) return
+  emit(
+    'update:fragmentNotes',
+    props.fragmentNotes.filter((item) => item.id !== note.id),
+  )
+}
+
+const onAllListScroll = () => {
+  query.value?.loadMoreIfNearBottom(allListRef.value)
 }
 
 const startRestoreConfirm = (note) => {
@@ -312,16 +512,25 @@ watch(
 watch(
   () => props.open,
   (open) => {
-    if (!open) restoringConfirmId.value = ''
+    if (!open) {
+      restoringConfirmId.value = ''
+      syncPickerToken += 1
+      pickerList.value = []
+    } else {
+      nextTick(updateTabIndicator)
+    }
   },
 )
 
 watch(
-  () => [props.activeFragmentId, props.open],
+  () => [props.panelTab, props.open],
   () => {
-    if (props.open) scrollToActiveFragment()
+    if (props.open && props.mode === 'compose') {
+      nextTick(updateTabIndicator)
+    }
   },
 )
+
 </script>
 
 <style scoped>
@@ -333,13 +542,26 @@ watch(
 }
 
 .struct-note-fragments-inner {
-  width: 360px;
+  --fragments-list-font-size: 11px;
+  --fragments-list-line-height: 1.55;
+  --fragments-list-tag-font: 11px;
+  --fragments-list-time-font: 10px;
+  --fragments-list-tile-size: 67px;
+  width: 100%;
   height: 100%;
   min-height: 0;
   display: flex;
   flex-direction: column;
   padding: 24px 0 0 20px;
   box-sizing: border-box;
+}
+
+.struct-note-fragments-all-pane,
+.struct-note-fragments-selected-pane {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
 }
 
 .struct-note-fragments-head {
@@ -349,6 +571,55 @@ watch(
   gap: 8px;
   margin-bottom: 12px;
   padding-right: 4px;
+}
+
+.struct-note-fragments-tabs {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px;
+  border-radius: 9px;
+  background: rgba(24, 24, 27, 0.06);
+}
+
+.struct-note-fragments-tab-indicator {
+  position: absolute;
+  top: 2px;
+  bottom: 2px;
+  left: 0;
+  width: 0;
+  border-radius: 7px;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(24, 24, 27, 0.1);
+  pointer-events: none;
+  z-index: 0;
+}
+
+.struct-note-fragments-tab {
+  position: relative;
+  z-index: 1;
+  height: 28px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--color-secondary-text);
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: color 0.14s ease;
+}
+
+.struct-note-fragments-tab:hover {
+  color: var(--color-primary);
+}
+
+.struct-note-fragments-tab[aria-selected='true'] {
+  color: var(--color-primary);
 }
 
 .struct-note-fragments-head-actions {
@@ -386,6 +657,26 @@ watch(
   font-size: 13px;
   font-weight: 600;
   color: var(--color-secondary-text);
+}
+
+.struct-note-fragments-search {
+  flex: 0 0 auto;
+  margin: 0 12px 0 8px;
+}
+
+.struct-note-fragments-all-list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 12px 12px 12px 8px;
+}
+
+.struct-note-fragments-empty--error {
+  color: #dc2626;
 }
 
 .struct-note-fragments-summary {
@@ -426,32 +717,36 @@ watch(
   color: var(--color-secondary-text);
 }
 
+.struct-note-fragments-empty--more {
+  padding-top: 4px;
+  text-align: center;
+}
+
 .struct-note-fragments-list {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 8px;
   margin: 0;
-  padding: 0 4px 0 0;
+  padding: 0 4px 12px 0;
   list-style: none;
+}
+
+.struct-note-fragments-list,
+.struct-note-fragments-all-list {
+  scrollbar-gutter: stable;
 }
 
 .struct-note-fragment-item {
   display: flex;
   flex-direction: column;
   gap: 0;
-  padding: 10px 12px;
-  border-radius: 10px;
+  padding: 8px 10px;
+  border-radius: 9px;
   border: 1px solid var(--color-border);
   background: rgba(255, 255, 255, 0.72);
-}
-
-.struct-note-fragment-item.is-active {
-  border-color: rgba(37, 99, 235, 0.35);
-  background: rgba(37, 99, 235, 0.04);
-  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.08);
 }
 
 .struct-note-fragment-item.is-restoring {
@@ -459,29 +754,33 @@ watch(
   background: rgba(37, 99, 235, 0.04);
 }
 
+.struct-note-fragments-all-item {
+  flex: 0 0 auto;
+}
+
 .struct-note-fragment-meta {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   min-width: 0;
-  margin-bottom: 8px;
+  margin-bottom: 6px;
 }
 
 .struct-note-fragment-tag {
   display: inline-block;
-  padding: 2px 8px;
+  padding: 1px 6px;
   border-radius: 999px;
   background: rgba(24, 24, 27, 0.08);
   color: var(--color-secondary-text);
-  font-size: 12px;
-  line-height: 1.5;
+  font-size: var(--fragments-list-tag-font);
+  line-height: 1.45;
   letter-spacing: 0.2px;
   white-space: nowrap;
 }
 
 .struct-note-fragment-time {
   color: #a1a1aa;
-  font-size: 11px;
+  font-size: var(--fragments-list-time-font);
   font-weight: 400;
   letter-spacing: 0.2px;
   font-variant-numeric: tabular-nums;
@@ -494,15 +793,15 @@ watch(
 }
 
 .struct-note-fragment-content {
-  font-size: 13px;
-  line-height: 1.6;
+  font-size: var(--fragments-list-font-size);
+  line-height: var(--fragments-list-line-height);
   color: var(--color-text);
   word-break: break-word;
 }
 
 .struct-note-fragment-content :deep(.tiptap-content .ProseMirror) {
-  font-size: 13px;
-  line-height: 1.6;
+  font-size: var(--fragments-list-font-size);
+  line-height: var(--fragments-list-line-height);
 }
 
 .struct-note-fragment-content :deep(.tiptap-content .ProseMirror > :last-child) {
@@ -510,12 +809,22 @@ watch(
 }
 
 .struct-note-fragment-content :deep(.gallery) {
-  margin-top: 8px;
+  margin-top: 6px;
+}
+
+.struct-note-fragment-content :deep(.tile) {
+  width: var(--fragments-list-tile-size);
+  height: var(--fragments-list-tile-size);
+}
+
+.struct-note-fragment-content :deep(.tile-overlay) {
+  width: 20px;
+  height: 20px;
 }
 
 .struct-note-fragment-empty {
   margin: 0;
-  font-size: 12px;
+  font-size: var(--fragments-list-font-size);
   color: var(--color-secondary-text);
 }
 
@@ -533,8 +842,8 @@ watch(
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 28px;
-  height: 28px;
+  width: 26px;
+  height: 26px;
   padding: 0;
   border: 1px solid var(--color-border);
   border-radius: 8px;
@@ -560,7 +869,8 @@ watch(
   color: var(--color-success);
 }
 
-.fragment-item-action-btn--restore:hover:not(:disabled) {
+.fragment-item-action-btn--restore:hover:not(:disabled),
+.fragment-item-action-btn--remove:hover:not(:disabled) {
   border-color: rgba(37, 99, 235, 0.28);
   color: var(--color-accent);
   background: rgba(37, 99, 235, 0.06);

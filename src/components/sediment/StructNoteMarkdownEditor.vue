@@ -4,29 +4,18 @@
     class="struct-note-md-editor-layout"
     v-model:fragment-notes="fragmentNotesModel"
     v-model:open="fragmentsOpenModel"
+    v-model:panel-tab="fragmentsPanelTab"
     :inserted-ids="insertedIds"
     :disabled="disabled"
     :show-expand-button="showExpandButton"
     :fragments-mode="fragmentsMode"
     :restoring-id="restoringId"
-    :active-fragment-id="activeFragmentId"
     :all-fragments-inserted="allFragmentsInserted"
     @insert="emit('insert', $event)"
     @insert-all="emit('insert-all')"
     @restore="emit('restore', $event)"
   >
     <slot name="prefix" />
-    <StructNoteMaterialBar
-      :fragment-notes="fragmentNotesModel"
-      :inserted-ids="insertedIds"
-      :disabled="disabled"
-      :mode="fragmentsMode"
-      :panel-open="fragmentsOpenModel"
-      :active-fragment-id="activeFragmentId"
-      @update:fragment-notes="fragmentNotesModel = $event"
-      @toggle-fragment="onToggleFragment"
-    />
-    <div class="struct-note-material-divider" aria-hidden="true" />
     <div
       class="struct-note-md-editor"
       :class="{ 'is-disabled': disabled }"
@@ -78,7 +67,6 @@ import {
 import '../../assets/styles/tiptap-slash-menu.css'
 import '../../assets/styles/struct-note-drag-handle.css'
 import StructNoteEditorLayout from './StructNoteEditorLayout.vue'
-import StructNoteMaterialBar from './StructNoteMaterialBar.vue'
 
 const props = defineProps({
   modelValue: {
@@ -146,23 +134,7 @@ const fragmentsOpenModel = computed({
   set: (value) => emit('update:fragmentsOpen', value),
 })
 
-const activeFragmentId = ref(null)
-
-watch(fragmentsOpenModel, (open) => {
-  if (!open) activeFragmentId.value = null
-})
-
-const onToggleFragment = (note) => {
-  const id = note?.id ? String(note.id) : ''
-  if (!id) return
-  if (fragmentsOpenModel.value && activeFragmentId.value === id) {
-    fragmentsOpenModel.value = false
-    activeFragmentId.value = null
-    return
-  }
-  activeFragmentId.value = id
-  fragmentsOpenModel.value = true
-}
+const fragmentsPanelTab = ref('selected')
 
 const rootStyle = computed(() => ({
   '--struct-note-md-min-height': `${Number(props.minHeight) || 320}px`,
@@ -279,13 +251,6 @@ onBeforeUnmount(() => {
   flex: 1;
   min-height: 0;
   width: 100%;
-}
-
-.struct-note-material-divider {
-  height: 1px;
-  background: rgba(24, 24, 27, 0.07);
-  margin-bottom: 12px;
-  flex: 0 0 auto;
 }
 
 .struct-note-md-editor {

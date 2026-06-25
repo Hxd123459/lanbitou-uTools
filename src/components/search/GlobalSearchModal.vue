@@ -31,85 +31,12 @@
         </header>
 
         <div class="global-search-body">
-          <div class="global-search-query">
-            <div class="global-search-input-row">
-              <span class="global-search-input-icon" aria-hidden="true">
-                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
-                  <circle cx="11" cy="11" r="7" />
-                  <path d="m20 20-3.5-3.5" />
-                </svg>
-              </span>
-              <input
-                ref="keywordInputRef"
-                :value="draftKeyword"
-                type="text"
-                class="global-search-input"
-                placeholder="使用 # 选标签；输入关键词，Enter添加；右侧选日期"
-                spellcheck="false"
-                @input="onKeywordInput"
-                @focus="onKeywordFocus"
-                @blur="onTagTextareaBlur"
-                @keydown="onKeywordKeydown"
-                @click="onCaretChange"
-                @keyup="onCaretChange"
-              />
-              <DateRangePicker
-                v-model:date-from="dateFrom"
-                v-model:date-to="dateTo"
-                compact
-              />
-            </div>
-
-            <div
-              v-if="keywords.length || selectedTag || hasDateRange"
-              class="global-search-chips"
-              aria-label="搜索条件"
-            >
-              <span
-                v-if="selectedTag"
-                class="global-search-tag-chip"
-              >
-                #{{ selectedTag.tagName }}
-                <button
-                  type="button"
-                  class="global-search-chip-remove"
-                  aria-label="移除标签筛选"
-                  @click="clearSelectedTag"
-                >
-                  ×
-                </button>
-              </span>
-              <span
-                v-if="hasDateRange"
-                class="global-search-date-chip"
-              >
-                {{ dateRangeLabel }}
-                <button
-                  type="button"
-                  class="global-search-chip-remove"
-                  aria-label="移除日期筛选"
-                  @click="clearDateRange"
-                >
-                  ×
-                </button>
-              </span>
-              <span
-                v-for="(item, index) in keywords"
-                :key="`${item}-${index}`"
-                class="global-search-chip"
-              >
-                {{ item }}
-                <button
-                  type="button"
-                  class="global-search-chip-remove"
-                  :aria-label="`移除关键词 ${item}`"
-                  @click="removeKeyword(index)"
-                >
-                  ×
-                </button>
-              </span>
-            </div>
-          </div>
+          <GlobalSearchQueryBar
+            ref="queryBarRef"
+            :active="visible"
+            clear-on-inactive
+            :scopes="resolvedScopes"
+          />
 
           <div class="global-search-filters">
             <div class="global-search-scope" role="tablist" aria-label="搜索范围">
@@ -221,62 +148,15 @@
         </div>
       </motion.div>
     </AnimatePresence>
-
-    <Teleport to="body">
-      <div
-        v-if="tagMenuOpen"
-        class="struct-note-slash-menu"
-        data-tag-hash-menu
-        role="listbox"
-        aria-label="选择标签"
-        :style="tagMenuStyle"
-        @mousedown="onTagMenuMouseDown"
-      >
-        <p v-if="tagMenuLoading" class="tag-hash-menu-state">加载标签中…</p>
-        <p v-else-if="!tagMenuItems.length" class="tag-hash-menu-state">
-          输入标签名，最多 5 个字
-        </p>
-        <button
-          v-for="(menuItem, index) in tagMenuItems"
-          :key="`${menuItem.type}-${menuItem.tagName}`"
-          type="button"
-          class="struct-note-slash-menu__item"
-          :class="{ 'struct-note-slash-menu__item--active': index === tagMenuIndex }"
-          role="option"
-          :aria-selected="index === tagMenuIndex"
-          @click="applyTagMenuItem(menuItem)"
-        >
-          <span class="struct-note-slash-menu__icon" aria-hidden="true">
-            <svg
-              v-if="menuItem.type === 'create'"
-              viewBox="0 0 24 24"
-              width="18"
-              height="18"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="1.8"
-              stroke-linecap="round"
-            >
-              <path d="M12 5v14M5 12h14" />
-            </svg>
-            <span v-else class="tag-hash-menu-hash">#</span>
-          </span>
-          <span class="struct-note-slash-menu__label">{{ menuItem.label }}</span>
-        </button>
-      </div>
-    </Teleport>
   </Teleport>
 </template>
 
 <script setup>
-import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { AnimatePresence, motion } from 'motion-v'
-import { searchGlobal } from '../../api/globalSearch'
-import { useTagHashPicker } from '../../composables/useTagHashPicker'
 import { useMotionPresets } from '../../composables/useMotionPresets'
-import DateRangePicker from '../common/DateRangePicker.vue'
 import { highlightPlainText } from '../../utils/searchHighlight'
-import '../../assets/styles/tiptap-slash-menu.css'
+import GlobalSearchQueryBar from './GlobalSearchQueryBar.vue'
 
 const props = defineProps({
   visible: { type: Boolean, default: false },
@@ -292,52 +172,18 @@ const scopeOptions = [
   { id: 'sediment', label: '沉淀' },
 ]
 
-const draftKeyword = ref('')
-const keywords = ref([])
-const selectedTag = ref(null)
-const dateFrom = ref('')
-const dateTo = ref('')
 const scope = ref('all')
-
-const results = ref([])
-const total = ref(0)
-const pageNo = ref(0)
-const hasMore = ref(false)
-const loading = ref(false)
-const loadingMore = ref(false)
-const searchError = ref('')
-const hasQueried = ref(false)
-
-const keywordInputRef = ref(null)
+const queryBarRef = ref(null)
 const resultsRef = ref(null)
 
-const {
-  menuOpen: tagMenuOpen,
-  menuStyle: tagMenuStyle,
-  selectedIndex: tagMenuIndex,
-  filteredItems: tagMenuItems,
-  tagsLoading: tagMenuLoading,
-  loadTags,
-  syncMenu: syncTagMenu,
-  closeMenu: closeTagMenu,
-  applyItem: applyTagMenuItem,
-  handleKeyDown: handleTagMenuKeyDown,
-  onMenuMouseDown: onTagMenuMouseDown,
-  onTextareaBlur: onTagTextareaBlur,
-} = useTagHashPicker({
-  getText: () => draftKeyword.value,
-  setText: (value) => {
-    draftKeyword.value = value
-  },
-  getTextarea: () => keywordInputRef.value,
-  onTagSelected: (tag) => {
-    selectedTag.value = tag
-    scheduleSearch(true)
-  },
-})
-
-let searchToken = 0
-let searchTimer = null
+const query = computed(() => queryBarRef.value?.query ?? null)
+const results = computed(() => query.value?.results.value ?? [])
+const total = computed(() => query.value?.total.value ?? 0)
+const loading = computed(() => query.value?.loading.value ?? false)
+const loadingMore = computed(() => query.value?.loadingMore.value ?? false)
+const searchError = computed(() => query.value?.searchError.value ?? '')
+const hasQueried = computed(() => query.value?.hasQueried.value ?? false)
+const keywords = computed(() => query.value?.keywords.value ?? [])
 
 const modalEase = [0.22, 1, 0.36, 1]
 
@@ -359,12 +205,7 @@ const resolvedScopes = computed(() => {
   return ['fragment', 'sediment']
 })
 
-const hasDateRange = computed(() => Boolean(dateFrom.value && dateTo.value))
-
-const dateRangeLabel = computed(() => {
-  if (!hasDateRange.value) return ''
-  return `${dateFrom.value} ~ ${dateTo.value}`
-})
+const hasMore = computed(() => query.value?.hasMore.value ?? false)
 
 const formatTime = (value) => {
   const raw = String(value ?? '').trim()
@@ -394,155 +235,8 @@ const emitSelect = (item) => {
   emit('select', item)
 }
 
-const resetState = () => {
-  draftKeyword.value = ''
-  keywords.value = []
-  selectedTag.value = null
-  dateFrom.value = ''
-  dateTo.value = ''
-  scope.value = 'all'
-  results.value = []
-  total.value = 0
-  pageNo.value = 0
-  hasMore.value = false
-  loading.value = false
-  loadingMore.value = false
-  searchError.value = ''
-  hasQueried.value = false
-  closeTagMenu()
-}
-
-const clearSelectedTag = () => {
-  selectedTag.value = null
-  scheduleSearch(true)
-}
-
-const clearDateRange = () => {
-  dateFrom.value = ''
-  dateTo.value = ''
-  scheduleSearch(true)
-}
-
-const addKeyword = () => {
-  const next = draftKeyword.value.trim()
-  if (!next || next.startsWith('#')) return
-  if (!keywords.value.includes(next)) {
-    keywords.value = [...keywords.value, next]
-  }
-  draftKeyword.value = ''
-  closeTagMenu()
-  scheduleSearch(true)
-}
-
-const removeKeyword = (index) => {
-  keywords.value = keywords.value.filter((_, i) => i !== index)
-  scheduleSearch(true)
-}
-
-const onKeywordInput = (event) => {
-  draftKeyword.value = event.target.value
-  nextTick(() => syncTagMenu())
-}
-
-const onKeywordFocus = () => {
-  nextTick(() => syncTagMenu())
-}
-
-const onCaretChange = () => {
-  nextTick(() => syncTagMenu())
-}
-
-const onKeywordKeydown = (event) => {
-  if (event.isComposing) return
-  if (handleTagMenuKeyDown(event)) return
-  if (event.key === 'Enter') {
-    event.preventDefault()
-    addKeyword()
-    return
-  }
-  if (event.key === 'Backspace' && !draftKeyword.value && keywords.value.length) {
-    keywords.value = keywords.value.slice(0, -1)
-    scheduleSearch(true)
-  }
-}
-
-const buildSearchParams = (page) => ({
-  keywords: keywords.value,
-  tagId: selectedTag.value?.tagId || null,
-  dateFrom: dateFrom.value || null,
-  dateTo: dateTo.value || null,
-  scopes: resolvedScopes.value,
-  page,
-  pageSize: 30,
-})
-
-const shouldRunSearch = () =>
-  keywords.value.length > 0 ||
-  selectedTag.value?.tagId ||
-  hasDateRange.value
-
-const runSearch = async ({ reset = false } = {}) => {
-  if (!shouldRunSearch()) {
-    results.value = []
-    total.value = 0
-    pageNo.value = 0
-    hasMore.value = false
-    hasQueried.value = false
-    searchError.value = ''
-    return
-  }
-
-  const myToken = ++searchToken
-  const page = reset ? 1 : pageNo.value + 1
-  if (reset) {
-    loading.value = true
-    searchError.value = ''
-  } else {
-    loadingMore.value = true
-  }
-
-  try {
-    const data = await searchGlobal(buildSearchParams(page))
-    if (myToken !== searchToken) return
-    hasQueried.value = true
-    if (reset) {
-      results.value = data.records || []
-    } else {
-      const existing = new Set(results.value.map((item) => `${item.type}-${item.id}`))
-      const next = (data.records || []).filter(
-        (item) => !existing.has(`${item.type}-${item.id}`),
-      )
-      results.value = [...results.value, ...next]
-    }
-    total.value = data.total ?? results.value.length
-    pageNo.value = data.pageNo ?? page
-    hasMore.value = data.hasMore ?? false
-  } catch (error) {
-    if (myToken !== searchToken) return
-    searchError.value = error?.message || '搜索失败，请稍后重试'
-    if (reset) results.value = []
-  } finally {
-    if (myToken === searchToken) {
-      loading.value = false
-      loadingMore.value = false
-    }
-  }
-}
-
-const scheduleSearch = (reset = true) => {
-  if (searchTimer) clearTimeout(searchTimer)
-  searchTimer = window.setTimeout(() => {
-    searchTimer = null
-    runSearch({ reset })
-  }, reset ? 180 : 0)
-}
-
 const onResultsScroll = () => {
-  const el = resultsRef.value
-  if (!el || loading.value || loadingMore.value || !hasMore.value) return
-  if (el.scrollHeight - el.scrollTop - el.clientHeight < 80) {
-    runSearch({ reset: false })
-  }
+  query.value?.loadMoreIfNearBottom(resultsRef.value)
 }
 
 const onKeydown = (event) => {
@@ -554,32 +248,19 @@ const onKeydown = (event) => {
 }
 
 watch(
-  () => [dateFrom.value, dateTo.value, scope.value],
-  () => scheduleSearch(true),
-)
-
-watch(
   () => props.visible,
-  async (open) => {
+  (open) => {
     if (open) {
-      resetState()
-      await loadTags()
+      scope.value = 'all'
       window.addEventListener('keydown', onKeydown)
-      await nextTick()
-      keywordInputRef.value?.focus()
     } else {
       window.removeEventListener('keydown', onKeydown)
-      if (searchTimer) {
-        clearTimeout(searchTimer)
-        searchTimer = null
-      }
     }
   },
 )
 
 onBeforeUnmount(() => {
   window.removeEventListener('keydown', onKeydown)
-  if (searchTimer) clearTimeout(searchTimer)
 })
 </script>
 

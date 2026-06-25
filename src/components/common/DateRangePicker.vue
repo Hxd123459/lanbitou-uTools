@@ -42,6 +42,7 @@
         v-if="open"
         ref="panelRef"
         class="date-range-panel"
+        :class="{ 'is-panel-compact': panelCompact }"
         :style="panelStyle"
       >
         <div class="date-range-panel-head">
@@ -50,16 +51,16 @@
           </button>
           <div class="date-range-month-labels">
             <span>{{ monthLabel(viewMonth) }}</span>
-            <span>{{ monthLabel(viewMonth + 1) }}</span>
+            <span v-if="!panelCompact">{{ monthLabel(viewMonth + 1) }}</span>
           </div>
           <button type="button" class="date-range-nav" aria-label="下一月" @click="shiftMonth(1)">
             ›
           </button>
         </div>
 
-        <div class="date-range-calendars">
+        <div class="date-range-calendars" :class="{ 'is-single': panelCompact }">
           <div
-            v-for="offset in [0, 1]"
+            v-for="offset in panelCompact ? [0] : [0, 1]"
             :key="offset"
             class="date-range-calendar"
           >
@@ -103,6 +104,10 @@ const props = defineProps({
     default: '',
   },
   compact: {
+    type: Boolean,
+    default: false,
+  },
+  panelCompact: {
     type: Boolean,
     default: false,
   },
@@ -513,6 +518,40 @@ onBeforeUnmount(() => {
   font-size: 11px;
   color: var(--color-secondary-text);
   text-align: center;
+}
+
+.date-range-panel.is-panel-compact {
+  width: min(280px, calc(100vw - 16px));
+  padding: 10px;
+}
+
+.date-range-panel.is-panel-compact .date-range-panel-head {
+  margin-bottom: 8px;
+}
+
+.date-range-panel.is-panel-compact .date-range-month-labels {
+  font-size: 12px;
+}
+
+.date-range-panel.is-panel-compact .date-range-nav {
+  width: 26px;
+  height: 26px;
+  font-size: 16px;
+}
+
+.date-range-panel.is-panel-compact .date-range-day {
+  height: 28px;
+  font-size: 11px;
+  border-radius: 6px;
+}
+
+.date-range-panel.is-panel-compact .date-range-hint {
+  margin-top: 8px;
+  font-size: 10px;
+}
+
+.date-range-calendars.is-single {
+  grid-template-columns: 1fr;
 }
 
 @media (max-width: 640px) {

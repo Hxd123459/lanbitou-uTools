@@ -8,8 +8,10 @@
       'is-selectable': selectable,
       'is-selected': selectable && selected && !selectionRemovable,
       'is-selection-removable': selectable && selectionRemovable,
+      'is-compact': compact,
     }"
     @click="onSelectableCardClick"
+    @dblclick="onCardDblClick"
   >
     <button
       v-if="selectable && !note?.isPending"
@@ -605,6 +607,14 @@ const props = defineProps({
     type: Boolean,
     default: false,
   },
+  disableEdit: {
+    type: Boolean,
+    default: false,
+  },
+  compact: {
+    type: Boolean,
+    default: false,
+  },
   tagAiLoading: {
     type: Boolean,
     default: false,
@@ -641,6 +651,10 @@ const isEditorFocused = ref(false)
 
 let listScrollEl = null
 let lastListScrollTop = 0
+let selectClickTimer = null
+
+const CARD_INTERACTIVE_SELECTOR =
+  'a, button, input, textarea, label, .thumb-strip, .gallery, .tile, .note-select-control, .note-tag, .lightbox'
 
 const HIGHLIGHT_CLASS = 'note-highlight'
 const HIGHLIGHT_SKIP_SELECTOR = 'pre, code, .hljs'
@@ -871,6 +885,7 @@ const clearSelectedTag = () => {
 }
 
 const enterEdit = async () => {
+  if (props.note?.isPending || saving.value || isEditing.value) return
   revokeDraftNewUrls()
   draftContent.value = contentText.value
   const tagId = originalTagId.value
@@ -1047,6 +1062,7 @@ watch(
 )
 
 onBeforeUnmount(() => {
+  clearSelectClickTimer()
   unbindListScroll()
   revokeDraftNewUrls()
 })
@@ -1182,10 +1198,29 @@ const onTagClick = () => {
   emit('tag-select', { tagId, tagName })
 }
 
+const clearSelectClickTimer = () => {
+  if (selectClickTimer) {
+    clearTimeout(selectClickTimer)
+    selectClickTimer = null
+  }
+}
+
+const onCardDblClick = (event) => {
+  if (props.disableEdit) return
+  if (props.note?.isPending || saving.value || isEditing.value) return
+  if (event.target.closest(CARD_INTERACTIVE_SELECTOR)) return
+  clearSelectClickTimer()
+  enterEdit()
+}
+
 const onSelectableCardClick = (event) => {
   if (!props.selectable || props.note?.isPending) return
-  if (event.target.closest('a, button, input, textarea, label, .thumb-strip')) return
-  emit('toggle-select')
+  if (event.target.closest(CARD_INTERACTIVE_SELECTOR)) return
+  clearSelectClickTimer()
+  selectClickTimer = setTimeout(() => {
+    selectClickTimer = null
+    emit('toggle-select')
+  }, 220)
 }
 
 function formatTime(dateValue) {
@@ -1561,6 +1596,7 @@ button.note-tag:focus-visible {
 
 .note-content-root {
   width: 100%;
+  cursor: text;
 }
 
 .note-content-root :deep(.tiptap-content .ProseMirror) {
@@ -1855,5 +1891,65 @@ button.note-tag:focus-visible {
   100% {
     background-position: 0 50%;
   }
+}
+
+.note-card.is-compact {
+  padding: 8px 10px;
+  border-radius: 9px;
+  border-color: var(--color-border);
+  background: rgba(255, 255, 255, 0.72);
+}
+
+.note-card.is-compact .note-meta {
+  margin-bottom: 6px;
+  gap: 8px;
+}
+
+.note-card.is-compact .note-tag {
+  font-size: var(--fragments-list-tag-font, 11px);
+  padding: 1px 6px;
+  line-height: 1.45;
+}
+
+.note-card.is-compact .note-time {
+  font-size: var(--fragments-list-time-font, 10px);
+}
+
+.note-card.is-compact .note-content-root :deep(.tiptap-content .ProseMirror) {
+  font-size: var(--fragments-list-font-size, 11px);
+  line-height: var(--fragments-list-line-height, 1.55);
+}
+
+.note-card.is-compact .note-text-fallback {
+  font-size: var(--fragments-list-font-size, 11px);
+  line-height: var(--fragments-list-line-height, 1.55);
+}
+
+.note-card.is-compact :deep(.ProseMirror pre) {
+  padding: 8px 10px;
+  font-size: 10px;
+}
+
+.note-card.is-compact :deep(.gallery) {
+  margin-top: 6px;
+}
+
+.note-card.is-compact :deep(.tile) {
+  width: var(--fragments-list-tile-size, 67px);
+  height: var(--fragments-list-tile-size, 67px);
+}
+
+.note-card.is-compact :deep(.tile-overlay) {
+  width: 20px;
+  height: 20px;
+}
+
+.note-card.is-compact.is-selectable .note-select-control {
+  margin-top: 1px;
+}
+
+.note-card.is-compact.is-selectable .note-select-box {
+  width: 15px;
+  height: 15px;
 }
 </style>

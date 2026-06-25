@@ -24,12 +24,12 @@
 
     <StructNoteFragmentsPanel
       v-model:open="fragmentsOpen"
+      v-model:panel-tab="panelTabModel"
       :fragment-notes="fragmentNotes"
       :inserted-ids="insertedIds"
       :disabled="disabled"
       :mode="fragmentsMode"
       :restoring-id="restoringId"
-      :active-fragment-id="activeFragmentId"
       :all-fragments-inserted="allFragmentsInserted"
       @update:fragment-notes="emit('update:fragmentNotes', $event)"
       @insert="emit('insert', $event)"
@@ -57,9 +57,9 @@ const props = defineProps({
     type: String,
     default: '',
   },
-  activeFragmentId: {
+  panelTab: {
     type: String,
-    default: '',
+    default: 'selected',
   },
   allFragmentsInserted: {
     type: Boolean,
@@ -67,7 +67,7 @@ const props = defineProps({
   },
 })
 
-const emit = defineEmits(['update:fragmentNotes', 'update:open', 'insert', 'insert-all', 'restore'])
+const emit = defineEmits(['update:fragmentNotes', 'update:open', 'update:panelTab', 'insert', 'insert-all', 'restore'])
 
 const fragmentsPanelLabel = computed(() =>
   props.fragmentsMode === 'source'
@@ -78,6 +78,11 @@ const fragmentsPanelLabel = computed(() =>
 const fragmentsOpen = computed({
   get: () => props.open,
   set: (value) => emit('update:open', value),
+})
+
+const panelTabModel = computed({
+  get: () => props.panelTab,
+  set: (value) => emit('update:panelTab', value),
 })
 </script>
 
