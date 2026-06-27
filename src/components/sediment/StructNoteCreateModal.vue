@@ -35,32 +35,38 @@
             :disabled="saving || aiGenerating"
           />
 
-          <motion.button
-            type="button"
-            class="btn btn-primary struct-note-modal-save"
-            :disabled="saving || aiGenerating || !canSave"
-            :while-hover="presets.button.hover"
-            :while-tap="presets.button.tap"
-            :transition="presets.button.transition"
-            @click="handleSave"
-          >
-            <svg
-              viewBox="0 0 24 24"
-              width="16"
-              height="16"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="1.8"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              aria-hidden="true"
+          <div class="struct-note-modal-header-actions">
+            <StructNoteCopyButton
+              :get-content="() => draftContent"
+              :disabled="saving || aiGenerating"
+            />
+            <motion.button
+              type="button"
+              class="btn btn-primary struct-note-modal-save"
+              :disabled="saving || aiGenerating || !canSave"
+              :while-hover="presets.button.hover"
+              :while-tap="presets.button.tap"
+              :transition="presets.button.transition"
+              @click="handleSave"
             >
-              <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" />
-              <polyline points="17 21 17 13 7 13 7 21" />
-              <polyline points="7 3 7 8 15 8" />
-            </svg>
-            <span>{{ saving ? '保存中…' : '保存' }}</span>
-          </motion.button>
+              <svg
+                viewBox="0 0 24 24"
+                width="16"
+                height="16"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.8"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                aria-hidden="true"
+              >
+                <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" />
+                <polyline points="17 21 17 13 7 13 7 21" />
+                <polyline points="7 3 7 8 15 8" />
+              </svg>
+              <span>{{ saving ? '保存中…' : '保存' }}</span>
+            </motion.button>
+          </div>
         </header>
 
         <StructNoteMarkdownEditor
@@ -122,6 +128,7 @@ import {
 import StructNoteAiDraftBar from './StructNoteAiDraftBar.vue'
 import StructNoteFolderBreadcrumb from './StructNoteFolderBreadcrumb.vue'
 import StructNoteMarkdownEditor from './StructNoteMarkdownEditor.vue'
+import StructNoteCopyButton from './StructNoteCopyButton.vue'
 
 const props = defineProps({
   visible: {
@@ -456,10 +463,17 @@ defineExpose({ resetDraft })
 }
 
 .struct-note-modal-save {
-  justify-self: end;
   display: inline-flex;
   align-items: center;
   gap: 6px;
+}
+
+.struct-note-modal-header-actions {
+  grid-column: 3;
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
 }
 
 .struct-note-modal-editor {

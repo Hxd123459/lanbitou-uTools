@@ -31,6 +31,8 @@
       :mode="fragmentsMode"
       :restoring-id="restoringId"
       :all-fragments-inserted="allFragmentsInserted"
+      :enable-fragment-picker="enableFragmentPicker"
+      :restorable-ids="restorableIds"
       @update:fragment-notes="emit('update:fragmentNotes', $event)"
       @insert="emit('insert', $event)"
       @insert-all="emit('insert-all')"
@@ -64,6 +66,14 @@ const props = defineProps({
   allFragmentsInserted: {
     type: Boolean,
     default: false,
+  },
+  enableFragmentPicker: {
+    type: Boolean,
+    default: false,
+  },
+  restorableIds: {
+    type: Array,
+    default: () => [],
   },
 })
 

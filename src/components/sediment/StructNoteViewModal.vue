@@ -35,6 +35,10 @@
           />
 
           <div class="note-view-header-actions">
+            <StructNoteCopyButton
+              :get-content="() => draftContent"
+              :disabled="fetching || loadError || saving"
+            />
             <motion.button
               type="button"
               class="btn btn-primary note-view-save-btn"
@@ -145,6 +149,8 @@
             :inserted-ids="insertedFragmentIds"
             :fragments-mode="fragmentsMode"
             :restoring-id="restoringFragmentId"
+            enable-fragment-picker
+            :restorable-ids="baselineFragmentIds"
             class="note-view-editor"
             @insert="insertFragment"
             @restore="handleRestoreFragment"
@@ -178,6 +184,7 @@ import { appendFragmentToContent } from '../../composables/useStructNoteFragment
 import { useMotionPresets } from '../../composables/useMotionPresets'
 import StructNoteFolderBreadcrumb from './StructNoteFolderBreadcrumb.vue'
 import StructNoteMarkdownEditor from './StructNoteMarkdownEditor.vue'
+import StructNoteCopyButton from './StructNoteCopyButton.vue'
 
 const AUTO_SAVE_DELAY_MS = 1200
 

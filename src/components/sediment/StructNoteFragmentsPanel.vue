@@ -12,7 +12,7 @@
     >
       <div class="struct-note-fragments-inner">
         <div class="struct-note-fragments-head">
-          <div v-if="mode === 'compose'" ref="tabsRef" class="struct-note-fragments-tabs" role="tablist" aria-label="碎片视图">
+          <div v-if="showFragmentTabs" ref="tabsRef" class="struct-note-fragments-tabs" role="tablist" aria-label="碎片视图">
             <motion.div
               class="struct-note-fragments-tab-indicator"
               :animate="tabIndicator"
@@ -45,7 +45,7 @@
 
           <div class="struct-note-fragments-head-actions">
             <button
-              v-if="mode === 'compose' && panelTab === 'selected' && fragmentNotes.length"
+              v-if="showFragmentTabs && panelTab === 'selected' && fragmentNotes.length"
               type="button"
               class="struct-note-fragments-insert-all"
               :disabled="disabled || allFragmentsInserted"
@@ -70,7 +70,7 @@
         </div>
 
         <div
-          v-if="mode === 'compose'"
+          v-if="showFragmentTabs"
           v-show="panelTab === 'all'"
           class="struct-note-fragments-all-pane"
         >
@@ -124,7 +124,7 @@
         </div>
 
         <p
-          v-if="mode === 'compose' && panelTab === 'selected' && fragmentNotes.length"
+          v-if="mode === 'compose' && showFragmentTabs && panelTab === 'selected' && fragmentNotes.length"
           class="struct-note-fragments-summary"
         >
           <svg
@@ -147,7 +147,10 @@
         </p>
 
         <!-- 已选 Tab -->
-        <div v-show="panelTab === 'selected' || mode === 'source'" class="struct-note-fragments-selected-pane">
+        <div
+          v-show="panelTab === 'selected' || (mode === 'source' && !showFragmentTabs)"
+          class="struct-note-fragments-selected-pane"
+        >
           <p v-if="!fragmentNotes.length" class="struct-note-fragments-empty">
             {{ emptyText }}
           </p>
@@ -260,7 +263,7 @@
                   </motion.button>
 
                   <motion.button
-                    v-if="mode === 'source'"
+                    v-if="isRestorableFragment(note.id)"
                     type="button"
                     class="fragment-item-action-btn fragment-item-action-btn--restore"
                     :disabled="disabled || restoringId === note.id"
@@ -278,7 +281,7 @@
                   </motion.button>
 
                   <motion.button
-                    v-if="mode === 'compose'"
+                    v-if="canRemoveFragment(note.id)"
                     type="button"
                     class="fragment-item-action-btn fragment-item-action-btn--remove"
                     :disabled="disabled"
@@ -336,6 +339,14 @@ const props = defineProps({
     type: Boolean,
     default: false,
   },
+  enableFragmentPicker: {
+    type: Boolean,
+    default: false,
+  },
+  restorableIds: {
+    type: Array,
+    default: () => [],
+  },
 })
 
 const emit = defineEmits([
@@ -348,17 +359,33 @@ const emit = defineEmits([
 ])
 
 const emptyText = computed(() =>
-  props.mode === 'source'
+  props.mode === 'source' && !props.enableFragmentPicker
     ? '暂无关联的碎片'
     : '暂无已选，切换到「全部」添加',
 )
+
+const showFragmentTabs = computed(
+  () => props.mode === 'compose' || props.enableFragmentPicker,
+)
+
+const restorableIdSet = computed(
+  () => new Set((props.restorableIds || []).map((id) => String(id)).filter(Boolean)),
+)
+
+const isRestorableFragment = (id) =>
+  props.mode === 'source' && restorableIdSet.value.has(String(id))
+
+const canRemoveFragment = (id) => {
+  if (isRestorableFragment(id)) return false
+  return props.mode === 'compose' || props.enableFragmentPicker
+}
 
 const PANEL_WIDTH_SELECTED = 360
 const PANEL_WIDTH_ALL = 436
 const fragmentOnlyScopes = ['fragment']
 
 const panelWidthPx = computed(() => {
-  if (props.mode === 'compose' && props.panelTab === 'all') return PANEL_WIDTH_ALL
+  if (showFragmentTabs.value && props.panelTab === 'all') return PANEL_WIDTH_ALL
   return PANEL_WIDTH_SELECTED
 })
 
@@ -523,9 +550,9 @@ watch(
 )
 
 watch(
-  () => [props.panelTab, props.open],
+  () => [props.panelTab, props.open, props.enableFragmentPicker],
   () => {
-    if (props.open && props.mode === 'compose') {
+    if (props.open && showFragmentTabs.value) {
       nextTick(updateTabIndicator)
     }
   },

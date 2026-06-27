@@ -28,8 +28,7 @@
   cursor: pointer;
 }
 
-.struct-note-slash-menu__item:hover,
-.struct-note-slash-menu__item--active {
+.struct-note-slash-menu__item:hover:not(:disabled) {
   background: rgba(24, 24, 27, 0.06);
 }
 
