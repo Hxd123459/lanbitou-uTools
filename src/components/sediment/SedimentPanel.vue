@@ -436,6 +436,7 @@
       @saved="loadCurrentList"
       @fragment-restored="(note) => emit('fragment-restored', note)"
       @fragments-archived="(ids) => emit('fragments-archived', ids)"
+      @error="(error) => emit('error', error)"
     />
   </section>
 </template>

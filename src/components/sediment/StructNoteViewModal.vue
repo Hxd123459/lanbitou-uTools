@@ -31,13 +31,13 @@
           <StructNoteFolderBreadcrumb
             ref="folderBreadcrumbRef"
             v-model:path-stack="pathStack"
-            :disabled="saving || fetching"
+            :disabled="saving || fetching || aiGenerating"
           />
 
           <div class="note-view-header-actions">
             <StructNoteCopyButton
               :get-content="() => draftContent"
-              :disabled="fetching || loadError || saving"
+              :disabled="fetching || loadError || saving || aiGenerating"
             />
             <motion.button
               type="button"
@@ -151,6 +151,7 @@
             :restoring-id="restoringFragmentId"
             enable-fragment-picker
             :restorable-ids="baselineFragmentIds"
+            :disabled="saving || aiGenerating"
             class="note-view-editor"
             @insert="insertFragment"
             @restore="handleRestoreFragment"
@@ -165,6 +166,15 @@
                 maxlength="80"
                 placeholder="请输入标题"
                 spellcheck="false"
+                :disabled="saving || aiGenerating"
+              />
+
+              <StructNoteAiDraftBar
+                v-if="localFragmentNotes.length"
+                :disabled="saving"
+                :generating="aiGenerating"
+                :active-preset="activePreset"
+                @draft-request="handleDraftRequest"
               />
             </template>
           </StructNoteMarkdownEditor>
@@ -180,8 +190,10 @@ import { AnimatePresence, motion } from 'motion-v'
 import { getStructNote, updateStructNote, findStructFolderItemByNoteId } from '../../api/structNote'
 import { fetchFolderPathStack, moveStructItem } from '../../api/structFolder'
 import { fetchNotesByIds, restoreArchivedFragment, archiveFragmentNotes } from '../../api/note'
-import { appendFragmentToContent } from '../../composables/useStructNoteFragments'
+import { appendFragmentToContent, resolveIntroducedFragmentIds } from '../../composables/useStructNoteFragments'
+import { useStructNoteAiDraft } from '../../composables/useStructNoteAiDraft'
 import { useMotionPresets } from '../../composables/useMotionPresets'
+import StructNoteAiDraftBar from './StructNoteAiDraftBar.vue'
 import StructNoteFolderBreadcrumb from './StructNoteFolderBreadcrumb.vue'
 import StructNoteMarkdownEditor from './StructNoteMarkdownEditor.vue'
 import StructNoteCopyButton from './StructNoteCopyButton.vue'
@@ -202,7 +214,7 @@ const props = defineProps({
   },
 })
 
-const emit = defineEmits(['close', 'saved', 'fragment-restored', 'fragments-archived'])
+const emit = defineEmits(['close', 'saved', 'fragment-restored', 'fragments-archived', 'error'])
 
 const { presets } = useMotionPresets()
 
@@ -226,6 +238,23 @@ const fragmentsMode = ref('compose')
 const sourceFragmentIds = ref([])
 const baselineFragmentIds = ref([])
 const restoringFragmentId = ref('')
+
+const {
+  aiGenerating,
+  activePreset,
+  handleDraftRequest,
+  stopAiDraftGeneration,
+  disposeAiDraft,
+} = useStructNoteAiDraft({
+  draftContent,
+  draftTitle,
+  localFragmentNotes,
+  insertedFragmentIds,
+  insertedStatusIds: insertedFragmentIds,
+  contentEditorRef,
+  onAiUnavailable: () => emit('error', new Error('请先在设置中配置 AI 服务')),
+  onError: (error) => emit('error', error),
+})
 
 let autoSaveTimer = null
 let loadToken = 0
@@ -260,7 +289,7 @@ const isDirty = computed(
 )
 
 const saveButtonDisabled = computed(
-  () => saving.value || !canSave.value || (!isDirty.value && saveStatus.value === 'saved'),
+  () => saving.value || aiGenerating.value || !canSave.value || (!isDirty.value && saveStatus.value === 'saved'),
 )
 
 const syncLastSavedFromDraft = () => {
@@ -305,9 +334,10 @@ const applyDraftFromNote = () => {
 }
 
 const insertFragment = (fragmentNote) => {
-  if (insertedFragmentIds.value.has(fragmentNote.id)) return
+  const fragmentId = String(fragmentNote.id)
+  if (insertedFragmentIds.value.has(fragmentId)) return
   draftContent.value = appendFragmentToContent(draftContent.value, fragmentNote)
-  insertedFragmentIds.value = new Set([...insertedFragmentIds.value, fragmentNote.id])
+  insertedFragmentIds.value = new Set([...insertedFragmentIds.value, fragmentId])
   nextTick(() => contentEditorRef.value?.focus())
 }
 
@@ -330,6 +360,9 @@ const handleRestoreFragment = async (fragmentNote) => {
     localFragmentNotes.value = localFragmentNotes.value.filter(
       (item) => String(item.id) !== String(fragmentId),
     )
+    insertedFragmentIds.value = new Set(
+      [...insertedFragmentIds.value].filter((id) => String(id) !== String(fragmentId)),
+    )
     if (!localFragmentNotes.value.length) {
       fragmentsOpen.value = false
     }
@@ -341,16 +374,21 @@ const handleRestoreFragment = async (fragmentNote) => {
   }
 }
 
-const loadSourceFragments = async (ids = []) => {
+const loadSourceFragments = async (ids = [], { preserveInserted = false } = {}) => {
+  const preservedInsertedIds = preserveInserted
+    ? new Set(insertedFragmentIds.value)
+    : null
   const normalizedIds = (Array.isArray(ids) ? ids : [])
     .map((id) => String(id))
     .filter(Boolean)
-  const list = normalizedIds.length ? await fetchNotesByIds(normalizedIds) : []
-  localFragmentNotes.value = list
+  const fetched = normalizedIds.length ? await fetchNotesByIds(normalizedIds) : []
+  const byId = new Map(fetched.map((note) => [String(note.id), note]))
+  localFragmentNotes.value = normalizedIds.map((id) => byId.get(id)).filter(Boolean)
   baselineFragmentIds.value = normalizedIds
-  fragmentsMode.value = list.length ? 'source' : 'compose'
-  fragmentsOpen.value = false
-  insertedFragmentIds.value = new Set()
+  fragmentsMode.value = localFragmentNotes.value.length ? 'source' : 'compose'
+  if (preserveInserted && preservedInsertedIds) {
+    insertedFragmentIds.value = preservedInsertedIds
+  }
 }
 
 const persistSourceFragments = async (noteId) => {
@@ -368,7 +406,7 @@ const persistSourceFragments = async (noteId) => {
 
   sourceFragmentIds.value = allFragmentIds
   if (allFragmentIds.length) {
-    await loadSourceFragments(allFragmentIds)
+    await loadSourceFragments(allFragmentIds, { preserveInserted: true })
   } else {
     localFragmentNotes.value = []
     baselineFragmentIds.value = []
@@ -414,7 +452,7 @@ const resolveTitleForSave = () => {
 }
 
 const handleSave = async (isAuto = false) => {
-  if (!canSave.value || saving.value) return
+  if (!canSave.value || saving.value || aiGenerating.value) return
   if (!isDirty.value) return
 
   saving.value = true
@@ -427,11 +465,14 @@ const handleSave = async (isAuto = false) => {
       .filter(Boolean)
       .map(String)
 
+    const introducedIds = [...insertedFragmentIds.value].map(String).filter(Boolean)
+
     await updateStructNote({
       id: noteId,
       title,
       content: draftContent.value.trim(),
       sourceFragmentIds: allFragmentIds,
+      introducedFragmentIds: introducedIds,
     })
     if (isFolderDirty.value && folderItemId.value) {
       await moveStructItem({
@@ -471,6 +512,12 @@ const fetchDetail = async () => {
     await resolveFolderContext(props.noteItem)
     applyDraftFromNote()
     await loadSourceFragments(sourceFragmentIds.value)
+    insertedFragmentIds.value = resolveIntroducedFragmentIds({
+      sourceFragmentIds: sourceFragmentIds.value,
+      introducedFragmentIds: data?.introducedFragmentIds,
+      content: draftContent.value,
+      fragmentNotes: localFragmentNotes.value,
+    })
     await nextTick()
     titleInputRef.value?.focus()
   } catch {
@@ -486,6 +533,7 @@ const fetchDetail = async () => {
 
 const emitClose = () => {
   if (saving.value) return
+  stopAiDraftGeneration()
   folderBreadcrumbRef.value?.closeFolderMenu()
   emit('close')
 }
@@ -495,6 +543,10 @@ const onKeydown = (e) => {
   if (e.key === 'Escape') {
     e.preventDefault()
     if (folderBreadcrumbRef.value?.handleEscape()) return
+    if (aiGenerating.value) {
+      stopAiDraftGeneration()
+      return
+    }
     emitClose()
     return
   }
@@ -535,6 +587,7 @@ watch(
       window.addEventListener('keydown', onKeydown)
     } else {
       clearAutoSaveTimer()
+      disposeAiDraft()
       window.removeEventListener('keydown', onKeydown)
     }
   },
@@ -542,6 +595,7 @@ watch(
 
 onBeforeUnmount(() => {
   clearAutoSaveTimer()
+  disposeAiDraft()
   window.removeEventListener('keydown', onKeydown)
 })
 </script>

@@ -36,9 +36,20 @@ const DRAFT_SYSTEM_BASE = `你是烂笔头的笔记整理助手。根据用户�
 4. 不要重复罗列原始碎片编号，直接整合成文
 5. 若碎片信息不足，基于已有内容尽力整理，不要编造事实`
 
-function buildSystemPrompt(preset, customPrompt, styleSection = '') {
+const APPEND_DRAFT_SYSTEM_BASE = `你是烂笔头的笔记整理助手。用户已有一篇长文，请将提供的新碎片整理成可追加到文末的内容块。
+
+输出规则（严格遵守）：
+1. 只输出要追加的 Markdown 正文，不要输出文档标题（禁止单独的一级 # 标题行）
+2. 使用 Markdown 格式（小标题、列表、引用、待办等均可），风格与已有正文尽量一致
+3. 禁止重复输出已有正文内容
+4. 禁止输出思考过程、解释、寒暄或 JSON
+5. 不要重复罗列原始碎片编号，直接整合成文
+6. 若碎片信息不足，基于已有内容尽力整理，不要编造事实`
+
+function buildSystemPrompt(preset, customPrompt, styleSection = '', mode = 'generate') {
   const presetConfig = SEDIMENT_DRAFT_PRESETS[preset] || SEDIMENT_DRAFT_PRESETS.compose
-  let prompt = `${DRAFT_SYSTEM_BASE}\n\n整理方式：${presetConfig.instruction}`
+  const base = mode === 'append' ? APPEND_DRAFT_SYSTEM_BASE : DRAFT_SYSTEM_BASE
+  let prompt = `${base}\n\n整理方式：${presetConfig.instruction}`
   const custom = String(customPrompt ?? '').trim()
   if (custom) {
     prompt += `\n\n用户补充要求：${custom}`
@@ -68,6 +79,33 @@ export function buildFragmentsUserMessage(fragments) {
       return `【碎片${i + 1}: ${label}】\n${body}`
     })
     .join('\n\n')
+}
+
+export function buildAppendUserMessage(existingContent, fragments) {
+  const body = String(existingContent ?? '').trim() || '（空）'
+  const fragmentsMessage = buildFragmentsUserMessage(fragments)
+  return `【已有正文】\n${body}\n\n【待整理的新碎片】\n${fragmentsMessage}`
+}
+
+export function parseAppendContent(raw) {
+  const text = String(raw ?? '').trim()
+  if (!text) return ''
+
+  const lines = text.split('\n')
+  let bodyStart = 0
+
+  for (let i = 0; i < lines.length; i += 1) {
+    const line = lines[i].trim()
+    if (!line) continue
+    if (/^#\s+/.test(line)) {
+      bodyStart = i + 1
+      break
+    }
+    bodyStart = i + 1
+    break
+  }
+
+  return lines.slice(bodyStart).join('\n').trim() || text
 }
 
 export function parseDraftTitleAndContent(raw) {
@@ -292,18 +330,28 @@ export function generateSedimentDraft({
   fragments,
   preset = 'compose',
   customPrompt,
+  mode = 'generate',
+  existingContent = '',
   onDelta,
   onTitle,
   onDone,
   onError,
 }) {
-  const userContent = buildFragmentsUserMessage(fragments)
+  const draftMode = mode === 'append' ? 'append' : 'generate'
+  const userContent = draftMode === 'append'
+    ? buildAppendUserMessage(existingContent, fragments)
+    : buildFragmentsUserMessage(fragments)
   let accumulated = ''
   let cancelled = false
   let innerCancel = () => {}
 
   const finish = () => {
     if (cancelled) return
+    if (draftMode === 'append') {
+      const content = parseAppendContent(accumulated)
+      onDone?.({ title: '', content })
+      return
+    }
     const { title, content } = parseDraftTitleAndContent(accumulated)
     if (title) onTitle?.(title)
     onDone?.({ title, content: content || accumulated })
@@ -328,7 +376,7 @@ export function generateSedimentDraft({
   ;(async () => {
     try {
       const styleSection = await resolveWritingStylePromptSection({ excludeIds })
-      const systemPrompt = buildSystemPrompt(preset, customPrompt, styleSection)
+      const systemPrompt = buildSystemPrompt(preset, customPrompt, styleSection, draftMode)
 
       if (settings.provider === 'utools') {
         const content = await requestUtoolsDraft(systemPrompt, userContent, settings.model)

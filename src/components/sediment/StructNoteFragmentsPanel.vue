@@ -157,7 +157,7 @@
 
           <ul v-else ref="listRef" class="struct-note-fragments-list">
               <li
-                v-for="note in fragmentNotes"
+                v-for="note in sortedFragmentNotes"
                 :key="note.id"
                 class="struct-note-fragment-item"
                 :class="{
@@ -222,17 +222,17 @@
                   <motion.button
                     type="button"
                     class="fragment-item-action-btn"
-                    :class="{ 'is-added': insertedIds.has(note.id) }"
-                    :disabled="disabled || insertedIds.has(note.id)"
-                    :aria-label="insertedIds.has(note.id) ? '已加入正文' : '加入正文'"
-                    :title="insertedIds.has(note.id) ? '已加入正文' : '加入正文'"
-                    :while-hover="disabled || insertedIds.has(note.id) ? undefined : presets.button.hover"
-                    :while-tap="disabled || insertedIds.has(note.id) ? undefined : presets.button.tap"
+                    :class="{ 'is-added': isFragmentInserted(note.id) }"
+                    :disabled="disabled || isFragmentInserted(note.id)"
+                    :aria-label="isFragmentInserted(note.id) ? '已引入正文' : '引入正文'"
+                    :title="isFragmentInserted(note.id) ? '已引入正文' : '引入正文'"
+                    :while-hover="disabled || isFragmentInserted(note.id) ? undefined : presets.button.hover"
+                    :while-tap="disabled || isFragmentInserted(note.id) ? undefined : presets.button.tap"
                     :transition="presets.button.transition"
                     @click="emit('insert', note)"
                   >
                     <svg
-                      v-if="insertedIds.has(note.id)"
+                      v-if="isFragmentInserted(note.id)"
                       viewBox="0 0 24 24"
                       width="14"
                       height="14"
@@ -437,6 +437,22 @@ const selectedIdSet = computed(
   () => new Set(props.fragmentNotes.map((note) => note?.id).filter(Boolean)),
 )
 
+const isFragmentInserted = (id) => {
+  if (id == null || id === '') return false
+  const key = String(id)
+  return props.insertedIds.has(key) || props.insertedIds.has(id)
+}
+
+const sortedFragmentNotes = computed(() => {
+  const pending = []
+  const inserted = []
+  for (const note of props.fragmentNotes) {
+    if (isFragmentInserted(note?.id)) inserted.push(note)
+    else pending.push(note)
+  }
+  return [...pending, ...inserted]
+})
+
 const setPanelTab = (tab) => {
   if (props.panelTab === tab) return
   emit('update:panelTab', tab)
@@ -500,7 +516,7 @@ const toggleAllTabSelect = async (note) => {
   } catch {
     /* 保留已有预览数据 */
   }
-  emit('update:fragmentNotes', [...props.fragmentNotes, resolved])
+  emit('update:fragmentNotes', [resolved, ...props.fragmentNotes])
 }
 
 const removeFromSelected = (note) => {
@@ -916,7 +932,7 @@ watch(
 .fragment-restore-text {
   font-size: 12px;
   font-weight: 500;
-  color: var(--color-accent);
+  color: var(--color-primary);
   white-space: nowrap;
 }
 
@@ -938,12 +954,14 @@ watch(
 }
 
 .fragment-restore-btn--yes {
-  background: var(--color-accent);
-  color: #fff;
+  background: var(--btn-primary-bg);
+  color: var(--btn-primary-fg);
+  box-shadow: var(--btn-primary-shadow);
 }
 
 .fragment-restore-btn--yes:hover:not(:disabled) {
-  background: #1d4ed8;
+  background: var(--btn-primary-bg-hover);
+  box-shadow: var(--btn-primary-shadow-hover);
 }
 
 .fragment-restore-btn--no {

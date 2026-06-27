@@ -115,12 +115,9 @@
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { AnimatePresence, motion } from 'motion-v'
 import { generateNoteTitle } from '../../ai/aiService'
-import {
-  generateSedimentDraft,
-  isSedimentDraftAiAvailable,
-  parseDraftTitleAndContent,
-} from '../../ai/sedimentDraftService'
+import { parseDraftTitleAndContent } from '../../ai/sedimentDraftService'
 import { useMotionPresets } from '../../composables/useMotionPresets'
+import { useStructNoteAiDraft } from '../../composables/useStructNoteAiDraft'
 import {
   appendFragmentToContent,
   getFragmentContent,
@@ -164,9 +161,24 @@ const pathStack = ref([])
 const insertedFragmentIds = ref(new Set())
 const localFragmentNotes = ref([])
 const fragmentsOpen = ref(false)
-const aiGenerating = ref(false)
-const activePreset = ref('')
-let cancelDraft = null
+
+const {
+  aiGenerating,
+  activePreset,
+  handleDraftRequest,
+  stopAiDraftGeneration,
+  disposeAiDraft,
+} = useStructNoteAiDraft({
+  draftContent,
+  draftTitle,
+  titleTouched,
+  aiDraftTitle,
+  localFragmentNotes,
+  insertedFragmentIds,
+  contentEditorRef,
+  onAiUnavailable: () => emit('ai-unavailable'),
+  onError: (error) => emit('error', error),
+})
 
 const canSave = computed(() => draftContent.value.trim().length > 0)
 
@@ -183,10 +195,7 @@ const currentParentId = computed(() => {
 })
 
 const resetDraft = () => {
-  cancelDraft?.()
-  cancelDraft = null
-  aiGenerating.value = false
-  activePreset.value = ''
+  stopAiDraftGeneration()
   draftTitle.value = ''
   draftContent.value = ''
   titleTouched.value = false
@@ -205,20 +214,6 @@ const emitClose = () => {
   stopAiDraftGeneration()
   closeFolderMenu()
   emit('close')
-}
-
-const stopAiDraftGeneration = () => {
-  cancelDraft?.()
-  cancelDraft = null
-  aiGenerating.value = false
-  activePreset.value = ''
-}
-
-const markAllFragmentsInserted = () => {
-  const ids = localFragmentNotes.value
-    .map((note) => note?.id)
-    .filter(Boolean)
-  insertedFragmentIds.value = new Set(ids)
 }
 
 const resolveTitleForSave = async () => {
@@ -286,97 +281,6 @@ const insertAllFragments = () => {
   }
 }
 
-const handleDraftRequest = ({ preset, customPrompt }) => {
-  if (!localFragmentNotes.value.length) return
-
-  if (!isSedimentDraftAiAvailable()) {
-    emit('ai-unavailable')
-    return
-  }
-
-  if (draftContent.value.trim()) {
-    const confirmed = window.confirm('AI 整理将覆盖当前正文，是否继续？')
-    if (!confirmed) return
-  }
-
-  cancelDraft?.()
-  aiGenerating.value = true
-  activePreset.value = preset || 'compose'
-  draftContent.value = ''
-  contentEditorRef.value?.setMarkdownContent('', { emitUpdate: false })
-
-  let draftAccumulated = ''
-  let streamRenderTimer = null
-
-  const renderStreamingDraft = (accumulated) => {
-    try {
-      const { content } = parseDraftTitleAndContent(accumulated)
-      const body = content || accumulated
-      draftContent.value = body
-      contentEditorRef.value?.setStreamingMarkdown(body)
-    } catch (error) {
-      if (streamRenderTimer) {
-        window.clearTimeout(streamRenderTimer)
-        streamRenderTimer = null
-      }
-      stopAiDraftGeneration()
-      emit('error', error instanceof Error ? error : new Error('AI 整理渲染失败'))
-    }
-  }
-
-  cancelDraft = generateSedimentDraft({
-    fragments: localFragmentNotes.value,
-    preset: preset || 'compose',
-    customPrompt,
-    onDelta: (_chunk, accumulated) => {
-      draftAccumulated = accumulated
-      if (streamRenderTimer) window.clearTimeout(streamRenderTimer)
-      streamRenderTimer = window.setTimeout(() => {
-        renderStreamingDraft(accumulated)
-        streamRenderTimer = null
-      }, 80)
-    },
-    onTitle: (title) => {
-      if (!titleTouched.value && title) {
-        draftTitle.value = title
-        aiDraftTitle.value = title
-      }
-    },
-    onDone: ({ title, content }) => {
-      if (streamRenderTimer) {
-        window.clearTimeout(streamRenderTimer)
-        streamRenderTimer = null
-      }
-      stopAiDraftGeneration()
-
-      if (!titleTouched.value && title) {
-        draftTitle.value = title
-        aiDraftTitle.value = title
-      }
-
-      const body =
-        content || parseDraftTitleAndContent(draftAccumulated).content || draftAccumulated
-      draftContent.value = body
-      try {
-        contentEditorRef.value?.setMarkdownContent(body, { emitUpdate: true })
-      } catch (error) {
-        emit('error', error instanceof Error ? error : new Error('AI 整理渲染失败'))
-        return
-      }
-      markAllFragmentsInserted()
-      nextTick(() => contentEditorRef.value?.focus())
-    },
-    onError: (error) => {
-      if (streamRenderTimer) {
-        window.clearTimeout(streamRenderTimer)
-        streamRenderTimer = null
-      }
-      stopAiDraftGeneration()
-      emit('error', error)
-    },
-  })
-}
-
 const onKeydown = (event) => {
   if (!props.visible || props.saving) return
   if (event.key === 'Escape') {
@@ -404,8 +308,7 @@ watch(
       titleInputRef.value?.focus()
       window.addEventListener('keydown', onKeydown)
     } else {
-      cancelDraft?.()
-      cancelDraft = null
+      disposeAiDraft()
       closeFolderMenu()
       window.removeEventListener('keydown', onKeydown)
     }
@@ -413,7 +316,7 @@ watch(
 )
 
 onBeforeUnmount(() => {
-  cancelDraft?.()
+  disposeAiDraft()
   window.removeEventListener('keydown', onKeydown)
 })
 

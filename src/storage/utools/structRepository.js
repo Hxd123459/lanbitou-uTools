@@ -80,6 +80,7 @@ export async function createStructNote({
     content: String(content ?? ''),
     tagId: tagId ?? null,
     sourceFragmentIds: normalizeSourceFragmentIds(sourceFragmentIds),
+    introducedFragmentIds: [],
     createTime: now,
     updateTime: now,
   }
@@ -88,6 +89,11 @@ export async function createStructNote({
 }
 
 function normalizeSourceFragmentIds(ids) {
+  if (!Array.isArray(ids)) return []
+  return [...new Set(ids.filter(Boolean).map(String))]
+}
+
+function normalizeIntroducedFragmentIds(ids) {
   if (!Array.isArray(ids)) return []
   return [...new Set(ids.filter(Boolean).map(String))]
 }
@@ -179,6 +185,10 @@ export async function getStructNote(id) {
     content: doc.content || '',
     tagId: doc.tagId ?? null,
     sourceFragmentIds: normalizeSourceFragmentIds(doc.sourceFragmentIds),
+    introducedFragmentIds:
+      doc.introducedFragmentIds === undefined
+        ? undefined
+        : normalizeIntroducedFragmentIds(doc.introducedFragmentIds),
     createTime: doc.createTime,
     updateTime: doc.updateTime,
   }
@@ -232,7 +242,14 @@ export async function findFolderItemByNoteId(noteId) {
   return doc ? toFolderItem(doc) : null
 }
 
-export async function updateStructNote({ id, title, content, tagId = null, sourceFragmentIds = undefined }) {
+export async function updateStructNote({
+  id,
+  title,
+  content,
+  tagId = null,
+  sourceFragmentIds = undefined,
+  introducedFragmentIds = undefined,
+}) {
   const doc = stripDoc(await dbGet(structNoteDocId(id)))
   if (!doc) throw new Error('结构化笔记不存在')
   doc.title = String(title ?? '').trim() || '无标题'
@@ -240,6 +257,9 @@ export async function updateStructNote({ id, title, content, tagId = null, sourc
   if (tagId != null) doc.tagId = tagId
   if (sourceFragmentIds !== undefined) {
     doc.sourceFragmentIds = normalizeSourceFragmentIds(sourceFragmentIds)
+  }
+  if (introducedFragmentIds !== undefined) {
+    doc.introducedFragmentIds = normalizeIntroducedFragmentIds(introducedFragmentIds)
   }
   doc.updateTime = formatDateTime()
   await saveDoc(STRUCT_NOTE_PREFIX, doc)

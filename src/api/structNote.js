@@ -11,10 +11,18 @@ export async function createStructNote({ title, content, tagId = null }) {
   return post('/struct/note/create', body)
 }
 
-export async function updateStructNote({ id, title, content, tagId = null, sourceFragmentIds = undefined }) {
+export async function updateStructNote({
+  id,
+  title,
+  content,
+  tagId = null,
+  sourceFragmentIds = undefined,
+  introducedFragmentIds = undefined,
+}) {
   const body = { id, title, content }
   if (tagId != null) body.tagId = tagId
   if (sourceFragmentIds !== undefined) body.sourceFragmentIds = sourceFragmentIds
+  if (introducedFragmentIds !== undefined) body.introducedFragmentIds = introducedFragmentIds
   if (isUtoolsMode()) {
     return utoolsStruct.updateStructNote(body)
   }
