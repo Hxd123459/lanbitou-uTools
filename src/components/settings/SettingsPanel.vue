@@ -13,7 +13,6 @@
       :transition="headerMotion.transition"
     >
       <h2 class="settings-panel-title">设置</h2>
-      <p class="settings-panel-desc">管理 AI 服务与本地数据备份。</p>
     </motion.header>
 
     <AiSettingsPanel
@@ -27,14 +26,20 @@
       @imported="emit('imported')"
       @error="emit('error', $event)"
     />
+    <SedimentTemplatesPanel
+      :active="active"
+      :highlight-add-card="highlightTemplateAdd"
+    />
   </motion.section>
 </template>
 
 <script setup>
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { motion } from 'motion-v'
 import { useMotionPresets } from '../../composables/useMotionPresets'
+import { SETTINGS_NAV_TARGETS } from '../../composables/useSettingsNavigation'
 import AiSettingsPanel from './AiSettingsPanel.vue'
+import SedimentTemplatesPanel from './SedimentTemplatesPanel.vue'
 import DataBackupPanel from './DataBackupPanel.vue'
 
 const props = defineProps({
@@ -51,6 +56,30 @@ const props = defineProps({
 const emit = defineEmits(['auto-tag-enabled', 'imported', 'error'])
 
 const { presets } = useMotionPresets()
+const highlightTemplateAdd = ref(false)
+let highlightTimer = null
+
+const scrollToTarget = (targetId) => {
+  if (!targetId) return false
+
+  const el = document.getElementById(targetId)
+  if (!el) return false
+
+  el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+
+  if (targetId === SETTINGS_NAV_TARGETS.sedimentTemplateAdd) {
+    highlightTemplateAdd.value = true
+    if (highlightTimer) window.clearTimeout(highlightTimer)
+    highlightTimer = window.setTimeout(() => {
+      highlightTemplateAdd.value = false
+      highlightTimer = null
+    }, 1800)
+  }
+
+  return true
+}
+
+defineExpose({ scrollToTarget })
 
 const panelMotion = computed(() => {
   const reveal = presets.value.reveal
@@ -80,16 +109,9 @@ const headerMotion = computed(() => {
 }
 
 .settings-panel-title {
-  margin: 0 0 6px;
+  margin: 0;
   font-size: 18px;
   font-weight: 600;
   color: var(--color-primary);
-}
-
-.settings-panel-desc {
-  margin: 0;
-  font-size: 13px;
-  line-height: 1.6;
-  color: var(--color-secondary-text);
 }
 </style>

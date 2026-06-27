@@ -93,7 +93,7 @@
         <span class="struct-note-fragment-ai-option-icon struct-note-fragment-ai-option-icon--plus" aria-hidden="true">
           +
         </span>
-        <span class="struct-note-fragment-ai-option-label">添加模版</span>
+        <span class="struct-note-fragment-ai-option-label">新增模板</span>
       </button>
     </div>
   </div>
@@ -102,7 +102,12 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { FRAGMENT_INTRO_RAW } from '../../composables/useStructNoteFragments'
-import { SEDIMENT_DRAFT_PRESETS } from '../../ai/sedimentDraftService'
+import { useSedimentTemplates } from '../../composables/useSedimentTemplates'
+import {
+  navigateToSettings,
+  SETTINGS_NAV_TARGETS,
+} from '../../composables/useSettingsNavigation'
+import { getSedimentTemplateTitle } from '../../storage/utools/sedimentTemplates'
 
 const props = defineProps({
   modelValue: {
@@ -121,12 +126,16 @@ const props = defineProps({
 
 const emit = defineEmits(['update:modelValue'])
 
+const { templates } = useSedimentTemplates()
 const menuOpen = ref(false)
 const rootRef = ref(null)
 
 const options = computed(() => [
   { id: FRAGMENT_INTRO_RAW, label: '原文' },
-  ...Object.values(SEDIMENT_DRAFT_PRESETS),
+  ...templates.value.map((item) => ({
+    id: item.id,
+    label: item.title,
+  })),
 ])
 
 const isOptionSelected = (id) => {
@@ -139,7 +148,7 @@ const triggerTitle = computed(() => {
   if (!props.modelValue || props.modelValue === FRAGMENT_INTRO_RAW) {
     return '引入方式：原文（点击选择 AI 模板）'
   }
-  const label = SEDIMENT_DRAFT_PRESETS[props.modelValue]?.label
+  const label = getSedimentTemplateTitle(props.modelValue)
   return label ? `引入方式：${label}` : '选择引入方式'
 })
 
@@ -159,7 +168,8 @@ const selectOption = (id) => {
 }
 
 const handleAddTemplate = () => {
-  // 预留：添加自定义模版
+  closeMenu()
+  navigateToSettings(SETTINGS_NAV_TARGETS.sedimentTemplateAdd)
 }
 
 const handleDocumentPointerDown = (event) => {

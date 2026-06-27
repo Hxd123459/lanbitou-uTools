@@ -16,14 +16,10 @@
         :transition="headerMotion.transition"
       >
         <h2 class="ai-settings-title">AI 设置</h2>
-        <p class="ai-settings-desc">配置 AI 服务来源与自动打标签。第三方 Key 将加密保存在本机。</p>
       </motion.header>
     </template>
     <template v-else>
-      <h3 class="ai-settings-subtitle">AI 设置</h3>
-      <p class="ai-settings-desc ai-settings-desc--embedded">
-        配置 AI 服务来源与自动打标签。第三方 Key 将加密保存在本机。
-      </p>
+      <SettingsSectionHeading title="AI 设置" />
     </template>
 
     <motion.div
@@ -187,6 +183,7 @@ import { motion } from 'motion-v'
 import { testAiConnection } from '../../ai/aiService'
 import { useMotionPresets } from '../../composables/useMotionPresets'
 import AppButton from '../motion/AppButton.vue'
+import SettingsSectionHeading from './SettingsSectionHeading.vue'
 import {
   AI_PROVIDERS,
   loadAiSettings,

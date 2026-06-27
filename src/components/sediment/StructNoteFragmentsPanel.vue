@@ -177,13 +177,6 @@
                   </span>
                   <time class="struct-note-fragment-time">{{ formatFragmentTime(note.createdAt) }}</time>
                 </div>
-                <p
-                  v-if="isFragmentInserted(note.id)"
-                  class="struct-note-fragment-intro-label"
-                >
-                  已以「{{ getIntroduceLabel(note.id) }}」引入
-                </p>
-
                 <div class="struct-note-fragment-main">
                   <div class="struct-note-fragment-content">
                     <TiptapPreview
@@ -309,6 +302,13 @@
                       <path d="M18 6 6 18M6 6l12 12" />
                     </svg>
                   </motion.button>
+
+                  <span
+                    v-if="isFragmentInserted(note.id)"
+                    class="struct-note-fragment-intro-label"
+                  >
+                    已以「{{ getIntroduceLabel(note.id) }}」引入
+                  </span>
                 </div>
               </li>
           </ul>
@@ -868,10 +868,11 @@ watch(
 }
 
 .struct-note-fragment-intro-label {
-  margin: -2px 0 6px;
+  margin-left: auto;
   font-size: 10px;
   line-height: 1.4;
   color: #a1a1aa;
+  white-space: nowrap;
 }
 
 .struct-note-fragment-main {
@@ -919,7 +920,8 @@ watch(
   display: flex;
   align-items: center;
   justify-content: flex-start;
-  gap: 4px;
+  flex-wrap: wrap;
+  gap: 4px 8px;
   margin-top: 8px;
   padding-top: 8px;
   border-top: 1px solid rgba(24, 24, 27, 0.06);

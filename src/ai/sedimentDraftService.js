@@ -1,38 +1,24 @@
 import { isUtoolsMode } from '../storage/env'
 import { loadAiSettings, getResolvedBaseUrl, getResolvedModel } from '../storage/utools/aiSettings'
+import {
+  getSedimentTemplateInstruction,
+  getSedimentTemplateTitle,
+  LEGACY_BUILTIN_LABELS,
+} from '../storage/utools/sedimentTemplates'
 import { isUtoolsAiAvailable } from './aiService'
 import { resolveWritingStylePromptSection } from './writingStyleService'
 import { getFragmentContent } from '../composables/useStructNoteFragments'
 
-export const SEDIMENT_DRAFT_PRESETS = {
-  summarize: {
-    id: 'summarize',
-    label: '提炼要点',
-    instruction: '将以下碎片提炼为结构化要点列表，保留关键信息，去除重复内容。',
-  },
-  compose: {
-    id: 'compose',
-    label: '整理成文',
-    instruction: '将以下碎片整合为一篇连贯的长文，逻辑清晰、段落分明，保留有价值的细节。',
-  },
-  timeline: {
-    id: 'timeline',
-    label: '按时间线',
-    instruction: '按时间顺序整理以下碎片，标注时间节点，梳理事件发展脉络。',
-  },
-  compare: {
-    id: 'compare',
-    label: '正反对比',
-    instruction: '分析以下碎片中的不同观点或对立面，整理成对比结构，突出异同。',
-  },
-}
+export const SEDIMENT_DRAFT_PRESETS = Object.fromEntries(
+  Object.entries(LEGACY_BUILTIN_LABELS).map(([id, label]) => [id, { id, label }]),
+)
 
 export const FRAGMENT_INTRO_RAW = 'raw'
 
 export function getIntroduceMethodLabel(methodId) {
   const key = String(methodId ?? '').trim()
   if (!key || key === FRAGMENT_INTRO_RAW) return '原文'
-  return SEDIMENT_DRAFT_PRESETS[key]?.label || key
+  return getSedimentTemplateTitle(key) || SEDIMENT_DRAFT_PRESETS[key]?.label || key
 }
 
 const DRAFT_SYSTEM_BASE = `你是烂笔头的笔记整理助手。根据用户提供的碎片笔记，生成可直接编辑的长文初稿。
@@ -65,13 +51,13 @@ const APPEND_DRAFT_SYSTEM_BASE = `你是烂笔头的笔记整理助手。用户�
 6. 若碎片信息不足，基于已有内容尽力整理，不要编造事实`
 
 function buildSystemPrompt(preset, customPrompt, styleSection = '', mode = 'generate') {
-  const presetConfig = SEDIMENT_DRAFT_PRESETS[preset] || SEDIMENT_DRAFT_PRESETS.compose
+  const instruction = getSedimentTemplateInstruction(preset)
   const base = mode === 'fragment'
     ? FRAGMENT_INSERT_SYSTEM_BASE
     : mode === 'append'
       ? APPEND_DRAFT_SYSTEM_BASE
       : DRAFT_SYSTEM_BASE
-  let prompt = `${base}\n\n整理方式：${presetConfig.instruction}`
+  let prompt = `${base}\n\n整理方式：${instruction}`
   const custom = String(customPrompt ?? '').trim()
   if (custom) {
     prompt += `\n\n用户补充要求：${custom}`

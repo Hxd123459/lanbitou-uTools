@@ -5,10 +5,7 @@
     :animate="cardMotion.animate"
     :transition="cardMotion.transition"
   >
-    <h3 class="ai-settings-subtitle">数据备份</h3>
-    <p class="ai-settings-desc data-backup-desc">
-      导出本地碎片、沉淀与标签为 ZIP；支持导入备份包或批量导入外部 Markdown 为碎片。
-    </p>
+    <SettingsSectionHeading title="数据备份" />
 
     <div class="data-backup-actions">
       <AppButton
@@ -71,6 +68,7 @@ import { exportAndDownloadLanbitouBackup } from '../../backup/dataExporter'
 import { importLanbitouBackup } from '../../backup/dataImporter'
 import { importExternalMarkdownFiles } from '../../backup/externalMdImporter'
 import AppButton from '../motion/AppButton.vue'
+import SettingsSectionHeading from './SettingsSectionHeading.vue'
 
 const props = defineProps({
   active: {
@@ -93,7 +91,7 @@ const mdInputRef = ref(null)
 const cardMotion = computed(() => {
   const reveal = presets.value.reveal
   return props.active
-    ? { initial: reveal.initial, animate: reveal.animate, transition: { ...reveal.transition, delay: 0.16 } }
+    ? { initial: reveal.initial, animate: reveal.animate, transition: { ...reveal.transition, delay: 0.24 } }
     : { initial: reveal.initial, animate: reveal.initial, transition: reveal.transition }
 })
 
@@ -225,19 +223,8 @@ const onMdSelected = async (event) => {
 </script>
 
 <style scoped>
-.ai-settings-subtitle {
-  margin: 0 0 8px;
-  font-size: 16px;
-  font-weight: 600;
-  color: var(--color-primary);
-}
-
 .data-backup-card {
   margin-top: 14px;
-}
-
-.data-backup-desc {
-  margin: 0 0 16px;
 }
 
 .data-backup-actions {

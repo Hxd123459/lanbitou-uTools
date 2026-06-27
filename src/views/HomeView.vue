@@ -332,6 +332,7 @@
 
       <!-- 设置 -->
       <SettingsPanel
+        ref="settingsPanelRef"
         v-show="activeTab === 'settings'"
         :active="activeTab === 'settings'"
         :pending-auto-tag-setup="pendingAutoTagSetup"
@@ -375,6 +376,7 @@ import NoteViewSwitcher from '../components/note/NoteViewSwitcher.vue'
 import { isUntaggedTag } from '../constants/noteTag'
 import { invalidateTagList } from '../composables/tagListSync'
 import { useCopyNote } from '../composables/useCopyNote'
+import { registerSettingsNavigator } from '../composables/useSettingsNavigation'
 import {
   isClipboardEnterAction,
   onClipboardEnter,
@@ -401,6 +403,7 @@ const inputValue = ref('')
 const noteSubmitting = ref(false)
 const uploadProgress = ref(0)
 const inputBarRef = ref(null)
+const settingsPanelRef = ref(null)
 const pendingAutoTagSetup = ref(false)
 const assistantStore = useAssistantStore()
 
@@ -1326,6 +1329,17 @@ const applyClipboardEnter = async (action) => {
 }
 
 let stopClipboardEnterListener = null
+let stopSettingsNavigator = null
+
+const scrollSettingsToTarget = async (target) => {
+  if (!target) return
+  await nextTick()
+  const scrolled = await settingsPanelRef.value?.scrollToTarget?.(target)
+  if (!scrolled) {
+    await nextTick()
+    settingsPanelRef.value?.scrollToTarget?.(target)
+  }
+}
 
 const scrollToNote = async (id) => {
   const tryScroll = () => {
@@ -1569,6 +1583,10 @@ onMounted(async () => {
     takePendingClipboardAction()
     applyClipboardEnter(action)
   })
+  stopSettingsNavigator = registerSettingsNavigator(async (target) => {
+    activeTab.value = 'settings'
+    await scrollSettingsToTarget(target)
+  })
 
   try {
     await assistantStore.loadInitialNotes()
@@ -1582,6 +1600,8 @@ onMounted(async () => {
 onBeforeUnmount(() => {
   stopClipboardEnterListener?.()
   stopClipboardEnterListener = null
+  stopSettingsNavigator?.()
+  stopSettingsNavigator = null
   deleteTimers.forEach((timer) => clearTimeout(timer))
   deleteTimers.clear()
   deleteSnapshots.clear()
