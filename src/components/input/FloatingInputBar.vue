@@ -246,6 +246,10 @@ import { isImageFileSizeAllowed } from '../../constants/uploadLimits'
 import { useMotionPresets } from '../../composables/useMotionPresets'
 import { useTagHashPicker } from '../../composables/useTagHashPicker'
 import { markClipboardImageHandledByPaste } from '../../composables/useUtoolsClipboardEnter'
+import {
+  extractClipboardImageFiles,
+  insertTextAtTextareaCursor,
+} from '../../utils/tiptapImageInsert'
 import AppButton from '../motion/AppButton.vue'
 import '../../assets/styles/tiptap-slash-menu.css'
 
@@ -423,15 +427,25 @@ const onKeydown = (event) => {
 const onPaste = (event) => {
   if (props.submitting) return
   if (document.activeElement !== textareaRef.value) return
-  const items = Array.from(event.clipboardData?.items || [])
-  const files = items
-    .filter((item) => item.kind === 'file' && item.type.startsWith('image/'))
-    .map((item) => item.getAsFile())
-    .filter(Boolean)
+  const clipboardData = event.clipboardData
+  if (!clipboardData) return
 
+  const files = extractClipboardImageFiles(clipboardData)
   if (!files.length) return
+
   event.preventDefault()
   markClipboardImageHandledByPaste()
+
+  const plain = clipboardData.getData('text/plain')
+  if (plain) {
+    insertTextAtTextareaCursor(
+      textareaRef.value,
+      props.modelValue,
+      plain,
+      (value) => emit('update:modelValue', value),
+    )
+  }
+
   addImages(files)
 }
 

@@ -1528,8 +1528,15 @@ const handlePin = async ({ id, pinWeightValue }) => {
   }
 }
 
-const handleCopied = () => {
-  openToast('已复制纯文本', 'success', { duration: 1600 })
+const handleCopied = (payload) => {
+  const mode = payload?.mode || 'plain'
+  const messages = {
+    plain: '已复制纯文本',
+    rich: payload?.imageCount
+      ? `已复制（含 ${payload.imageCount} 张图片）`
+      : '已复制（含图片）',
+  }
+  openToast(messages[mode] || '复制成功', 'success', { duration: 1600 })
 }
 
 const handleCopyFailed = () => {

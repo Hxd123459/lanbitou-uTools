@@ -172,13 +172,15 @@
         </motion.button>
         <motion.button
           v-if="!isEditing"
+          ref="copyBtnRef"
           class="icon-btn"
+          :class="{ 'is-active': copyMenuOpen }"
           type="button"
-          title="复制纯文本"
+          title="复制"
           :while-hover="presets.button.hover"
           :while-tap="presets.button.tap"
           :transition="presets.button.transition"
-          @click="onCopy"
+          @click.stop="toggleCopyMenu"
         >
           <svg viewBox="0 0 24 24" width="14" height="14" fill="none"
             stroke="currentColor" stroke-width="1.8" stroke-linecap="round"
@@ -540,6 +542,62 @@
           <span class="struct-note-slash-menu__label">{{ item.label }}</span>
         </button>
       </div>
+
+      <div
+        v-if="copyMenuOpen"
+        ref="copyMenuRef"
+        class="struct-note-slash-menu struct-note-slash-menu--compact"
+        data-note-copy-menu
+        role="listbox"
+        aria-label="复制选项"
+        :style="copyMenuStyle"
+        @mousedown.prevent
+      >
+        <button
+          v-for="(item, index) in copyMenuItems"
+          :key="item.mode"
+          type="button"
+          class="struct-note-slash-menu__item"
+          :class="{ 'struct-note-slash-menu__item--active': index === copyMenuIndex }"
+          role="option"
+          :aria-selected="index === copyMenuIndex"
+          :disabled="item.disabled || copyBusy"
+          @click="applyCopyMenuItem(item)"
+        >
+          <span class="struct-note-slash-menu__icon" aria-hidden="true">
+            <svg
+              v-if="item.mode === 'plain'"
+              viewBox="0 0 24 24"
+              width="14"
+              height="14"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.8"
+              stroke-linecap="round"
+            >
+              <path d="M4 7V4h16v3" />
+              <path d="M9 20h6" />
+              <path d="M12 4v16" />
+            </svg>
+            <svg
+              v-else
+              viewBox="0 0 24 24"
+              width="14"
+              height="14"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.8"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <rect x="3" y="3" width="18" height="18" rx="2" />
+              <circle cx="8.5" cy="8.5" r="1.5" />
+              <path d="m21 15-5-5L5 21" />
+            </svg>
+          </span>
+          <span class="struct-note-slash-menu__label">{{ item.label }}</span>
+        </button>
+      </div>
     </Teleport>
   </article>
 </template>
@@ -558,6 +616,10 @@ import { isImageFileSizeAllowed } from '../../constants/uploadLimits'
 import { useMotionPresets } from '../../composables/useMotionPresets'
 import { useTagHashPicker } from '../../composables/useTagHashPicker'
 import { markClipboardImageHandledByPaste } from '../../composables/useUtoolsClipboardEnter'
+import {
+  extractClipboardImageFiles,
+  insertTextAtTextareaCursor,
+} from '../../utils/tiptapImageInsert'
 import { useAssistantStore } from '../../stores/assistantStore'
 import AppButton from '../motion/AppButton.vue'
 import '../../assets/styles/tiptap-slash-menu.css'
@@ -568,6 +630,11 @@ import {
   findMergedHighlightRanges,
   normalizeHighlightKeywords,
 } from '../../utils/searchHighlight'
+import {
+  copyNoteByMode,
+  getNoteImages,
+  getNotePlainText,
+} from '../../utils/copyNoteContent'
 
 const { presets, reduced } = useMotionPresets()
 
@@ -655,7 +722,7 @@ let lastListScrollTop = 0
 let selectClickTimer = null
 
 const CARD_INTERACTIVE_SELECTOR =
-  'a, button, input, textarea, label, .thumb-strip, .gallery, .tile, .note-select-control, .note-tag, .lightbox'
+  'a, button, input, textarea, label, .thumb-strip, .gallery, .tile, .note-select-control, .note-tag, .lightbox, [data-note-copy-menu]'
 
 const HIGHLIGHT_CLASS = 'note-highlight'
 const HIGHLIGHT_SKIP_SELECTOR = 'pre, code, .hljs'
@@ -713,6 +780,30 @@ const hasRecallId = computed(
     props.note?.aiNoteRecallId !== '',
 )
 const recallModalOpen = ref(false)
+
+const copyBtnRef = ref(null)
+const copyMenuRef = ref(null)
+const copyMenuOpen = ref(false)
+const copyMenuIndex = ref(0)
+const copyBusy = ref(false)
+const copyMenuStyle = ref({ left: '0px', top: '0px', visibility: 'hidden' })
+
+const copyMenuItems = computed(() => {
+  const plain = getNotePlainText(props.note)
+  const images = getNoteImages(props.note)
+  return [
+    {
+      mode: 'plain',
+      label: '复制纯文本',
+      disabled: !plain,
+    },
+    {
+      mode: 'rich',
+      label: '复制（含图片）',
+      disabled: !plain && !images.length,
+    },
+  ]
+})
 
 const openRecallModal = () => {
   if (!hasRecallId.value) return
@@ -960,14 +1051,27 @@ const onPickImages = (event) => {
 
 const onEditorPaste = (event) => {
   if (saving.value) return
-  const items = Array.from(event.clipboardData?.items || [])
-  const files = items
-    .filter((item) => item.kind === 'file' && item.type.startsWith('image/'))
-    .map((item) => item.getAsFile())
-    .filter(Boolean)
+  const clipboardData = event.clipboardData
+  if (!clipboardData) return
+
+  const files = extractClipboardImageFiles(clipboardData)
   if (!files.length) return
+
   event.preventDefault()
   markClipboardImageHandledByPaste()
+
+  const plain = clipboardData.getData('text/plain')
+  if (plain) {
+    insertTextAtTextareaCursor(
+      editorRef.value,
+      draftContent.value,
+      plain,
+      (value) => {
+        draftContent.value = value
+      },
+    )
+  }
+
   appendDraftFiles(files)
 }
 
@@ -1032,19 +1136,128 @@ const onTogglePin = (target) => {
   emit('pin', { id: props.note.id, pinWeightValue: next })
 }
 
-const onCopy = async () => {
-  const plain = stripMarkdown(contentText.value)
-  if (!plain) return
-  try {
-    if (navigator.clipboard && window.isSecureContext) {
-      await navigator.clipboard.writeText(plain)
-    } else {
-      legacyCopy(plain)
+const closeCopyMenu = () => {
+  copyMenuOpen.value = false
+  copyMenuIndex.value = 0
+  copyMenuStyle.value = { left: '0px', top: '0px', visibility: 'hidden' }
+}
+
+const positionCopyMenu = async () => {
+  const anchor = copyBtnRef.value?.$el ?? copyBtnRef.value
+  if (!(anchor instanceof HTMLElement)) return
+
+  await nextTick()
+  const viewportPadding = 8
+  const menuGap = 6
+  const rect = anchor.getBoundingClientRect()
+  let left = rect.left
+  let top = rect.bottom + menuGap
+
+  copyMenuStyle.value = {
+    left: `${left}px`,
+    top: `${top}px`,
+    visibility: 'hidden',
+  }
+
+  requestAnimationFrame(() => {
+    const menuEl = copyMenuRef.value
+    if (!menuEl) return
+
+    const menuRect = menuEl.getBoundingClientRect()
+    if (menuRect.bottom > window.innerHeight - viewportPadding) {
+      top = Math.max(viewportPadding, rect.top - menuRect.height - menuGap)
     }
-    emit('copied')
+    if (left + menuRect.width > window.innerWidth - viewportPadding) {
+      left = Math.max(
+        viewportPadding,
+        window.innerWidth - menuRect.width - viewportPadding,
+      )
+    }
+
+    copyMenuStyle.value = {
+      left: `${left}px`,
+      top: `${top}px`,
+      visibility: 'visible',
+    }
+  })
+}
+
+const toggleCopyMenu = async () => {
+  if (copyMenuOpen.value) {
+    closeCopyMenu()
+    return
+  }
+  copyMenuOpen.value = true
+  copyMenuIndex.value = copyMenuItems.value.findIndex((item) => !item.disabled)
+  if (copyMenuIndex.value < 0) copyMenuIndex.value = 0
+  await positionCopyMenu()
+}
+
+const applyCopyMenuItem = async (item) => {
+  if (!item || item.disabled || copyBusy.value) return
+  copyBusy.value = true
+  try {
+    const result = await copyNoteByMode(props.note, item.mode)
+    closeCopyMenu()
+    emit('copied', result)
   } catch (error) {
     console.error('[NoteCard] copy failed:', error)
-    emit('copy-failed')
+    closeCopyMenu()
+    emit('copy-failed', { mode: item.mode })
+  } finally {
+    copyBusy.value = false
+  }
+}
+
+const onCopyMenuDocumentClick = (event) => {
+  if (!copyMenuOpen.value) return
+  const anchor = copyBtnRef.value?.$el ?? copyBtnRef.value
+  const menuEl = copyMenuRef.value
+  const target = event.target
+  if (anchor?.contains?.(target) || menuEl?.contains?.(target)) return
+  closeCopyMenu()
+}
+
+const onCopyMenuKeydown = (event) => {
+  if (!copyMenuOpen.value) return
+
+  if (event.key === 'Escape') {
+    event.preventDefault()
+    closeCopyMenu()
+    return
+  }
+
+  if (event.key === 'ArrowDown') {
+    event.preventDefault()
+    let next = copyMenuIndex.value
+    do {
+      next = (next + 1) % copyMenuItems.value.length
+    } while (
+      copyMenuItems.value[next]?.disabled &&
+      next !== copyMenuIndex.value
+    )
+    copyMenuIndex.value = next
+    return
+  }
+
+  if (event.key === 'ArrowUp') {
+    event.preventDefault()
+    let next = copyMenuIndex.value
+    do {
+      next =
+        (next - 1 + copyMenuItems.value.length) % copyMenuItems.value.length
+    } while (
+      copyMenuItems.value[next]?.disabled &&
+      next !== copyMenuIndex.value
+    )
+    copyMenuIndex.value = next
+    return
+  }
+
+  if (event.key === 'Enter') {
+    event.preventDefault()
+    const item = copyMenuItems.value[copyMenuIndex.value]
+    if (item && !item.disabled) applyCopyMenuItem(item)
   }
 }
 
@@ -1057,6 +1270,7 @@ watch(
       if (draftContent.value) draftContent.value = ''
       selectedTag.value = null
       closeTagMenu()
+      closeCopyMenu()
       revokeDraftNewUrls()
       draftImageItems.value = []
     }
@@ -1067,9 +1281,13 @@ onBeforeUnmount(() => {
   clearSelectClickTimer()
   unbindListScroll()
   revokeDraftNewUrls()
+  document.removeEventListener('click', onCopyMenuDocumentClick, true)
+  document.removeEventListener('keydown', onCopyMenuKeydown, true)
 })
 
 onMounted(() => {
+  document.addEventListener('click', onCopyMenuDocumentClick, true)
+  document.addEventListener('keydown', onCopyMenuKeydown, true)
   const platform =
     (typeof navigator !== 'undefined' &&
       (navigator.userAgentData?.platform || navigator.platform || '')) ||
@@ -1154,44 +1372,6 @@ watch(
   },
   { flush: 'post' },
 )
-
-function stripMarkdown(md) {
-  if (!md) return ''
-  return md
-    .replace(/```[\s\S]*?```/g, (block) =>
-      block.replace(/```[^\n]*\n?|```/g, ''),
-    )
-    .replace(/`([^`]+)`/g, '$1')
-    .replace(/!\[([^\]]*)\]\([^)]*\)/g, '$1')
-    .replace(/\[([^\]]*)\]\([^)]*\)/g, '$1')
-    .replace(/^#{1,6}\s+/gm, '')
-    .replace(/^>\s?/gm, '')
-    .replace(/^\s*[-+*]\s+\[[xX ]\]\s+/gm, '')
-    .replace(/^\s*[-+*]\s+/gm, '')
-    .replace(/^\s*\d+\.\s+/gm, '')
-    .replace(/\*\*([^*]+)\*\*/g, '$1')
-    .replace(/__([^_]+)__/g, '$1')
-    .replace(/\*([^*\n]+)\*/g, '$1')
-    .replace(/_([^_\n]+)_/g, '$1')
-    .replace(/~~([^~]+)~~/g, '$1')
-    .replace(/^[-*_]{3,}\s*$/gm, '')
-    .replace(/\n{3,}/g, '\n\n')
-    .trim()
-}
-
-function legacyCopy(text) {
-  const ta = document.createElement('textarea')
-  ta.value = text
-  ta.style.position = 'fixed'
-  ta.style.opacity = '0'
-  document.body.appendChild(ta)
-  ta.select()
-  try {
-    document.execCommand('copy')
-  } finally {
-    document.body.removeChild(ta)
-  }
-}
 
 const onTagClick = () => {
   const tagId = originalTagId.value

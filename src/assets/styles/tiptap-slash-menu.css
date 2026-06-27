@@ -33,6 +33,15 @@
   background: rgba(24, 24, 27, 0.06);
 }
 
+.struct-note-slash-menu__item:disabled {
+  opacity: 0.38;
+  cursor: not-allowed;
+}
+
+.struct-note-slash-menu__item:disabled:hover {
+  background: transparent;
+}
+
 .struct-note-slash-menu__icon {
   display: inline-flex;
   align-items: center;
@@ -76,4 +85,29 @@
 .struct-note-slash-menu--panel .struct-note-slash-menu__icon svg {
   width: 16px;
   height: 16px;
+}
+
+.struct-note-slash-menu--compact {
+  min-width: 132px;
+  max-width: 168px;
+  padding: 3px;
+  border-radius: 8px;
+}
+
+.struct-note-slash-menu--compact .struct-note-slash-menu__item {
+  gap: 6px;
+  padding: 5px 7px;
+  font-size: 11px;
+  border-radius: 6px;
+}
+
+.struct-note-slash-menu--compact .struct-note-slash-menu__icon {
+  flex: 0 0 14px;
+  width: 14px;
+  height: 14px;
+}
+
+.struct-note-slash-menu--compact .struct-note-slash-menu__icon svg {
+  width: 14px;
+  height: 14px;
 }
