@@ -27,6 +27,14 @@ export const SEDIMENT_DRAFT_PRESETS = {
   },
 }
 
+export const FRAGMENT_INTRO_RAW = 'raw'
+
+export function getIntroduceMethodLabel(methodId) {
+  const key = String(methodId ?? '').trim()
+  if (!key || key === FRAGMENT_INTRO_RAW) return '原文'
+  return SEDIMENT_DRAFT_PRESETS[key]?.label || key
+}
+
 const DRAFT_SYSTEM_BASE = `你是烂笔头的笔记整理助手。根据用户提供的碎片笔记，生成可直接编辑的长文初稿。
 
 输出规则（严格遵守）：
@@ -35,6 +43,16 @@ const DRAFT_SYSTEM_BASE = `你是烂笔头的笔记整理助手。根据用户�
 3. 禁止输出思考过程、解释、寒暄或 JSON
 4. 不要重复罗列原始碎片编号，直接整合成文
 5. 若碎片信息不足，基于已有内容尽力整理，不要编造事实`
+
+const FRAGMENT_INSERT_SYSTEM_BASE = `你是烂笔头的笔记整理助手。根据用户提供的碎片笔记，生成可直接插入长文正文的 Markdown 内容块。
+
+输出规则（严格遵守）：
+1. 只输出一段 Markdown 正文，不要输出文档标题（禁止单独的一级 # 标题行）
+2. 使用 Markdown 格式（小标题、列表、引用、待办等均可）
+3. 禁止输出思考过程、解释、寒暄或 JSON
+4. 不要重复罗列原始碎片编号，直接整合成文
+5. 图片由系统单独处理，你只处理文字，不要输出图片语法
+6. 若碎片信息不足，基于已有内容尽力整理，不要编造事实`
 
 const APPEND_DRAFT_SYSTEM_BASE = `你是烂笔头的笔记整理助手。用户已有一篇长文，请将提供的新碎片整理成可追加到文末的内容块。
 
@@ -48,7 +66,11 @@ const APPEND_DRAFT_SYSTEM_BASE = `你是烂笔头的笔记整理助手。用户�
 
 function buildSystemPrompt(preset, customPrompt, styleSection = '', mode = 'generate') {
   const presetConfig = SEDIMENT_DRAFT_PRESETS[preset] || SEDIMENT_DRAFT_PRESETS.compose
-  const base = mode === 'append' ? APPEND_DRAFT_SYSTEM_BASE : DRAFT_SYSTEM_BASE
+  const base = mode === 'fragment'
+    ? FRAGMENT_INSERT_SYSTEM_BASE
+    : mode === 'append'
+      ? APPEND_DRAFT_SYSTEM_BASE
+      : DRAFT_SYSTEM_BASE
   let prompt = `${base}\n\n整理方式：${presetConfig.instruction}`
   const custom = String(customPrompt ?? '').trim()
   if (custom) {
@@ -337,8 +359,8 @@ export function generateSedimentDraft({
   onDone,
   onError,
 }) {
-  const draftMode = mode === 'append' ? 'append' : 'generate'
-  const userContent = draftMode === 'append'
+  const draftMode = mode === 'append' ? 'append' : mode === 'fragment' ? 'fragment' : 'generate'
+  const userContent = draftMode === 'append' || (draftMode === 'fragment' && String(existingContent ?? '').trim())
     ? buildAppendUserMessage(existingContent, fragments)
     : buildFragmentsUserMessage(fragments)
   let accumulated = ''
@@ -347,7 +369,7 @@ export function generateSedimentDraft({
 
   const finish = () => {
     if (cancelled) return
-    if (draftMode === 'append') {
+    if (draftMode === 'append' || draftMode === 'fragment') {
       const content = parseAppendContent(accumulated)
       onDone?.({ title: '', content })
       return

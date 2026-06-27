@@ -33,7 +33,12 @@
       :all-fragments-inserted="allFragmentsInserted"
       :enable-fragment-picker="enableFragmentPicker"
       :restorable-ids="restorableIds"
+      :selected-insert-preset="selectedInsertPreset"
+      :introduced-fragment-methods="introducedFragmentMethods"
+      :ai-processing="aiProcessing"
+      :processing-fragment-id="processingFragmentId"
       @update:fragment-notes="emit('update:fragmentNotes', $event)"
+      @update:selected-insert-preset="emit('update:selectedInsertPreset', $event)"
       @insert="emit('insert', $event)"
       @insert-all="emit('insert-all')"
       @restore="emit('restore', $event)"
@@ -75,9 +80,33 @@ const props = defineProps({
     type: Array,
     default: () => [],
   },
+  selectedInsertPreset: {
+    type: String,
+    default: null,
+  },
+  introducedFragmentMethods: {
+    type: Object,
+    default: () => ({}),
+  },
+  aiProcessing: {
+    type: Boolean,
+    default: false,
+  },
+  processingFragmentId: {
+    type: String,
+    default: '',
+  },
 })
 
-const emit = defineEmits(['update:fragmentNotes', 'update:open', 'update:panelTab', 'insert', 'insert-all', 'restore'])
+const emit = defineEmits([
+  'update:fragmentNotes',
+  'update:open',
+  'update:panelTab',
+  'insert',
+  'insert-all',
+  'restore',
+  'update:selectedInsertPreset',
+])
 
 const fragmentsPanelLabel = computed(() =>
   props.fragmentsMode === 'source'

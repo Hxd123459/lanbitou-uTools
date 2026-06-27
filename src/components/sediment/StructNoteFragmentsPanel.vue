@@ -44,14 +44,21 @@
           </h3>
 
           <div class="struct-note-fragments-head-actions">
+            <StructNoteFragmentAiPicker
+              v-if="showFragmentTabs && panelTab === 'selected' && fragmentNotes.length"
+              :model-value="selectedInsertPreset"
+              :disabled="disabled"
+              :processing="aiProcessing"
+              @update:model-value="emit('update:selectedInsertPreset', $event)"
+            />
             <button
               v-if="showFragmentTabs && panelTab === 'selected' && fragmentNotes.length"
               type="button"
               class="struct-note-fragments-insert-all"
-              :disabled="disabled || allFragmentsInserted"
+              :disabled="disabled || aiProcessing || allFragmentsInserted"
               @click="emit('insert-all')"
             >
-              全部插入
+              {{ aiProcessing ? '整理中…' : '全部插入' }}
             </button>
             <motion.button
               type="button"
@@ -170,6 +177,12 @@
                   </span>
                   <time class="struct-note-fragment-time">{{ formatFragmentTime(note.createdAt) }}</time>
                 </div>
+                <p
+                  v-if="isFragmentInserted(note.id)"
+                  class="struct-note-fragment-intro-label"
+                >
+                  已以「{{ getIntroduceLabel(note.id) }}」引入
+                </p>
 
                 <div class="struct-note-fragment-main">
                   <div class="struct-note-fragment-content">
@@ -223,7 +236,7 @@
                     type="button"
                     class="fragment-item-action-btn"
                     :class="{ 'is-added': isFragmentInserted(note.id) }"
-                    :disabled="disabled || isFragmentInserted(note.id)"
+                    :disabled="disabled || isFragmentInserted(note.id) || aiProcessing"
                     :aria-label="isFragmentInserted(note.id) ? '已引入正文' : '引入正文'"
                     :title="isFragmentInserted(note.id) ? '已引入正文' : '引入正文'"
                     :while-hover="disabled || isFragmentInserted(note.id) ? undefined : presets.button.hover"
@@ -309,8 +322,10 @@
 import { computed, nextTick, ref, watch } from 'vue'
 import { AnimatePresence, motion } from 'motion-v'
 import { fetchNotesByIds } from '../../api/note'
+import { getIntroduceMethodLabel } from '../../ai/sedimentDraftService'
 import { getFragmentContent, getFragmentImages, formatFragmentTime } from '../../composables/useStructNoteFragments'
 import { useMotionPresets } from '../../composables/useMotionPresets'
+import StructNoteFragmentAiPicker from './StructNoteFragmentAiPicker.vue'
 import GlobalSearchQueryBar from '../search/GlobalSearchQueryBar.vue'
 import TiptapPreview from '../common/TiptapPreview.vue'
 import NoteImageGallery from '../note/NoteImageGallery.vue'
@@ -347,6 +362,22 @@ const props = defineProps({
     type: Array,
     default: () => [],
   },
+  selectedInsertPreset: {
+    type: String,
+    default: null,
+  },
+  introducedFragmentMethods: {
+    type: Object,
+    default: () => ({}),
+  },
+  aiProcessing: {
+    type: Boolean,
+    default: false,
+  },
+  processingFragmentId: {
+    type: String,
+    default: '',
+  },
 })
 
 const emit = defineEmits([
@@ -356,6 +387,7 @@ const emit = defineEmits([
   'insert',
   'insert-all',
   'restore',
+  'update:selectedInsertPreset',
 ])
 
 const emptyText = computed(() =>
@@ -441,6 +473,11 @@ const isFragmentInserted = (id) => {
   if (id == null || id === '') return false
   const key = String(id)
   return props.insertedIds.has(key) || props.insertedIds.has(id)
+}
+
+const getIntroduceLabel = (id) => {
+  const key = String(id)
+  return getIntroduceMethodLabel(props.introducedFragmentMethods?.[key])
 }
 
 const sortedFragmentNotes = computed(() => {
@@ -828,6 +865,13 @@ watch(
   letter-spacing: 0.2px;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
+}
+
+.struct-note-fragment-intro-label {
+  margin: -2px 0 6px;
+  font-size: 10px;
+  line-height: 1.4;
+  color: #a1a1aa;
 }
 
 .struct-note-fragment-main {

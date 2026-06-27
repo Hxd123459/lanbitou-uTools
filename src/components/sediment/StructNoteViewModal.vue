@@ -31,13 +31,13 @@
           <StructNoteFolderBreadcrumb
             ref="folderBreadcrumbRef"
             v-model:path-stack="pathStack"
-            :disabled="saving || fetching || aiGenerating"
+            :disabled="saving || fetching || aiProcessing"
           />
 
           <div class="note-view-header-actions">
             <StructNoteCopyButton
               :get-content="() => draftContent"
-              :disabled="fetching || loadError || saving || aiGenerating"
+              :disabled="fetching || loadError || saving || aiProcessing"
             />
             <motion.button
               type="button"
@@ -147,13 +147,20 @@
             with-fragments
             :note-id="structNoteId"
             :inserted-ids="insertedFragmentIds"
+            :introduced-fragment-methods="introducedFragmentMethods"
+            :selected-insert-preset="selectedInsertPreset"
+            :ai-processing="aiProcessing"
+            :processing-fragment-id="processingFragmentId"
+            :all-fragments-inserted="allFragmentsInserted"
             :fragments-mode="fragmentsMode"
             :restoring-id="restoringFragmentId"
             enable-fragment-picker
             :restorable-ids="baselineFragmentIds"
-            :disabled="saving || aiGenerating"
+            :disabled="saving || aiProcessing"
             class="note-view-editor"
             @insert="insertFragment"
+            @insert-all="insertAllFragments"
+            @update:selected-insert-preset="selectedInsertPreset = $event"
             @restore="handleRestoreFragment"
             @image-too-large="emit('error', new Error('单张图片不能超过 10MB'))"
           >
@@ -166,16 +173,9 @@
                 maxlength="80"
                 placeholder="请输入标题"
                 spellcheck="false"
-                :disabled="saving || aiGenerating"
+                :disabled="saving || aiProcessing"
               />
-
-              <StructNoteAiDraftBar
-                v-if="localFragmentNotes.length"
-                :disabled="saving"
-                :generating="aiGenerating"
-                :active-preset="activePreset"
-                @draft-request="handleDraftRequest"
-              />
+              <div class="struct-note-title-divider" aria-hidden="true" />
             </template>
           </StructNoteMarkdownEditor>
         </div>
@@ -190,10 +190,9 @@ import { AnimatePresence, motion } from 'motion-v'
 import { getStructNote, updateStructNote, findStructFolderItemByNoteId } from '../../api/structNote'
 import { fetchFolderPathStack, moveStructItem } from '../../api/structFolder'
 import { fetchNotesByIds, restoreArchivedFragment, archiveFragmentNotes } from '../../api/note'
-import { appendFragmentToContent, resolveIntroducedFragmentIds } from '../../composables/useStructNoteFragments'
-import { useStructNoteAiDraft } from '../../composables/useStructNoteAiDraft'
+import { resolveIntroducedFragmentIds, normalizeIntroducedFragmentMethods } from '../../composables/useStructNoteFragments'
+import { useStructNoteFragmentInsert } from '../../composables/useStructNoteFragmentInsert'
 import { useMotionPresets } from '../../composables/useMotionPresets'
-import StructNoteAiDraftBar from './StructNoteAiDraftBar.vue'
 import StructNoteFolderBreadcrumb from './StructNoteFolderBreadcrumb.vue'
 import StructNoteMarkdownEditor from './StructNoteMarkdownEditor.vue'
 import StructNoteCopyButton from './StructNoteCopyButton.vue'
@@ -233,6 +232,7 @@ const pathStack = ref([])
 const folderItemId = ref('')
 const localFragmentNotes = ref([])
 const insertedFragmentIds = ref(new Set())
+const introducedFragmentMethods = ref({})
 const fragmentsOpen = ref(false)
 const fragmentsMode = ref('compose')
 const sourceFragmentIds = ref([])
@@ -240,17 +240,18 @@ const baselineFragmentIds = ref([])
 const restoringFragmentId = ref('')
 
 const {
-  aiGenerating,
-  activePreset,
-  handleDraftRequest,
-  stopAiDraftGeneration,
-  disposeAiDraft,
-} = useStructNoteAiDraft({
+  selectedInsertPreset,
+  aiProcessing,
+  processingFragmentId,
+  insertFragment,
+  insertAllFragments,
+  stopInsertProcessing,
+  disposeFragmentInsert,
+} = useStructNoteFragmentInsert({
   draftContent,
-  draftTitle,
   localFragmentNotes,
   insertedFragmentIds,
-  insertedStatusIds: insertedFragmentIds,
+  introducedFragmentMethods,
   contentEditorRef,
   onAiUnavailable: () => emit('error', new Error('请先在设置中配置 AI 服务')),
   onError: (error) => emit('error', error),
@@ -260,6 +261,13 @@ let autoSaveTimer = null
 let loadToken = 0
 
 const canSave = computed(() => draftContent.value.trim().length > 0)
+
+const allFragmentsInserted = computed(() => {
+  if (!localFragmentNotes.value.length) return false
+  return localFragmentNotes.value.every((note) =>
+    insertedFragmentIds.value.has(String(note.id)),
+  )
+})
 
 const currentParentId = computed(() => {
   const last = pathStack.value[pathStack.value.length - 1]
@@ -289,7 +297,7 @@ const isDirty = computed(
 )
 
 const saveButtonDisabled = computed(
-  () => saving.value || aiGenerating.value || !canSave.value || (!isDirty.value && saveStatus.value === 'saved'),
+  () => saving.value || aiProcessing.value || !canSave.value || (!isDirty.value && saveStatus.value === 'saved'),
 )
 
 const syncLastSavedFromDraft = () => {
@@ -333,14 +341,6 @@ const applyDraftFromNote = () => {
   saveStatus.value = 'saved'
 }
 
-const insertFragment = (fragmentNote) => {
-  const fragmentId = String(fragmentNote.id)
-  if (insertedFragmentIds.value.has(fragmentId)) return
-  draftContent.value = appendFragmentToContent(draftContent.value, fragmentNote)
-  insertedFragmentIds.value = new Set([...insertedFragmentIds.value, fragmentId])
-  nextTick(() => contentEditorRef.value?.focus())
-}
-
 const structNoteId = computed(
   () => props.noteItem?.noteId ?? props.noteItem?.id ?? note.value?.id ?? '',
 )
@@ -363,6 +363,9 @@ const handleRestoreFragment = async (fragmentNote) => {
     insertedFragmentIds.value = new Set(
       [...insertedFragmentIds.value].filter((id) => String(id) !== String(fragmentId)),
     )
+    const nextMethods = { ...introducedFragmentMethods.value }
+    delete nextMethods[String(fragmentId)]
+    introducedFragmentMethods.value = nextMethods
     if (!localFragmentNotes.value.length) {
       fragmentsOpen.value = false
     }
@@ -378,6 +381,9 @@ const loadSourceFragments = async (ids = [], { preserveInserted = false } = {}) 
   const preservedInsertedIds = preserveInserted
     ? new Set(insertedFragmentIds.value)
     : null
+  const preservedMethods = preserveInserted
+    ? { ...introducedFragmentMethods.value }
+    : null
   const normalizedIds = (Array.isArray(ids) ? ids : [])
     .map((id) => String(id))
     .filter(Boolean)
@@ -388,6 +394,9 @@ const loadSourceFragments = async (ids = [], { preserveInserted = false } = {}) 
   fragmentsMode.value = localFragmentNotes.value.length ? 'source' : 'compose'
   if (preserveInserted && preservedInsertedIds) {
     insertedFragmentIds.value = preservedInsertedIds
+  }
+  if (preserveInserted && preservedMethods) {
+    introducedFragmentMethods.value = preservedMethods
   }
 }
 
@@ -452,7 +461,7 @@ const resolveTitleForSave = () => {
 }
 
 const handleSave = async (isAuto = false) => {
-  if (!canSave.value || saving.value || aiGenerating.value) return
+  if (!canSave.value || saving.value || aiProcessing.value) return
   if (!isDirty.value) return
 
   saving.value = true
@@ -473,6 +482,7 @@ const handleSave = async (isAuto = false) => {
       content: draftContent.value.trim(),
       sourceFragmentIds: allFragmentIds,
       introducedFragmentIds: introducedIds,
+      introducedFragmentMethods: { ...introducedFragmentMethods.value },
     })
     if (isFolderDirty.value && folderItemId.value) {
       await moveStructItem({
@@ -518,6 +528,9 @@ const fetchDetail = async () => {
       content: draftContent.value,
       fragmentNotes: localFragmentNotes.value,
     })
+    introducedFragmentMethods.value = normalizeIntroducedFragmentMethods(
+      data?.introducedFragmentMethods,
+    )
     await nextTick()
     titleInputRef.value?.focus()
   } catch {
@@ -533,7 +546,7 @@ const fetchDetail = async () => {
 
 const emitClose = () => {
   if (saving.value) return
-  stopAiDraftGeneration()
+  stopInsertProcessing()
   folderBreadcrumbRef.value?.closeFolderMenu()
   emit('close')
 }
@@ -543,8 +556,8 @@ const onKeydown = (e) => {
   if (e.key === 'Escape') {
     e.preventDefault()
     if (folderBreadcrumbRef.value?.handleEscape()) return
-    if (aiGenerating.value) {
-      stopAiDraftGeneration()
+    if (aiProcessing.value) {
+      stopInsertProcessing()
       return
     }
     emitClose()
@@ -577,6 +590,7 @@ watch(
       folderItemId.value = ''
       localFragmentNotes.value = []
       insertedFragmentIds.value = new Set()
+      introducedFragmentMethods.value = {}
       fragmentsOpen.value = false
       fragmentsMode.value = 'compose'
       sourceFragmentIds.value = []
@@ -587,7 +601,7 @@ watch(
       window.addEventListener('keydown', onKeydown)
     } else {
       clearAutoSaveTimer()
-      disposeAiDraft()
+      disposeFragmentInsert()
       window.removeEventListener('keydown', onKeydown)
     }
   },
@@ -595,7 +609,7 @@ watch(
 
 onBeforeUnmount(() => {
   clearAutoSaveTimer()
-  disposeAiDraft()
+  disposeFragmentInsert()
   window.removeEventListener('keydown', onKeydown)
 })
 </script>
@@ -724,8 +738,16 @@ onBeforeUnmount(() => {
   color: var(--color-primary);
   font-family: inherit;
   padding: 8px 0 0;
-  margin-bottom: 8px;
+  margin-bottom: 0;
   caret-color: var(--color-accent);
+}
+
+.struct-note-title-divider {
+  flex: 0 0 auto;
+  width: 100%;
+  height: 1px;
+  margin: 12px 0 14px;
+  background: rgba(24, 24, 27, 0.1);
 }
 
 .note-view-title-input::placeholder {

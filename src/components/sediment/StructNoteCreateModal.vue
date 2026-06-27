@@ -32,18 +32,18 @@
           <StructNoteFolderBreadcrumb
             ref="folderBreadcrumbRef"
             v-model:path-stack="pathStack"
-            :disabled="saving || aiGenerating"
+            :disabled="saving || aiProcessing"
           />
 
           <div class="struct-note-modal-header-actions">
             <StructNoteCopyButton
               :get-content="() => draftContent"
-              :disabled="saving || aiGenerating"
+              :disabled="saving || aiProcessing"
             />
             <motion.button
               type="button"
               class="btn btn-primary struct-note-modal-save"
-              :disabled="saving || aiGenerating || !canSave"
+              :disabled="saving || aiProcessing || !canSave"
               :while-hover="presets.button.hover"
               :while-tap="presets.button.tap"
               :transition="presets.button.transition"
@@ -76,12 +76,17 @@
           v-model:fragments-open="fragmentsOpen"
           class="struct-note-modal-editor"
           with-fragments
-          :disabled="saving || aiGenerating"
+          :disabled="saving || aiProcessing"
           :inserted-ids="insertedFragmentIds"
+          :introduced-fragment-methods="introducedFragmentMethods"
+          :selected-insert-preset="selectedInsertPreset"
+          :ai-processing="aiProcessing"
+          :processing-fragment-id="processingFragmentId"
           :all-fragments-inserted="allFragmentsInserted"
           :min-height="240"
           @insert="insertFragment"
           @insert-all="insertAllFragments"
+          @update:selected-insert-preset="selectedInsertPreset = $event"
           @image-too-large="emit('error', new Error('单张图片不能超过 10MB'))"
         >
           <template #prefix>
@@ -93,17 +98,10 @@
               maxlength="80"
               placeholder="标题（可留空，保存时自动生成）"
               spellcheck="false"
-              :disabled="saving || aiGenerating"
+              :disabled="saving || aiProcessing"
               @input="titleTouched = true"
             />
-
-            <StructNoteAiDraftBar
-              v-if="localFragmentNotes.length"
-              :disabled="saving"
-              :generating="aiGenerating"
-              :active-preset="activePreset"
-              @draft-request="handleDraftRequest"
-            />
+            <div class="struct-note-title-divider" aria-hidden="true" />
           </template>
         </StructNoteMarkdownEditor>
       </motion.div>
@@ -117,12 +115,10 @@ import { AnimatePresence, motion } from 'motion-v'
 import { generateNoteTitle } from '../../ai/aiService'
 import { parseDraftTitleAndContent } from '../../ai/sedimentDraftService'
 import { useMotionPresets } from '../../composables/useMotionPresets'
-import { useStructNoteAiDraft } from '../../composables/useStructNoteAiDraft'
+import { useStructNoteFragmentInsert } from '../../composables/useStructNoteFragmentInsert'
 import {
-  appendFragmentToContent,
   getFragmentContent,
 } from '../../composables/useStructNoteFragments'
-import StructNoteAiDraftBar from './StructNoteAiDraftBar.vue'
 import StructNoteFolderBreadcrumb from './StructNoteFolderBreadcrumb.vue'
 import StructNoteMarkdownEditor from './StructNoteMarkdownEditor.vue'
 import StructNoteCopyButton from './StructNoteCopyButton.vue'
@@ -159,22 +155,23 @@ const contentEditorRef = ref(null)
 const folderBreadcrumbRef = ref(null)
 const pathStack = ref([])
 const insertedFragmentIds = ref(new Set())
+const introducedFragmentMethods = ref({})
 const localFragmentNotes = ref([])
 const fragmentsOpen = ref(false)
 
 const {
-  aiGenerating,
-  activePreset,
-  handleDraftRequest,
-  stopAiDraftGeneration,
-  disposeAiDraft,
-} = useStructNoteAiDraft({
+  selectedInsertPreset,
+  aiProcessing,
+  processingFragmentId,
+  insertFragment,
+  insertAllFragments,
+  stopInsertProcessing,
+  disposeFragmentInsert,
+} = useStructNoteFragmentInsert({
   draftContent,
-  draftTitle,
-  titleTouched,
-  aiDraftTitle,
   localFragmentNotes,
   insertedFragmentIds,
+  introducedFragmentMethods,
   contentEditorRef,
   onAiUnavailable: () => emit('ai-unavailable'),
   onError: (error) => emit('error', error),
@@ -185,7 +182,7 @@ const canSave = computed(() => draftContent.value.trim().length > 0)
 const allFragmentsInserted = computed(() => {
   if (!localFragmentNotes.value.length) return false
   return localFragmentNotes.value.every((note) =>
-    insertedFragmentIds.value.has(note.id),
+    insertedFragmentIds.value.has(String(note.id)),
   )
 })
 
@@ -195,12 +192,14 @@ const currentParentId = computed(() => {
 })
 
 const resetDraft = () => {
-  stopAiDraftGeneration()
+  stopInsertProcessing()
+  selectedInsertPreset.value = null
   draftTitle.value = ''
   draftContent.value = ''
   titleTouched.value = false
   aiDraftTitle.value = ''
   insertedFragmentIds.value = new Set()
+  introducedFragmentMethods.value = {}
   localFragmentNotes.value = props.fragmentNotes.map((note) => ({ ...note }))
   fragmentsOpen.value = false
 }
@@ -211,7 +210,7 @@ const closeFolderMenu = () => {
 
 const emitClose = () => {
   if (props.saving) return
-  stopAiDraftGeneration()
+  stopInsertProcessing()
   closeFolderMenu()
   emit('close')
 }
@@ -250,7 +249,7 @@ const resolveTitleForSave = async () => {
 }
 
 const handleSave = async () => {
-  if (!canSave.value || props.saving || aiGenerating.value) return
+  if (!canSave.value || props.saving || aiProcessing.value) return
 
   const title = await resolveTitleForSave()
   const sourceFragmentIds = localFragmentNotes.value
@@ -263,22 +262,9 @@ const handleSave = async () => {
     parentId: currentParentId.value,
     pathStack: pathStack.value.map((item) => ({ id: item.id, name: item.name })),
     sourceFragmentIds,
+    introducedFragmentIds: [...insertedFragmentIds.value].map(String).filter(Boolean),
+    introducedFragmentMethods: { ...introducedFragmentMethods.value },
   })
-}
-
-const insertFragment = (note) => {
-  if (insertedFragmentIds.value.has(note.id)) return
-  draftContent.value = appendFragmentToContent(draftContent.value, note)
-  insertedFragmentIds.value = new Set([...insertedFragmentIds.value, note.id])
-  nextTick(() => contentEditorRef.value?.focus())
-}
-
-const insertAllFragments = () => {
-  for (const note of localFragmentNotes.value) {
-    if (!insertedFragmentIds.value.has(note.id)) {
-      insertFragment(note)
-    }
-  }
 }
 
 const onKeydown = (event) => {
@@ -286,8 +272,8 @@ const onKeydown = (event) => {
   if (event.key === 'Escape') {
     event.preventDefault()
     if (folderBreadcrumbRef.value?.handleEscape()) return
-    if (aiGenerating.value) {
-      stopAiDraftGeneration()
+    if (aiProcessing.value) {
+      stopInsertProcessing()
       return
     }
     emitClose()
@@ -308,7 +294,7 @@ watch(
       titleInputRef.value?.focus()
       window.addEventListener('keydown', onKeydown)
     } else {
-      disposeAiDraft()
+      disposeFragmentInsert()
       closeFolderMenu()
       window.removeEventListener('keydown', onKeydown)
     }
@@ -316,7 +302,7 @@ watch(
 )
 
 onBeforeUnmount(() => {
-  disposeAiDraft()
+  disposeFragmentInsert()
   window.removeEventListener('keydown', onKeydown)
 })
 
@@ -405,8 +391,16 @@ defineExpose({ resetDraft })
   color: var(--color-primary);
   font-family: inherit;
   padding: 0;
-  margin-bottom: 8px;
+  margin-bottom: 0;
   caret-color: var(--color-accent);
+}
+
+.struct-note-title-divider {
+  flex: 0 0 auto;
+  width: 100%;
+  height: 1px;
+  margin: 12px 0 14px;
+  background: rgba(24, 24, 27, 0.1);
 }
 
 .struct-note-title-input::placeholder {

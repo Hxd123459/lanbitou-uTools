@@ -13,9 +13,14 @@
     :all-fragments-inserted="allFragmentsInserted"
     :enable-fragment-picker="enableFragmentPicker"
     :restorable-ids="restorableIds"
+    :selected-insert-preset="selectedInsertPreset"
+    :introduced-fragment-methods="introducedFragmentMethods"
+    :ai-processing="aiProcessing"
+    :processing-fragment-id="processingFragmentId"
     @insert="emit('insert', $event)"
     @insert-all="emit('insert-all')"
     @restore="emit('restore', $event)"
+    @update:selected-insert-preset="emit('update:selectedInsertPreset', $event)"
   >
     <slot name="prefix" />
     <div
@@ -128,6 +133,22 @@ const props = defineProps({
     type: Array,
     default: () => [],
   },
+  selectedInsertPreset: {
+    type: String,
+    default: null,
+  },
+  introducedFragmentMethods: {
+    type: Object,
+    default: () => ({}),
+  },
+  aiProcessing: {
+    type: Boolean,
+    default: false,
+  },
+  processingFragmentId: {
+    type: String,
+    default: '',
+  },
 })
 
 const emit = defineEmits([
@@ -138,6 +159,7 @@ const emit = defineEmits([
   'insert-all',
   'restore',
   'image-too-large',
+  'update:selectedInsertPreset',
 ])
 
 const fragmentNotesModel = computed({

@@ -18,11 +18,13 @@ export async function updateStructNote({
   tagId = null,
   sourceFragmentIds = undefined,
   introducedFragmentIds = undefined,
+  introducedFragmentMethods = undefined,
 }) {
   const body = { id, title, content }
   if (tagId != null) body.tagId = tagId
   if (sourceFragmentIds !== undefined) body.sourceFragmentIds = sourceFragmentIds
   if (introducedFragmentIds !== undefined) body.introducedFragmentIds = introducedFragmentIds
+  if (introducedFragmentMethods !== undefined) body.introducedFragmentMethods = introducedFragmentMethods
   if (isUtoolsMode()) {
     return utoolsStruct.updateStructNote(body)
   }

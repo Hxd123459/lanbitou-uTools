@@ -907,7 +907,15 @@ const closeCreateNoteModal = () => {
   pendingFragmentNotes.value = []
 }
 
-const handleCreateNote = async ({ title, content, parentId, pathStack: savedPathStack = [], sourceFragmentIds = [] }) => {
+const handleCreateNote = async ({
+  title,
+  content,
+  parentId,
+  pathStack: savedPathStack = [],
+  sourceFragmentIds = [],
+  introducedFragmentIds = [],
+  introducedFragmentMethods = {},
+}) => {
   if (noteSaving.value) return
   noteSaving.value = true
   try {
@@ -921,6 +929,19 @@ const handleCreateNote = async ({ title, content, parentId, pathStack: savedPath
       content,
       sourceFragmentIds: fragmentIds,
     })
+    const introducedIds = (Array.isArray(introducedFragmentIds) ? introducedFragmentIds : [])
+      .map((id) => String(id))
+      .filter(Boolean)
+    if (introducedIds.length || Object.keys(introducedFragmentMethods || {}).length) {
+      await updateStructNote({
+        id: structNoteId,
+        title,
+        content,
+        sourceFragmentIds: fragmentIds,
+        introducedFragmentIds: introducedIds,
+        introducedFragmentMethods,
+      })
+    }
     if (hasPendingInlineImages(content)) {
       const finalizedContent = await finalizeInlineImagesInMarkdown(structNoteId, content)
       if (finalizedContent !== content) {

@@ -176,6 +176,17 @@ export async function updateSort(list = []) {
   return true
 }
 
+function normalizeIntroducedFragmentMethods(methods) {
+  if (!methods || typeof methods !== 'object' || Array.isArray(methods)) return {}
+  const out = {}
+  for (const [id, method] of Object.entries(methods)) {
+    const fragmentId = String(id ?? '').trim()
+    const value = String(method ?? '').trim()
+    if (fragmentId && value) out[fragmentId] = value
+  }
+  return out
+}
+
 export async function getStructNote(id) {
   const doc = stripDoc(await dbGet(structNoteDocId(id)))
   if (!doc) return null
@@ -189,6 +200,10 @@ export async function getStructNote(id) {
       doc.introducedFragmentIds === undefined
         ? undefined
         : normalizeIntroducedFragmentIds(doc.introducedFragmentIds),
+    introducedFragmentMethods:
+      doc.introducedFragmentMethods === undefined
+        ? undefined
+        : normalizeIntroducedFragmentMethods(doc.introducedFragmentMethods),
     createTime: doc.createTime,
     updateTime: doc.updateTime,
   }
@@ -249,6 +264,7 @@ export async function updateStructNote({
   tagId = null,
   sourceFragmentIds = undefined,
   introducedFragmentIds = undefined,
+  introducedFragmentMethods = undefined,
 }) {
   const doc = stripDoc(await dbGet(structNoteDocId(id)))
   if (!doc) throw new Error('结构化笔记不存在')
@@ -260,6 +276,9 @@ export async function updateStructNote({
   }
   if (introducedFragmentIds !== undefined) {
     doc.introducedFragmentIds = normalizeIntroducedFragmentIds(introducedFragmentIds)
+  }
+  if (introducedFragmentMethods !== undefined) {
+    doc.introducedFragmentMethods = normalizeIntroducedFragmentMethods(introducedFragmentMethods)
   }
   doc.updateTime = formatDateTime()
   await saveDoc(STRUCT_NOTE_PREFIX, doc)

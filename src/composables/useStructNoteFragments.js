@@ -1,8 +1,10 @@
+import { buildFragmentImageMarkdown } from '../utils/attachmentMarkdown'
+
+export const FRAGMENT_INTRO_RAW = 'raw'
+
 export function getFragmentTitle(note) {
   return note?.title || note?.fineTitle || '无标题'
 }
-
-import { buildFragmentImageMarkdown } from '../utils/attachmentMarkdown'
 
 export function getFragmentContent(note) {
   return note?.markdownContent || note?.text || note?.summary || ''
@@ -38,6 +40,37 @@ export function appendFragmentToContent(content, note) {
   if (!block) return content || ''
   const trimmed = (content || '').trim()
   return trimmed ? `${trimmed}\n\n${block}` : block
+}
+
+export function buildFragmentImagesMarkdown(notes) {
+  const list = Array.isArray(notes) ? notes : [notes]
+  return list
+    .map((note) => buildFragmentImageMarkdown(note))
+    .filter(Boolean)
+    .join('\n\n')
+}
+
+export function appendProcessedBlockToContent(content, { text = '', notes = [] } = {}) {
+  const textPart = String(text ?? '').trim()
+  const imagesMd = buildFragmentImagesMarkdown(notes)
+  let block = textPart
+  if (imagesMd) {
+    block = textPart ? `${textPart}\n\n${imagesMd}` : imagesMd
+  }
+  if (!block) return content || ''
+  const trimmed = (content || '').trim()
+  return trimmed ? `${trimmed}\n\n${block}` : block
+}
+
+export function normalizeIntroducedFragmentMethods(methods) {
+  if (!methods || typeof methods !== 'object' || Array.isArray(methods)) return {}
+  const out = {}
+  for (const [id, method] of Object.entries(methods)) {
+    const fragmentId = String(id ?? '').trim()
+    const value = String(method ?? '').trim()
+    if (fragmentId && value) out[fragmentId] = value
+  }
+  return out
 }
 
 function normalizeForContentMatch(text) {
