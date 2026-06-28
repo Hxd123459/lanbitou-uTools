@@ -108,19 +108,56 @@ export const useAssistantStore = defineStore('assistant', () => {
     await loadNotes({ reset: true, force: true })
   }
 
+  const forceReloadNotes = async () => {
+    loadToken += 1
+    loadingNotes.value = false
+    loadingMoreNotes.value = false
+    currentPageNo.value = 0
+    hasMoreNotes.value = true
+
+    const myToken = ++loadToken
+    loadingNotes.value = true
+    try {
+      const result = await fetchNoteList({
+        pageNo: 1,
+        pageSize: NOTE_LIST_PAGE_SIZE,
+      })
+      if (myToken !== loadToken) return
+      notes.value = result.list
+      noteIdSet.value = new Set(
+        result.list.map((item) => item.id).filter(Boolean),
+      )
+      currentPageNo.value = result.pageNo
+      hasMoreNotes.value = result.hasMore
+    } finally {
+      if (myToken === loadToken) {
+        loadingNotes.value = false
+        loadingMoreNotes.value = false
+      }
+    }
+  }
+
   const loadInitialNotes = async () => {
     await reloadNotes()
   }
 
   const insertRestoredNote = (note) => {
-    if (!note?.id || noteIdSet.value.has(note.id)) return
-    noteIdSet.value.add(note.id)
+    if (!note?.id) return
     const normalized = {
       ...note,
       pendingDelete: false,
       createdAt: note.createdAt || note.createTime || '',
+      text: note.text || note.markdownContent || note.rawContent || '',
+      markdownContent: note.markdownContent || note.text || note.rawContent || '',
     }
-    notes.value = [normalized, ...notes.value.filter((item) => item.id !== note.id)]
+    const existing = notes.value.find((item) => item.id === note.id)
+    if (existing) {
+      Object.assign(existing, normalized)
+      noteIdSet.value.add(note.id)
+      return
+    }
+    noteIdSet.value.add(note.id)
+    notes.value = [normalized, ...notes.value]
   }
 
   const loadMoreNotes = async () => {
@@ -267,6 +304,7 @@ export const useAssistantStore = defineStore('assistant', () => {
     loadInitialNotes,
     loadMoreNotes,
     reloadNotes,
+    forceReloadNotes,
     insertRestoredNote,
     setEditingNoteId,
     setNotePendingDelete,

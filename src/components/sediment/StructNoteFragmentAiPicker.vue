@@ -88,7 +88,8 @@
       <button
         type="button"
         class="struct-note-fragment-ai-option struct-note-fragment-ai-option--add"
-        @click="handleAddTemplate"
+        @mousedown.stop
+        @click.stop="handleAddTemplate"
       >
         <span class="struct-note-fragment-ai-option-icon struct-note-fragment-ai-option-icon--plus" aria-hidden="true">
           +

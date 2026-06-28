@@ -711,6 +711,11 @@ const closeNoteView = () => {
   activeNoteItem.value = null
 }
 
+const dismissOverlays = () => {
+  if (noteViewVisible.value) closeNoteView()
+  if (createNoteVisible.value) closeCreateNoteModal()
+}
+
 // ---- 重命名 ----
 const startRename = async (item) => {
   closeActionMenu()
@@ -996,7 +1001,12 @@ onBeforeUnmount(() => {
   document.removeEventListener('pointerdown', onDocumentPointerdown)
 })
 
-defineExpose({ openCreateNoteModal, openNoteViewByNoteId, reload: loadCurrentList })
+defineExpose({
+  openCreateNoteModal,
+  openNoteViewByNoteId,
+  dismissOverlays,
+  reload: loadCurrentList,
+})
 </script>
 
 <style scoped>

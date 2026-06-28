@@ -709,6 +709,14 @@ const onNoteViewModeChange = (mode) => {
   noteViewMode.value = mode
   if ((mode === 'list' || mode === 'select') && prev === 'tags') {
     void flushNotesRefreshOnListEnter()
+    if (
+      !tagFilterState.active &&
+      !isSearchActive.value &&
+      !assistantStore.visibleNotes.length &&
+      !assistantStore.loadingNotes
+    ) {
+      void assistantStore.loadInitialNotes()
+    }
   }
 }
 
@@ -1154,13 +1162,19 @@ const reloadActiveTagFilter = async ({ tagId, tagName } = {}) => {
       pageNo: 1,
       pageSize: NOTE_LIST_PAGE_SIZE,
     })
-    if (myToken !== tagFilterToken) return
+    if (myToken !== tagFilterToken) {
+      if (!tagFilterState.tagId) tagFilterState.active = false
+      return
+    }
     tagFilterState.list = result.list
     tagFilterState.total = result.total
     tagFilterState.pageNo = result.pageNo
     tagFilterState.hasMore = result.hasMore
   } catch (error) {
-    if (myToken !== tagFilterToken) return
+    if (myToken !== tagFilterToken) {
+      if (!tagFilterState.tagId) tagFilterState.active = false
+      return
+    }
     const local = assistantStore.visibleNotes.filter((note) =>
       isUntaggedTag({ tagId: resolvedTagId })
         ? !note.tagId
@@ -1273,19 +1287,39 @@ const flushHomeNotesRefresh = async () => {
   }
 }
 
-const handleRecycleRestored = async (note) => {
-  refreshNotesOnHomeEnter.value = true
+const cancelPendingDelete = (id) => {
+  if (!id) return
+  const timer = deleteTimers.get(id)
+  if (timer) {
+    clearTimeout(timer)
+    deleteTimers.delete(id)
+  }
+  deleteSnapshots.delete(id)
+  assistantStore.setNotePendingDelete(id, false)
+}
+
+const resetHomeListView = () => {
+  tagFilterToken += 1
   clearTagFilter()
   clearSearch()
   noteViewMode.value = 'list'
-  if (note) {
-    assistantStore.insertRestoredNote(note)
+}
+
+const handleRecycleRestored = async (note) => {
+  refreshNotesOnHomeEnter.value = false
+  if (note?.id) {
+    cancelPendingDelete(note.id)
   }
-  if (activeTab.value === 'home') {
-    await flushHomeNotesRefresh()
-    return
-  }
+  resetHomeListView()
   activeTab.value = 'home'
+  await nextTick()
+  try {
+    await assistantStore.forceReloadNotes()
+    scrollNoteListToTop()
+    openToast('已恢复笔记', 'success', { duration: 1600 })
+  } catch (error) {
+    notifyError(error)
+  }
 }
 
 const handleBackupImported = async (payload) => {
@@ -1333,11 +1367,10 @@ let stopSettingsNavigator = null
 
 const scrollSettingsToTarget = async (target) => {
   if (!target) return
-  await nextTick()
-  const scrolled = await settingsPanelRef.value?.scrollToTarget?.(target)
-  if (!scrolled) {
+  for (let attempt = 0; attempt < 4; attempt += 1) {
     await nextTick()
-    settingsPanelRef.value?.scrollToTarget?.(target)
+    if (settingsPanelRef.value?.scrollToTarget?.(target)) return
+    await new Promise((resolve) => window.setTimeout(resolve, 60))
   }
 }
 
@@ -1584,6 +1617,7 @@ onMounted(async () => {
     applyClipboardEnter(action)
   })
   stopSettingsNavigator = registerSettingsNavigator(async (target) => {
+    sedimentPanelRef.value?.dismissOverlays?.()
     activeTab.value = 'settings'
     await scrollSettingsToTarget(target)
   })
