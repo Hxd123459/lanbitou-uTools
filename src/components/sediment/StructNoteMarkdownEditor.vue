@@ -6,6 +6,8 @@
     v-model:open="fragmentsOpenModel"
     v-model:panel-tab="fragmentsPanelTab"
     :inserted-ids="insertedIds"
+    :inserted-id-list="insertedIdList"
+    :restored-fragment-hint="restoredFragmentHint"
     :disabled="disabled"
     :show-expand-button="showExpandButton"
     :fragments-mode="fragmentsMode"
@@ -100,6 +102,14 @@ const props = defineProps({
   insertedIds: {
     type: Object,
     default: () => new Set(),
+  },
+  insertedIdList: {
+    type: Array,
+    default: () => [],
+  },
+  restoredFragmentHint: {
+    type: Object,
+    default: null,
   },
   fragmentsOpen: {
     type: Boolean,

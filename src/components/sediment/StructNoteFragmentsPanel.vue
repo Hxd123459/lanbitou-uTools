@@ -337,6 +337,8 @@ import NoteCard from '../note/NoteCard.vue'
 const props = defineProps({
   fragmentNotes: { type: Array, default: () => [] },
   insertedIds: { type: Object, default: () => new Set() },
+  insertedIdList: { type: Array, default: () => [] },
+  restoredFragmentHint: { type: Object, default: null },
   disabled: { type: Boolean, default: false },
   open: { type: Boolean, default: false },
   panelTab: {
@@ -432,6 +434,23 @@ const panelMotionTransition = {
 
 const stripSnippetHtml = (html) => String(html || '').replace(/<[^>]+>/g, '')
 
+const mapRestoredToPickerNote = (item) => ({
+  id: item.id,
+  title: item.title || '',
+  markdownContent: item.markdownContent || item.text || '',
+  createdAt: item.createdAt || item.createTime,
+  tagId: item.tagId ?? null,
+  images: item.images || [],
+  _searchPreview: false,
+})
+
+const refreshAllTabSearch = async () => {
+  const runSearch = queryBarRef.value?.query?.runSearch
+  if (typeof runSearch === 'function') {
+    await runSearch({ reset: true })
+  }
+}
+
 const mapSearchResultToNote = (item) => {
   const snippetText = (item.snippets || [])
     .map(stripSnippetHtml)
@@ -469,13 +488,25 @@ const hasQueried = computed(() => query.value?.hasQueried.value ?? false)
 const searchKeywords = computed(() => query.value?.keywords.value ?? [])
 
 const selectedIdSet = computed(
-  () => new Set(props.fragmentNotes.map((note) => note?.id).filter(Boolean)),
+  () => new Set(
+    props.fragmentNotes
+      .map((note) => String(note?.id ?? ''))
+      .filter(Boolean),
+  ),
 )
+
+const insertedIdSet = computed(() => new Set(
+  (props.insertedIdList.length
+    ? props.insertedIdList
+    : [...(props.insertedIds || [])]
+  )
+    .map((id) => String(id))
+    .filter(Boolean),
+))
 
 const isFragmentInserted = (id) => {
   if (id == null || id === '') return false
-  const key = String(id)
-  return props.insertedIds.has(key) || props.insertedIds.has(id)
+  return insertedIdSet.value.has(String(id))
 }
 
 const visiblePickerList = computed(() =>
@@ -541,15 +572,16 @@ const onSearchResultsChange = async (records) => {
   }
 }
 
-const isNoteSelected = (id) => selectedIdSet.value.has(id)
+const isNoteSelected = (id) => selectedIdSet.value.has(String(id))
 
 const toggleAllTabSelect = async (note) => {
   if (props.disabled || !note?.id) return
   const ids = selectedIdSet.value
-  if (ids.has(note.id)) {
+  const noteKey = String(note.id)
+  if (ids.has(noteKey)) {
     emit(
       'update:fragmentNotes',
-      props.fragmentNotes.filter((item) => item.id !== note.id),
+      props.fragmentNotes.filter((item) => String(item.id) !== noteKey),
     )
     return
   }
@@ -588,6 +620,22 @@ const confirmRestore = (note) => {
   if (props.disabled || !note?.id) return
   emit('restore', note)
 }
+
+watch(
+  () => props.restoredFragmentHint?.at,
+  async (at) => {
+    if (!at) return
+    const restored = props.restoredFragmentHint?.note
+    if (!restored?.id) return
+    const key = String(restored.id)
+    if (!pickerList.value.some((note) => String(note?.id) === key)) {
+      pickerList.value = [mapRestoredToPickerNote(restored), ...pickerList.value]
+    }
+    if (props.open) {
+      await refreshAllTabSearch()
+    }
+  },
+)
 
 watch(
   () => props.restoringId,

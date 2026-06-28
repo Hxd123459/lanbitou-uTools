@@ -488,9 +488,10 @@ export async function restoreFragmentFromArchive(fragmentId) {
   if (!doc.archivedAt) return toApiNote(doc)
 
   const preservedCreateTime = doc.archivedCreateTime || doc.createTime
-  doc.archivedAt = null
-  doc.archivedByStructNoteId = null
-  doc.archivedCreateTime = null
+  // uTools db.put 需带最新 _rev；归档字段用 delete 彻底清除，避免 null 残留导致搜索仍过滤
+  delete doc.archivedAt
+  delete doc.archivedByStructNoteId
+  delete doc.archivedCreateTime
   if (preservedCreateTime) {
     doc.createTime = preservedCreateTime
   }

@@ -27,6 +27,8 @@
       v-model:panel-tab="panelTabModel"
       :fragment-notes="fragmentNotes"
       :inserted-ids="insertedIds"
+      :inserted-id-list="insertedIdList"
+      :restored-fragment-hint="restoredFragmentHint"
       :disabled="disabled"
       :mode="fragmentsMode"
       :restoring-id="restoringId"
@@ -53,6 +55,8 @@ import StructNoteFragmentsPanel from './StructNoteFragmentsPanel.vue'
 const props = defineProps({
   fragmentNotes: { type: Array, default: () => [] },
   insertedIds: { type: Object, default: () => new Set() },
+  insertedIdList: { type: Array, default: () => [] },
+  restoredFragmentHint: { type: Object, default: null },
   disabled: { type: Boolean, default: false },
   open: { type: Boolean, default: false },
   showExpandButton: { type: Boolean, default: true },

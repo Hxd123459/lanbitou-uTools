@@ -147,6 +147,8 @@
             with-fragments
             :note-id="structNoteId"
             :inserted-ids="insertedFragmentIds"
+            :inserted-id-list="insertedFragmentIdList"
+            :restored-fragment-hint="restoredFragmentHint"
             :introduced-fragment-methods="introducedFragmentMethods"
             :selected-insert-preset="selectedInsertPreset"
             :ai-processing="aiProcessing"
@@ -238,6 +240,11 @@ const fragmentsMode = ref('compose')
 const sourceFragmentIds = ref([])
 const baselineFragmentIds = ref([])
 const restoringFragmentId = ref('')
+const restoredFragmentHint = ref(null)
+
+const insertedFragmentIdList = computed(() =>
+  [...insertedFragmentIds.value].map((id) => String(id)).filter(Boolean),
+)
 
 const {
   selectedInsertPreset,
@@ -366,6 +373,15 @@ const handleRestoreFragment = async (fragmentNote) => {
     const nextMethods = { ...introducedFragmentMethods.value }
     delete nextMethods[String(fragmentId)]
     introducedFragmentMethods.value = nextMethods
+    await updateStructNote({
+      id: noteId,
+      title: resolveTitleForSave(),
+      content: draftContent.value.trim(),
+      sourceFragmentIds: [...sourceFragmentIds.value],
+      introducedFragmentIds: [...insertedFragmentIds.value],
+      introducedFragmentMethods: nextMethods,
+    })
+    restoredFragmentHint.value = { note: restored, at: Date.now() }
     if (!localFragmentNotes.value.length) {
       fragmentsOpen.value = false
     }
@@ -596,6 +612,7 @@ watch(
       sourceFragmentIds.value = []
       baselineFragmentIds.value = []
       restoringFragmentId.value = ''
+      restoredFragmentHint.value = null
       clearAutoSaveTimer()
       fetchDetail()
       window.addEventListener('keydown', onKeydown)
