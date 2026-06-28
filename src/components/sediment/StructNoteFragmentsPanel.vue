@@ -104,12 +104,15 @@
             <p v-else-if="searchError" class="struct-note-fragments-empty struct-note-fragments-empty--error">
               {{ searchError }}
             </p>
+            <p v-else-if="hasQueried && !pickerLoading && !visiblePickerList.length && pickerList.length" class="struct-note-fragments-empty">
+              匹配碎片均已引入正文
+            </p>
             <p v-else-if="hasQueried && !pickerLoading && !pickerList.length" class="struct-note-fragments-empty">
               未找到匹配碎片，试试减少关键词或放宽筛选
             </p>
 
             <div
-              v-for="note in pickerList"
+              v-for="note in visiblePickerList"
               :key="note.id"
               class="struct-note-fragments-all-item"
             >
@@ -474,6 +477,10 @@ const isFragmentInserted = (id) => {
   const key = String(id)
   return props.insertedIds.has(key) || props.insertedIds.has(id)
 }
+
+const visiblePickerList = computed(() =>
+  pickerList.value.filter((note) => !isFragmentInserted(note?.id)),
+)
 
 const getIntroduceLabel = (id) => {
   const key = String(id)
