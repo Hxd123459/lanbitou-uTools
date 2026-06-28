@@ -124,6 +124,7 @@ export function useStructNoteFragmentInsert({
       draftContent.value = appendProcessedBlockToContent(draftContent.value, {
         text,
         notes: [note],
+        method: preset,
       })
       markFragmentIntroduced(fragmentId, preset)
       await nextTick()
@@ -167,6 +168,7 @@ export function useStructNoteFragmentInsert({
       draftContent.value = appendProcessedBlockToContent(draftContent.value, {
         text,
         notes: pending,
+        method: preset,
       })
       for (const note of pending) {
         markFragmentIntroduced(note.id, preset)

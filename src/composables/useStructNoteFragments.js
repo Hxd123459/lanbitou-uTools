@@ -1,4 +1,5 @@
 import { buildFragmentImageMarkdown } from '../utils/attachmentMarkdown'
+import { wrapFragmentIntroBlock } from '../utils/fragmentIntroMarkers'
 
 export const FRAGMENT_INTRO_RAW = 'raw'
 
@@ -50,7 +51,10 @@ export function buildFragmentImagesMarkdown(notes) {
     .join('\n\n')
 }
 
-export function appendProcessedBlockToContent(content, { text = '', notes = [] } = {}) {
+export function appendProcessedBlockToContent(
+  content,
+  { text = '', notes = [], method = '' } = {},
+) {
   const textPart = String(text ?? '').trim()
   const imagesMd = buildFragmentImagesMarkdown(notes)
   let block = textPart
@@ -58,8 +62,14 @@ export function appendProcessedBlockToContent(content, { text = '', notes = [] }
     block = textPart ? `${textPart}\n\n${imagesMd}` : imagesMd
   }
   if (!block) return content || ''
+
+  const fragmentIds = (Array.isArray(notes) ? notes : [])
+    .map((note) => note?.id)
+    .filter(Boolean)
+  const markedBlock = wrapFragmentIntroBlock(block, { fragmentIds, method }) || block
+
   const trimmed = (content || '').trim()
-  return trimmed ? `${trimmed}\n\n${block}` : block
+  return trimmed ? `${trimmed}\n\n${markedBlock}` : markedBlock
 }
 
 export function normalizeIntroducedFragmentMethods(methods) {

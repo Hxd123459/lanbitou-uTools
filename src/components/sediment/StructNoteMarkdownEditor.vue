@@ -68,6 +68,7 @@ import {
   persistAttachmentRefsInMarkdown,
   resolveAttachmentRefsInMarkdown,
 } from '../../utils/attachmentMarkdown'
+import { setEditorMarkdownContent } from '../../utils/fragmentIntroMarkers'
 import { createTiptapExtensions } from '../../composables/useTiptapExtensions'
 import { createImagePasteExtension } from '../../extensions/tiptapImagePaste'
 import {
@@ -76,6 +77,7 @@ import {
 } from '../../composables/useStructNoteDragHandle'
 import '../../assets/styles/tiptap-slash-menu.css'
 import '../../assets/styles/struct-note-drag-handle.css'
+import '../../assets/styles/fragment-intro-block.css'
 import StructNoteEditorLayout from './StructNoteEditorLayout.vue'
 
 const props = defineProps({
@@ -197,12 +199,11 @@ const getImagePasteContext = () => ({
 })
 
 const editor = useEditor({
-  content: resolveAttachmentRefsInMarkdown(props.modelValue || ''),
-  contentType: 'markdown',
+  content: '',
   editable: !props.disabled,
   immediatelyRender: false,
   extensions: [
-    ...createTiptapExtensions({ enableImage: true }),
+    ...createTiptapExtensions({ enableImage: true, enableFragmentIntro: true }),
     NodeRange,
     createImagePasteExtension(getImagePasteContext),
   ],
@@ -210,6 +211,9 @@ const editor = useEditor({
     attributes: {
       class: 'struct-note-md-prosemirror',
     },
+  },
+  onCreate: ({ editor: currentEditor }) => {
+    setEditorMarkdownContent(currentEditor, props.modelValue, { emitUpdate: false })
   },
   onUpdate: ({ editor: currentEditor }) => {
     emit('update:modelValue', persistAttachmentRefsInMarkdown(currentEditor.getMarkdown()))
@@ -234,14 +238,12 @@ watch(
   () => props.modelValue,
   (value) => {
     if (!editor.value) return
-    const resolved = resolveAttachmentRefsInMarkdown(value || '')
     const current = editor.value.getMarkdown()
     if ((value || '') === (current || '')) return
-    if (resolved === (current || '')) return
-    editor.value.commands.setContent(resolved || '', {
-      contentType: 'markdown',
-      emitUpdate: false,
-    })
+    const resolved = resolveAttachmentRefsInMarkdown(value || '')
+    const currentResolved = resolveAttachmentRefsInMarkdown(current || '')
+    if (resolved === currentResolved) return
+    setEditorMarkdownContent(editor.value, value || '', { emitUpdate: false })
   },
 )
 
@@ -265,19 +267,8 @@ const focus = () => {
   editor.value?.commands.focus('end')
 }
 
-const setMarkdownContent = (value, { emitUpdate = true } = {}) => {
-  if (!editor.value || editor.value.isDestroyed) return false
-  try {
-    editor.value.commands.setContent(resolveAttachmentRefsInMarkdown(value || ''), {
-      contentType: 'markdown',
-      emitUpdate,
-    })
-    return true
-  } catch (error) {
-    console.warn('[烂笔头] markdown 解析失败', error)
-    return false
-  }
-}
+const setMarkdownContent = (value, { emitUpdate = true } = {}) =>
+  setEditorMarkdownContent(editor.value, value, { emitUpdate })
 
 const appendMarkdownChunk = (chunk) => {
   if (!editor.value || editor.value.isDestroyed) return

@@ -7,6 +7,7 @@ import TaskItem from '@tiptap/extension-task-item'
 import TaskList from '@tiptap/extension-task-list'
 import { common, createLowlight } from 'lowlight'
 import { MarkdownPasteExtension } from '../extensions/tiptapMarkdownPaste'
+import { createFragmentIntroBlockExtension } from '../extensions/tiptapFragmentIntroBlock'
 import { SlashCommandExtension } from '../extensions/tiptapSlashCommand'
 import {
   CodeSafeBold,
@@ -23,6 +24,7 @@ export function createTiptapExtensions(options = {}) {
     slashCommand = true,
     markdownPaste = true,
     enableImage = false,
+    enableFragmentIntro = false,
   } = options
 
   const extensions = [
@@ -73,6 +75,10 @@ export function createTiptapExtensions(options = {}) {
 
   if (markdownPaste) {
     extensions.push(MarkdownPasteExtension)
+  }
+
+  if (enableFragmentIntro) {
+    extensions.push(createFragmentIntroBlockExtension())
   }
 
   return extensions
