@@ -474,7 +474,7 @@ const props = defineProps({
   },
 })
 
-const emit = defineEmits(['error', 'fragments-archived', 'fragment-restored'])
+const emit = defineEmits(['error', 'fragments-archived', 'fragment-restored', 'moved-to-recycle'])
 
 const { presets } = useMotionPresets()
 
@@ -766,6 +766,7 @@ const confirmDelete = async (item) => {
     await deleteStructItem(item.id)
     deletingId.value = null
     await loadCurrentList()
+    emit('moved-to-recycle', { recycleType: 'sediment', id: item.noteId || item.id })
   } catch (error) {
     emit('error', error)
   } finally {

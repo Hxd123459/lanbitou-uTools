@@ -312,7 +312,11 @@ export async function listRecycle() {
     .map(stripNoteDoc)
     .filter((doc) => doc?.id && doc.deletedAt)
     .sort((a, b) => String(b.deletedAt || '').localeCompare(String(a.deletedAt || '')))
-    .map(toApiNote)
+    .map((doc) => ({
+      ...toApiNote(doc),
+      deletedAt: doc.deletedAt,
+      recycleType: 'fragment',
+    }))
 }
 
 export async function restoreRecycle(id) {
@@ -480,15 +484,8 @@ export async function archiveFragmentsForStructNote(fragmentIds, structNoteId) {
   return archivedIds
 }
 
-export async function restoreFragmentFromArchive(fragmentId) {
-  const id = String(fragmentId ?? '').trim()
-  if (!id) throw new Error('碎片不存在')
-  const doc = await getNoteDoc(id)
-  if (!doc || doc.deletedAt) throw new Error('碎片不存在')
-  if (!doc.archivedAt) return toApiNote(doc)
-
+function unarchiveNoteDoc(doc) {
   const preservedCreateTime = doc.archivedCreateTime || doc.createTime
-  // uTools db.put 需带最新 _rev；归档字段用 delete 彻底清除，避免 null 残留导致搜索仍过滤
   delete doc.archivedAt
   delete doc.archivedByStructNoteId
   delete doc.archivedCreateTime
@@ -496,6 +493,32 @@ export async function restoreFragmentFromArchive(fragmentId) {
     doc.createTime = preservedCreateTime
   }
   doc.updateTime = formatDateTime()
+}
+
+export async function restoreFragmentsArchivedByStructNote(structNoteId) {
+  const targetId = String(structNoteId ?? '').trim()
+  if (!targetId) return []
+  const docs = await dbAllDocs(NOTE_PREFIX)
+  const restoredIds = []
+  for (const raw of docs || []) {
+    const doc = stripNoteDoc(raw)
+    if (!doc?.id || doc.deletedAt || !doc.archivedAt) continue
+    if (String(doc.archivedByStructNoteId ?? '') !== targetId) continue
+    unarchiveNoteDoc(doc)
+    await saveNoteDoc(doc)
+    restoredIds.push(doc.id)
+  }
+  return restoredIds
+}
+
+export async function restoreFragmentFromArchive(fragmentId) {
+  const id = String(fragmentId ?? '').trim()
+  if (!id) throw new Error('碎片不存在')
+  const doc = await getNoteDoc(id)
+  if (!doc || doc.deletedAt) throw new Error('碎片不存在')
+  if (!doc.archivedAt) return toApiNote(doc)
+
+  unarchiveNoteDoc(doc)
   await saveNoteDoc(doc)
   return toApiNote(doc)
 }

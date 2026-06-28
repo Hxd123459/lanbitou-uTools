@@ -33,17 +33,33 @@ export function mapBlockResources(blocks) {
 function mapBlockToNote(item) {
   return {
     id: item.id,
+    recycleType: item.recycleType || 'fragment',
     title: item.title || '',
     fineTitle: item.fineTitle || '',
-    summary: item.summary || '',
-    text: item.rawContent || '',
-    markdownContent: item.markdownContent || '',
+    summary: item.summary || item.content?.slice?.(0, 120) || '',
+    text: item.rawContent || item.content || '',
+    markdownContent: item.markdownContent || item.content || '',
     createdAt: item.createTime,
+    deletedAt: item.deletedAt || null,
     tokenUsage: item.tokenUsage,
     pinWeightType: item.pinWeightType || 'DEFAULT',
     aiNoteRecallId: item.aiNoteRecallId ?? null,
     tagId: item.tagId ?? null,
     images: mapBlockResources(item.blocks),
+  }
+}
+
+function mapStructRecycleItem(item) {
+  return {
+    id: item.id,
+    recycleType: 'sediment',
+    title: item.title || '',
+    summary: '',
+    text: item.content || '',
+    markdownContent: item.content || '',
+    createdAt: item.createTime,
+    deletedAt: item.deletedAt || null,
+    images: [],
   }
 }
 
@@ -341,27 +357,69 @@ export async function searchNotes({
 
 export async function fetchRecycleList() {
   if (isUtoolsMode()) {
-    const data = await utoolsNote.listRecycle()
-    return Array.isArray(data) ? data.map(mapBlockToNote) : []
+    const [fragments, sediments] = await Promise.all([
+      utoolsNote.listRecycle(),
+      utoolsStruct.listStructRecycle(),
+    ])
+    const merged = [
+      ...(Array.isArray(fragments) ? fragments.map(mapBlockToNote) : []),
+      ...(Array.isArray(sediments) ? sediments.map(mapStructRecycleItem) : []),
+    ]
+    merged.sort(
+      (a, b) => String(b.deletedAt || '').localeCompare(String(a.deletedAt || '')),
+    )
+    return merged
   }
   const data = await get('/api/note/recycle/list')
   return Array.isArray(data) ? data.map(mapBlockToNote) : []
 }
 
-export async function restoreRecycleNote(id) {
+export async function restoreRecycleNote(id, recycleType = 'fragment') {
   if (isUtoolsMode()) {
+    if (recycleType === 'sediment') {
+      return utoolsStruct.restoreStructRecycle(id)
+    }
     return utoolsNote.restoreRecycle(id)
   }
-  return get('/api/note/recycle/restore', { id })
+  return get('/api/note/recycle/restore', { id, type: recycleType })
 }
 
-export async function deleteRecycleForever(ids) {
-  const idList = (Array.isArray(ids) ? ids : [ids]).filter((id) => id != null)
-  if (!idList.length) return null
+function normalizeRecycleTargets(items) {
+  return (Array.isArray(items) ? items : [items])
+    .filter((item) => item != null)
+    .map((item) => {
+      if (item && typeof item === 'object') {
+        return {
+          id: item.id,
+          recycleType: item.recycleType || 'fragment',
+        }
+      }
+      return { id: item, recycleType: 'fragment' }
+    })
+    .filter((item) => item.id != null)
+}
+
+export async function deleteRecycleForever(items) {
+  const targets = normalizeRecycleTargets(items)
+  if (!targets.length) return null
   if (isUtoolsMode()) {
-    return utoolsNote.deleteForever(idList)
+    const fragmentIds = targets
+      .filter((item) => item.recycleType !== 'sediment')
+      .map((item) => item.id)
+    const sedimentIds = targets
+      .filter((item) => item.recycleType === 'sediment')
+      .map((item) => item.id)
+    if (fragmentIds.length) {
+      await utoolsNote.deleteForever(fragmentIds)
+    }
+    for (const id of sedimentIds) {
+      await utoolsStruct.deleteStructForever(id)
+    }
+    return true
   }
-  return get('/api/note/recycle/deleteForever', { ids: idList.join(',') })
+  return get('/api/note/recycle/deleteForever', {
+    ids: targets.map((item) => item.id).join(','),
+  })
 }
 
 export async function fetchAllTags() {

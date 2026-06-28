@@ -147,7 +147,7 @@ export async function globalSearch({
     const structDocs = await dbAllDocs(STRUCT_NOTE_PREFIX)
     ;(structDocs || [])
       .map(stripDoc)
-      .filter((doc) => doc?.id)
+      .filter((doc) => doc?.id && !doc.deletedAt)
       .forEach((doc) => {
         if (!matchesTag(doc, tagId)) return
         if (!matchesDateRange(doc.createTime, dateFrom, dateTo)) return

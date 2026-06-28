@@ -313,6 +313,7 @@
         @error="notifyError"
         @fragments-archived="handleFragmentsArchived"
         @fragment-restored="handleFragmentRestored"
+        @moved-to-recycle="handleMovedToRecycle"
       />
 
       <!-- 热力图 -->
@@ -1307,6 +1308,17 @@ const resetHomeListView = () => {
 
 const handleRecycleRestored = async (note) => {
   refreshNotesOnHomeEnter.value = false
+  if (note?.recycleType === 'sediment') {
+    activeTab.value = 'sediment'
+    await nextTick()
+    try {
+      sedimentPanelRef.value?.reload?.()
+      openToast('已恢复长文', 'success', { duration: 1600 })
+    } catch (error) {
+      notifyError(error)
+    }
+    return
+  }
   if (note?.id) {
     cancelPendingDelete(note.id)
   }
@@ -1316,9 +1328,20 @@ const handleRecycleRestored = async (note) => {
   try {
     await assistantStore.forceReloadNotes()
     scrollNoteListToTop()
-    openToast('已恢复笔记', 'success', { duration: 1600 })
+    openToast('已恢复碎片', 'success', { duration: 1600 })
   } catch (error) {
     notifyError(error)
+  }
+}
+
+const handleMovedToRecycle = async () => {
+  trashPanelRef.value?.reload?.()
+  if (activeTab.value === 'home') {
+    try {
+      await assistantStore.forceReloadNotes()
+    } catch (error) {
+      notifyError(error)
+    }
   }
 }
 

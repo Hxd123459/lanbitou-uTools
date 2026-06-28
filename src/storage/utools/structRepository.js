@@ -1,5 +1,6 @@
 import { STRUCT_FOLDER_PREFIX, STRUCT_NOTE_PREFIX } from './constants'
 import { dbAllDocs, dbGet, dbPut, dbRemove } from './dbClient'
+import { restoreFragmentsArchivedByStructNote, restoreFragmentFromArchive } from './noteRepository'
 import { createId, formatDateTime, normalizeParentId, parentIdMatches } from './utils'
 
 function folderDocId(id) {
@@ -40,7 +41,7 @@ export async function listFolder(parentId = 0) {
   const docs = await dbAllDocs(STRUCT_FOLDER_PREFIX)
   return (docs || [])
     .map(stripDoc)
-    .filter((doc) => doc?.id && parentIdMatches(doc.parentId, parentId))
+    .filter((doc) => doc?.id && !doc.deletedAt && parentIdMatches(doc.parentId, parentId))
     .sort((a, b) => {
       const sortDiff = (a.sort ?? 0) - (b.sort ?? 0)
       if (sortDiff !== 0) return sortDiff
@@ -140,28 +141,42 @@ export async function moveItem({ id, targetParentId }) {
   return true
 }
 
+async function softDeleteFolderItem(folderItem) {
+  if (!folderItem?.id) return false
+  const doc = stripDoc(await dbGet(folderDocId(folderItem.id)))
+  if (!doc || doc.deletedAt) return false
+  const now = formatDateTime()
+  doc.deletedAt = now
+  doc.updateTime = now
+  await saveDoc(STRUCT_FOLDER_PREFIX, doc)
+  return true
+}
+
 async function deleteFolderChildren(parentId) {
   const children = await listFolder(parentId ?? 0)
   for (const child of children) {
     if (child.type === 'folder') {
       await deleteFolderChildren(child.id)
-    } else if (child.type === 'note' && child.noteId) {
-      await deleteStructNote(child.noteId)
+      await softDeleteFolderItem(child)
+      continue
     }
-    await dbRemove(folderDocId(child.id))
+    if (child.type === 'note' && child.noteId) {
+      const folderDoc = stripDoc(await dbGet(folderDocId(child.id)))
+      await deleteStructNote(child.noteId, { folderItem: folderDoc || child })
+      await softDeleteFolderItem(folderDoc || child)
+    }
   }
 }
 
 export async function deleteItem(id) {
   const doc = stripDoc(await dbGet(folderDocId(id)))
-  if (!doc) return false
+  if (!doc || doc.deletedAt) return false
   if (doc.type === 'folder') {
     await deleteFolderChildren(doc.id)
   } else if (doc.type === 'note' && doc.noteId) {
-    await deleteStructNote(doc.noteId)
+    await deleteStructNote(doc.noteId, { folderItem: doc })
   }
-  await dbRemove(folderDocId(id))
-  return true
+  return softDeleteFolderItem(doc)
 }
 
 export async function updateSort(list = []) {
@@ -189,7 +204,7 @@ function normalizeIntroducedFragmentMethods(methods) {
 
 export async function getStructNote(id) {
   const doc = stripDoc(await dbGet(structNoteDocId(id)))
-  if (!doc) return null
+  if (!doc || doc.deletedAt) return null
   return {
     id: doc.id,
     title: doc.title || '',
@@ -230,7 +245,7 @@ export async function getFolderPathStack(parentId = 0) {
 
   const docs = (await dbAllDocs(STRUCT_FOLDER_PREFIX) || [])
     .map(stripDoc)
-    .filter(Boolean)
+    .filter((doc) => doc?.id && !doc.deletedAt)
   const byId = new Map(docs.map((doc) => [String(doc.id), doc]))
 
   const stack = []
@@ -253,7 +268,12 @@ export async function findFolderItemByNoteId(noteId) {
   const docs = await dbAllDocs(STRUCT_FOLDER_PREFIX)
   const doc = (docs || [])
     .map(stripDoc)
-    .find((item) => item?.type === 'note' && String(item.noteId) === targetId)
+    .find(
+      (item) =>
+        item?.type === 'note'
+        && !item.deletedAt
+        && String(item.noteId) === targetId,
+    )
   return doc ? toFolderItem(doc) : null
 }
 
@@ -267,7 +287,7 @@ export async function updateStructNote({
   introducedFragmentMethods = undefined,
 }) {
   const doc = stripDoc(await dbGet(structNoteDocId(id)))
-  if (!doc) throw new Error('结构化笔记不存在')
+  if (!doc || doc.deletedAt) throw new Error('结构化笔记不存在')
   doc.title = String(title ?? '').trim() || '无标题'
   doc.content = String(content ?? '')
   if (tagId != null) doc.tagId = tagId
@@ -286,7 +306,12 @@ export async function updateStructNote({
   const folderDocs = await dbAllDocs(STRUCT_FOLDER_PREFIX)
   const linked = (folderDocs || [])
     .map(stripDoc)
-    .find((item) => item?.type === 'note' && String(item.noteId) === String(id))
+    .find(
+      (item) =>
+        item?.type === 'note'
+        && !item.deletedAt
+        && String(item.noteId) === String(id),
+    )
   if (linked && linked.name !== doc.title) {
     linked.name = doc.title
     linked.updateTime = formatDateTime()
@@ -296,9 +321,108 @@ export async function updateStructNote({
   return doc.id
 }
 
-export async function deleteStructNote(id) {
+export async function deleteStructNote(id, { folderItem = null } = {}) {
   const doc = stripDoc(await dbGet(structNoteDocId(id)))
+  if (!doc || doc.deletedAt) return false
+
+  await restoreFragmentsArchivedByStructNote(id)
+  const fragmentIdsToRestore = new Set([
+    ...normalizeSourceFragmentIds(doc.sourceFragmentIds),
+    ...normalizeIntroducedFragmentIds(doc.introducedFragmentIds),
+  ])
+  for (const fragmentId of fragmentIdsToRestore) {
+    try {
+      await restoreFragmentFromArchive(fragmentId)
+    } catch {
+      /* 碎片可能已还原或不存在 */
+    }
+  }
+
+  const now = formatDateTime()
+  doc.deletedAt = now
+  doc.updateTime = now
+  if (folderItem) {
+    doc.recycleFolderItem = {
+      id: folderItem.id,
+      parentId: folderItem.parentId ?? null,
+      name: folderItem.name || doc.title || '',
+      sort: folderItem.sort ?? 0,
+    }
+  }
+  await saveDoc(STRUCT_NOTE_PREFIX, doc)
+  return true
+}
+
+export async function listStructRecycle() {
+  const docs = await dbAllDocs(STRUCT_NOTE_PREFIX)
+  return (docs || [])
+    .map(stripDoc)
+    .filter((doc) => doc?.id && doc.deletedAt)
+    .sort((a, b) => String(b.deletedAt || '').localeCompare(String(a.deletedAt || '')))
+    .map((doc) => ({
+      id: doc.id,
+      recycleType: 'sediment',
+      title: doc.title || '',
+      content: doc.content || '',
+      createTime: doc.createTime,
+      deletedAt: doc.deletedAt,
+    }))
+}
+
+export async function restoreStructRecycle(id) {
+  const noteId = String(id ?? '').trim()
+  if (!noteId) return false
+  const doc = stripDoc(await dbGet(structNoteDocId(noteId)))
+  if (!doc?.deletedAt) return false
+
+  delete doc.deletedAt
+  doc.updateTime = formatDateTime()
+  const snapshot = doc.recycleFolderItem
+  delete doc.recycleFolderItem
+  await saveDoc(STRUCT_NOTE_PREFIX, doc)
+
+  if (!snapshot?.id) return true
+
+  const existing = stripDoc(await dbGet(folderDocId(snapshot.id)))
+  if (existing) {
+    delete existing.deletedAt
+    existing.parentId = snapshot.parentId ?? null
+    existing.name = snapshot.name || existing.name || doc.title || ''
+    existing.noteId = noteId
+    existing.type = 'note'
+    existing.sort = snapshot.sort ?? existing.sort ?? 0
+    existing.updateTime = formatDateTime()
+    await saveDoc(STRUCT_FOLDER_PREFIX, existing)
+    return true
+  }
+
+  const now = formatDateTime()
+  await saveDoc(STRUCT_FOLDER_PREFIX, {
+    id: snapshot.id,
+    parentId: snapshot.parentId ?? null,
+    name: snapshot.name || doc.title || '无标题',
+    type: 'note',
+    noteId,
+    sort: snapshot.sort ?? 0,
+    createTime: now,
+    updateTime: now,
+  })
+  return true
+}
+
+export async function deleteStructForever(id) {
+  const noteId = String(id ?? '').trim()
+  if (!noteId) return false
+  const doc = stripDoc(await dbGet(structNoteDocId(noteId)))
   if (!doc) return false
-  await dbRemove(structNoteDocId(id))
+  const folderItemId = doc.recycleFolderItem?.id
+  if (folderItemId) {
+    try {
+      await dbRemove(folderDocId(folderItemId))
+    } catch {
+      /* 目录项可能已不存在 */
+    }
+  }
+  await dbRemove(structNoteDocId(noteId))
   return true
 }

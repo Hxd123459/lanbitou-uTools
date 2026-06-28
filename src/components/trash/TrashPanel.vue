@@ -39,7 +39,7 @@
       <AnimatePresence mode="popLayout">
         <motion.li
           v-for="note in items"
-          :key="note.id"
+          :key="`${note.recycleType || 'fragment'}-${note.id}`"
           class="trash-list-item"
           layout
           :initial="presets.reveal.initial"
@@ -49,6 +49,42 @@
           <article class="trash-card">
             <div class="trash-card-meta">
               <div class="trash-card-meta-left">
+                <span
+                  class="trash-card-type"
+                  :class="note.recycleType === 'sediment' ? 'is-sediment' : 'is-fragment'"
+                  :title="note.recycleType === 'sediment' ? '沉淀' : '碎片'"
+                  aria-hidden="true"
+                >
+                  <svg
+                    v-if="note.recycleType === 'sediment'"
+                    viewBox="0 0 24 24"
+                    width="16"
+                    height="16"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.8"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <path d="M12 2 2 7l10 5 10-5-10-5z" />
+                    <path d="M2 17l10 5 10-5M2 12l10 5 10-5" />
+                  </svg>
+                  <svg
+                    v-else
+                    viewBox="0 0 24 24"
+                    width="16"
+                    height="16"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.8"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <path d="M4 5.5h7v7H4z" />
+                    <path d="M15 4h5v5.5L16.5 14H13V8.5L15 4z" />
+                    <path d="M8 15.5h7v5.5H8z" />
+                  </svg>
+                </span>
                 <span v-if="(note.title || '').trim()" class="trash-card-tag">
                   {{ note.title }}
                 </span>
@@ -56,20 +92,20 @@
               </div>
               <div
                 class="trash-card-actions"
-                :class="{ 'is-busy': actionLoadingId === note.id }"
+                :class="{ 'is-busy': actionLoadingId === `${note.recycleType || 'fragment'}-${note.id}` }"
               >
                 <motion.button
                   type="button"
                   class="icon-btn"
                   title="恢复"
-                  :disabled="actionLoadingId === note.id"
+                  :disabled="actionLoadingId === `${note.recycleType || 'fragment'}-${note.id}`"
                   :while-hover="presets.button.hover"
                   :while-tap="presets.button.tap"
                   :transition="presets.button.transition"
-                  @click="handleRestore(note.id)"
+                  @click="handleRestore(note)"
                 >
                   <svg
-                    v-if="actionLoadingId === note.id"
+                    v-if="actionLoadingId === `${note.recycleType || 'fragment'}-${note.id}`"
                     class="icon-spin"
                     viewBox="0 0 24 24"
                     width="14"
@@ -101,11 +137,11 @@
                   type="button"
                   class="icon-btn icon-btn-danger"
                   title="彻底删除"
-                  :disabled="actionLoadingId === note.id"
+                  :disabled="actionLoadingId === `${note.recycleType || 'fragment'}-${note.id}`"
                   :while-hover="presets.button.hover"
                   :while-tap="presets.button.tap"
                   :transition="presets.button.transition"
-                  @click="handleDeleteForever(note.id)"
+                  @click="handleDeleteForever(note)"
                 >
                   <svg
                     viewBox="0 0 24 24"
@@ -206,15 +242,21 @@ const loadList = async () => {
   }
 }
 
-const handleRestore = async (id) => {
-  if (actionLoadingId.value != null) return
-  const note = items.value.find((item) => item.id === id)
-  actionLoadingId.value = id
+const handleRestore = async (note) => {
+  if (actionLoadingId.value != null || !note?.id) return
+  const loadingKey = `${note.recycleType || 'fragment'}-${note.id}`
+  actionLoadingId.value = loadingKey
   try {
-    await restoreRecycleNote(id)
-    items.value = items.value.filter((item) => item.id !== id)
+    await restoreRecycleNote(note.id, note.recycleType || 'fragment')
+    items.value = items.value.filter(
+      (item) =>
+        !(
+          item.id === note.id
+          && (item.recycleType || 'fragment') === (note.recycleType || 'fragment')
+        ),
+    )
     syncCount()
-    emit('restored', note || { id })
+    emit('restored', note)
   } catch (error) {
     emit('error', error)
   } finally {
@@ -222,12 +264,19 @@ const handleRestore = async (id) => {
   }
 }
 
-const handleDeleteForever = async (id) => {
-  if (actionLoadingId.value != null) return
-  actionLoadingId.value = id
+const handleDeleteForever = async (note) => {
+  if (actionLoadingId.value != null || !note?.id) return
+  const loadingKey = `${note.recycleType || 'fragment'}-${note.id}`
+  actionLoadingId.value = loadingKey
   try {
-    await deleteRecycleForever([id])
-    items.value = items.value.filter((item) => item.id !== id)
+    await deleteRecycleForever([note])
+    items.value = items.value.filter(
+      (item) =>
+        !(
+          item.id === note.id
+          && (item.recycleType || 'fragment') === (note.recycleType || 'fragment')
+        ),
+    )
     syncCount()
   } catch (error) {
     emit('error', error)
@@ -242,7 +291,10 @@ const handleClearAll = async () => {
   }
   clearingAll.value = true
   try {
-    const ids = items.value.map((item) => item.id)
+    const ids = items.value.map((item) => ({
+      id: item.id,
+      recycleType: item.recycleType || 'fragment',
+    }))
     await deleteRecycleForever(ids)
     items.value = []
     syncCount()
@@ -374,6 +426,22 @@ defineExpose({ reload: loadList })
   flex-wrap: wrap;
   gap: 8px;
   min-width: 0;
+}
+
+.trash-card-type {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  color: var(--color-secondary-text);
+}
+
+.trash-card-type.is-fragment {
+  color: var(--color-accent);
+}
+
+.trash-card-type.is-sediment {
+  color: #7c3aed;
 }
 
 .trash-card-tag {
