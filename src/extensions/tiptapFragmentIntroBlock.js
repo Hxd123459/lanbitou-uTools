@@ -116,6 +116,17 @@ export const FragmentIntroBlock = Node.create({
           }
           return true
         },
+      removeFragmentIntroBlock:
+        (pos) =>
+        ({ state, dispatch }) => {
+          const node = state.doc.nodeAt(pos)
+          if (!node || node.type.name !== this.name) return false
+          if (dispatch) {
+            const tr = state.tr.delete(pos, pos + node.nodeSize)
+            dispatch(tr)
+          }
+          return true
+        },
     }
   },
 
@@ -136,6 +147,25 @@ export const FragmentIntroBlock = Node.create({
         node.attrs.introducedAt,
       )
 
+      const actions = document.createElement('div')
+      actions.className = 'aw-fragment-intro-actions'
+
+      const cancelBtn = document.createElement('button')
+      cancelBtn.type = 'button'
+      cancelBtn.className = 'aw-fragment-intro-cancel'
+      cancelBtn.textContent = '取消'
+      cancelBtn.addEventListener('mousedown', (event) => {
+        event.preventDefault()
+        event.stopPropagation()
+      })
+      cancelBtn.addEventListener('click', (event) => {
+        event.preventDefault()
+        event.stopPropagation()
+        const pos = typeof getPos === 'function' ? getPos() : null
+        if (typeof pos !== 'number') return
+        editor.commands.removeFragmentIntroBlock(pos)
+      })
+
       const assimilateBtn = document.createElement('button')
       assimilateBtn.type = 'button'
       assimilateBtn.className = 'aw-fragment-intro-assimilate'
@@ -152,7 +182,8 @@ export const FragmentIntroBlock = Node.create({
         editor.commands.assimilateFragmentIntroBlock(pos)
       })
 
-      badge.append(label, assimilateBtn)
+      actions.append(cancelBtn, assimilateBtn)
+      badge.append(label, actions)
 
       const contentDOM = document.createElement('div')
       contentDOM.className = 'aw-fragment-intro-content'

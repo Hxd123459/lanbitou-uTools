@@ -36,7 +36,7 @@ const FRAGMENT_INSERT_SYSTEM_BASE = `你是烂笔头的笔记整理助手。根�
 1. 只输出一段 Markdown 正文，不要输出文档标题（禁止单独的一级 # 标题行）
 2. 使用 Markdown 格式（小标题、列表、引用、待办等均可）
 3. 禁止输出思考过程、解释、寒暄或 JSON
-4. 不要重复罗列原始碎片编号，直接整合成文
+4. 不要重复罗列原始碎片编号，直接整合成文；不要遗漏任一条碎片中的有效信息
 5. 图片由系统单独处理，你只处理文字，不要输出图片语法
 6. 若碎片信息不足，基于已有内容尽力整理，不要编造事实`
 
@@ -346,7 +346,7 @@ export function generateSedimentDraft({
   onError,
 }) {
   const draftMode = mode === 'append' ? 'append' : mode === 'fragment' ? 'fragment' : 'generate'
-  const userContent = draftMode === 'append' || (draftMode === 'fragment' && String(existingContent ?? '').trim())
+  const userContent = draftMode === 'append'
     ? buildAppendUserMessage(existingContent, fragments)
     : buildFragmentsUserMessage(fragments)
   let accumulated = ''

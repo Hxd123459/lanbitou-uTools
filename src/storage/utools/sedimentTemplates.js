@@ -1,6 +1,8 @@
 const STORAGE_KEY = 'lanbitou/sediment-templates'
 const VERSION_KEY = 'lanbitou/sediment-templates-version'
-const TEMPLATE_SEED_VERSION = 2
+const TEMPLATE_SEED_VERSION = 3
+
+const LEGACY_TODOS_MERGE_LINE = '3. 合并重复或相近的待办；无法判断完成状态时默认为未完成'
 
 /** 仅保留最常用、输出形态差异明显的内置模板；其余由用户自定义 */
 export const BUILTIN_TEMPLATE_SEED = [
@@ -34,7 +36,7 @@ export const BUILTIN_TEMPLATE_SEED = [
 输出格式（严格遵守）：
 1. 可用 ## 小节标题分组（如「本周」「待跟进」「已完成」），不要使用一级标题 #
 2. 每条待办使用 - [ ] 未完成 或 - [x] 已完成 语法
-3. 合并重复或相近的待办；无法判断完成状态时默认为未完成
+3. 保留全部行动项，仅合并表述完全相同的待办；无法判断完成状态时默认为未完成
 4. 可在待办后用括号补充简短背景、负责人或截止日期
 5. 非行动类信息整理为简短列表或段落，放在对应分组末尾`,
   },
@@ -102,7 +104,7 @@ function applyTemplateMigrations(list, storage) {
   const version = Number(storage.getItem(VERSION_KEY)) || 1
   if (version >= TEMPLATE_SEED_VERSION) return list
 
-  const next = list.map((item) => {
+  let next = list.map((item) => {
     const seed = BUILTIN_TEMPLATE_SEED.find((entry) => entry.id === item.id)
     if (!seed) return item
 
@@ -112,6 +114,15 @@ function applyTemplateMigrations(list, storage) {
     }
     return item
   })
+
+  if (version < 3) {
+    const todosSeed = BUILTIN_TEMPLATE_SEED.find((entry) => entry.id === 'todos')
+    next = next.map((item) => {
+      if (item.id !== 'todos' || !todosSeed) return item
+      if (!String(item.instruction).includes(LEGACY_TODOS_MERGE_LINE)) return item
+      return { ...item, instruction: todosSeed.instruction }
+    })
+  }
 
   storage.setItem(VERSION_KEY, TEMPLATE_SEED_VERSION)
   if (JSON.stringify(next) !== JSON.stringify(list)) {

@@ -1,4 +1,5 @@
 import { nextTick, ref } from 'vue'
+import { fetchNotesByIds } from '../api/note'
 import {
   generateSedimentDraft,
   isSedimentDraftAiAvailable,
@@ -15,10 +16,6 @@ function fragmentHasAiText(note) {
   return Boolean(getFragmentContent(note).trim())
 }
 
-function fragmentsNeedAiText(fragments) {
-  return fragments.some((note) => fragmentHasAiText(note))
-}
-
 function getPendingFragments(fragmentNotes, insertedIds) {
   const inserted = insertedIds?.value ?? insertedIds ?? new Set()
   return (Array.isArray(fragmentNotes) ? fragmentNotes : []).filter((note) => {
@@ -27,6 +24,23 @@ function getPendingFragments(fragmentNotes, insertedIds) {
     const key = String(id)
     return !inserted.has(key) && !inserted.has(id)
   })
+}
+
+async function refreshFragmentNotes(notes) {
+  const list = Array.isArray(notes) ? notes : []
+  const ids = list.map((note) => note?.id).filter(Boolean)
+  if (!ids.length) return list
+
+  try {
+    const fetched = await fetchNotesByIds(ids)
+    const byId = new Map(fetched.map((note) => [String(note.id), note]))
+    return list.map((note) => {
+      const full = byId.get(String(note?.id))
+      return full ? { ...note, ...full } : note
+    })
+  } catch {
+    return list
+  }
 }
 
 export function useStructNoteFragmentInsert({
@@ -71,7 +85,6 @@ export function useStructNoteFragmentInsert({
         fragments,
         preset: selectedInsertPreset.value || 'compose',
         mode: 'fragment',
-        existingContent: draftContent.value.trim(),
         onDelta: () => {},
         onDone: ({ content }) => {
           resolve(parseAppendContent(content || ''))
@@ -90,6 +103,26 @@ export function useStructNoteFragmentInsert({
     return true
   }
 
+  const insertFragmentWithPreset = async (note, preset) => {
+    const fragmentId = String(note?.id ?? '')
+    if (!fragmentId || insertedFragmentIds.value.has(fragmentId)) return
+
+    if (!fragmentHasAiText(note)) {
+      draftContent.value = appendFragmentToContent(draftContent.value, note)
+      markFragmentIntroduced(fragmentId, preset)
+      return
+    }
+
+    processingFragmentId.value = fragmentId
+    const text = await runAiForFragments([note])
+    draftContent.value = appendProcessedBlockToContent(draftContent.value, {
+      text,
+      notes: [note],
+      method: preset,
+    })
+    markFragmentIntroduced(fragmentId, preset)
+  }
+
   const insertFragment = async (note) => {
     const fragmentId = String(note?.id ?? '')
     if (!fragmentId || insertedFragmentIds.value.has(fragmentId)) return
@@ -103,15 +136,6 @@ export function useStructNoteFragmentInsert({
       return
     }
 
-    if (!fragmentHasAiText(note)) {
-      draftContent.value = appendFragmentToContent(draftContent.value, note)
-      markFragmentIntroduced(fragmentId, preset)
-      await nextTick()
-      contentEditorRef.value?.setMarkdownContent?.(draftContent.value, { emitUpdate: true })
-      contentEditorRef.value?.focus()
-      return
-    }
-
     if (!isSedimentDraftAiAvailable()) {
       onAiUnavailable?.()
       return
@@ -120,13 +144,8 @@ export function useStructNoteFragmentInsert({
     aiProcessing.value = true
     processingFragmentId.value = fragmentId
     try {
-      const text = await runAiForFragments([note])
-      draftContent.value = appendProcessedBlockToContent(draftContent.value, {
-        text,
-        notes: [note],
-        method: preset,
-      })
-      markFragmentIntroduced(fragmentId, preset)
+      const [resolved] = await refreshFragmentNotes([note])
+      await insertFragmentWithPreset(resolved || note, preset)
       await nextTick()
       contentEditorRef.value?.setMarkdownContent?.(draftContent.value, { emitUpdate: true })
       contentEditorRef.value?.focus()
@@ -161,16 +180,26 @@ export function useStructNoteFragmentInsert({
 
     aiProcessing.value = true
     try {
-      const aiFragments = fragmentsNeedAiText(pending)
-        ? pending.filter((note) => fragmentHasAiText(note))
-        : []
-      const text = aiFragments.length ? await runAiForFragments(aiFragments) : ''
+      const resolvedNotes = await refreshFragmentNotes(pending)
+      const textParts = []
+
+      for (const note of resolvedNotes) {
+        const fragmentId = String(note?.id ?? '')
+        if (!fragmentId || insertedFragmentIds.value.has(fragmentId)) continue
+
+        if (!fragmentHasAiText(note)) continue
+
+        processingFragmentId.value = fragmentId
+        const text = await runAiForFragments([note])
+        if (text) textParts.push(text)
+      }
+
       draftContent.value = appendProcessedBlockToContent(draftContent.value, {
-        text,
-        notes: pending,
+        text: textParts.join('\n\n'),
+        notes: resolvedNotes,
         method: preset,
       })
-      for (const note of pending) {
+      for (const note of resolvedNotes) {
         markFragmentIntroduced(note.id, preset)
       }
       await nextTick()

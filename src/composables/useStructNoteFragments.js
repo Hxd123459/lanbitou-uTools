@@ -8,7 +8,7 @@ export function getFragmentTitle(note) {
 }
 
 export function getFragmentContent(note) {
-  return note?.markdownContent || note?.text || note?.summary || ''
+  return note?.markdownContent || note?.text || note?.rawContent || note?.summary || ''
 }
 
 export function getFragmentImages(note) {
