@@ -189,6 +189,26 @@ export async function listByDay({ date, tagId = null, pageNo = 1, pageSize = NOT
   }
 }
 
+function noteCharCount(doc) {
+  const text = doc?.markdownContent || doc?.rawContent || doc?.summary || ''
+  return text.replace(/\s/g, '').length
+}
+
+export async function buildWritingDailyStats() {
+  const all = await loadAllNoteDocs()
+  const wordsByDate = {}
+  const fragmentsByDate = {}
+
+  all.forEach((doc) => {
+    const key = datePartFromDateTime(doc.createTime)
+    if (!key) return
+    fragmentsByDate[key] = (fragmentsByDate[key] || 0) + 1
+    wordsByDate[key] = (wordsByDate[key] || 0) + noteCharCount(doc)
+  })
+
+  return { wordsByDate, fragmentsByDate }
+}
+
 export async function insertNote(rawContent, images = [], onProgress, options = {}) {
   const doc = await createNoteDoc(rawContent, images, { onProgress, ...options })
   return buildInsertResponse(doc)

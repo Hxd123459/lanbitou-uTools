@@ -50,6 +50,7 @@
                 :title="day.title"
                 :aria-label="day.title"
                 :disabled="!day.inRange"
+                @click="onDayClick(day)"
               />
             </div>
           </div>
@@ -61,7 +62,7 @@
 
 <script setup>
 import { computed } from 'vue'
-import { useAssistantStore } from '../../stores/assistantStore'
+import { useDailyWritingStats } from '../../composables/useWritingStats'
 
 const props = defineProps({
   active: {
@@ -70,7 +71,9 @@ const props = defineProps({
   },
 })
 
-const assistantStore = useAssistantStore()
+const emit = defineEmits(['open-day'])
+
+const { fragmentsByDate } = useDailyWritingStats({ active: () => props.active })
 
 const WEEK_COUNT = 20
 const weekdayLabels = ['一', '', '三', '', '五', '', '日']
@@ -108,15 +111,12 @@ function formatDisplayDate(key) {
   return `${date.getMonth() + 1}月${date.getDate()}日`
 }
 
-const countByDate = computed(() => {
-  const map = new Map()
-  assistantStore.notes.forEach((note) => {
-    const key = toDateKey(note.createdAt)
-    if (!key) return
-    map.set(key, (map.get(key) || 0) + 1)
-  })
-  return map
-})
+const countByDate = computed(() => fragmentsByDate.value)
+
+const onDayClick = (day) => {
+  if (!day.inRange) return
+  emit('open-day', day.key)
+}
 
 const rangeStart = computed(() => {
   const today = new Date()
@@ -395,7 +395,7 @@ const statItems = computed(() => [
 .heatmap-cell {
   border: 0;
   padding: 0;
-  cursor: default;
+  cursor: pointer;
 }
 
 .heatmap-cell.is-outside {

@@ -145,6 +145,33 @@ export async function fetchNoteList({
   return parseBlockListPage(data, safePageNo, safePageSize)
 }
 
+export async function fetchWritingDailyStats() {
+  if (isUtoolsMode()) {
+    return utoolsNote.buildWritingDailyStats()
+  }
+
+  const wordsByDate = {}
+  const fragmentsByDate = {}
+  let pageNo = 1
+  let hasMore = true
+
+  while (hasMore) {
+    const result = await fetchNoteList({ pageNo, pageSize: 50 })
+    result.list.forEach((note) => {
+      const date = new Date(note.createdAt)
+      if (Number.isNaN(date.getTime())) return
+      const key = formatDateParam(date)
+      fragmentsByDate[key] = (fragmentsByDate[key] || 0) + 1
+      const text = note?.markdownContent || note?.text || note?.rawContent || note?.summary || ''
+      wordsByDate[key] = (wordsByDate[key] || 0) + text.replace(/\s/g, '').length
+    })
+    hasMore = result.hasMore
+    pageNo += 1
+  }
+
+  return { wordsByDate, fragmentsByDate }
+}
+
 export async function fetchBlockListByDate(
   currentDate,
   tagId = null,

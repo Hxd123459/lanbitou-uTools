@@ -48,7 +48,10 @@
               日期
               <span class="tag-filter-summary-name">「{{ dateFilterState.label }}」</span>
             </span>
-            <span class="tag-filter-summary-count">共 {{ dateFilteredNotes.length }} 条</span>
+            <span class="tag-filter-summary-count">
+              <template v-if="dateFilterState.loading">加载中…</template>
+              <template v-else>共 {{ dateFilterState.total }} 条</template>
+            </span>
             <motion.button
               type="button"
               class="tag-filter-summary-clear"
@@ -185,7 +188,13 @@
           </ul>
 
           <p
-            v-else-if="showDateFilterChrome && !dateFilteredNotes.length"
+            v-if="showDateFilterChrome && dateFilterState.loading"
+            class="empty-state"
+          >
+            加载中…
+          </p>
+          <p
+            v-else-if="showDateFilterChrome && !dateFilterState.list.length"
             class="empty-state"
           >
             {{ dateFilterState.label ? `「${dateFilterState.label}」` : '' }} 暂无碎片笔记。
@@ -196,7 +205,7 @@
             class="note-list-items"
           >
             <li
-              v-for="note in dateFilteredNotes"
+              v-for="note in dateFilterState.list"
               :key="`date-${dateFilterState.dateKey}-${note.id}`"
               class="note-list-item"
             >
@@ -377,10 +386,11 @@
       />
 
       <!-- 热力图 -->
-      <HeatmapPanel
-        v-show="activeTab === 'echo'"
-        :active="activeTab === 'echo'"
-      />
+        <HeatmapPanel
+          v-show="activeTab === 'echo'"
+          :active="activeTab === 'echo'"
+          @open-day="handleHeatmapOpenDay"
+        />
 
       <!-- 回收站 -->
       <TrashPanel
@@ -453,6 +463,7 @@ import { loadAiSettings } from '../storage/utools/aiSettings'
 import { ApiError } from '../api/http'
 import {
   deleteBlock,
+  fetchBlockListByDate,
   fetchNotesByTag,
   NOTE_LIST_PAGE_SIZE,
   searchNotes,
@@ -531,7 +542,7 @@ const searchState = reactive({
 const isSearchActive = computed(() => searchKeyword.value.length > 0)
 
 const displayedNotes = computed(() => {
-  if (dateFilterState.active) return dateFilteredNotes.value
+  if (dateFilterState.active) return dateFilterState.list
   if (tagFilterState.active) return tagFilterState.list
   if (isSearchActive.value) return searchState.list
   return assistantStore.visibleNotes
@@ -555,7 +566,7 @@ const selectedNotesList = computed(() => {
   for (const note of tagFilterState.list) {
     registerSelectedNote(note, byId)
   }
-  for (const note of dateFilteredNotes.value) {
+  for (const note of dateFilterState.list) {
     registerSelectedNote(note, byId)
   }
   return ids.map((id) => byId.get(String(id))).filter(Boolean)
@@ -582,6 +593,7 @@ const showTagFilterChrome = computed(
 )
 
 const isDisplayedNotesLoading = computed(() => {
+  if (dateFilterState.active) return dateFilterState.loading
   if (tagFilterState.active) return tagFilterState.loading
   if (isSearchActive.value) return searchState.loading
   return assistantStore.loadingNotes
@@ -589,6 +601,7 @@ const isDisplayedNotesLoading = computed(() => {
 
 const showListLoadingMore = computed(() => {
   if (noteViewMode.value === 'selected') return false
+  if (dateFilterState.active) return dateFilterState.loadingMore
   if (isSearchActive.value) return searchState.loadingMore
   if (tagFilterState.active) return tagFilterState.loadingMore
   return assistantStore.loadingMoreNotes
@@ -606,20 +619,18 @@ const tagFilterState = reactive({
   hasMore: false,
 })
 let tagFilterToken = 0
+let dateFilterToken = 0
 
 const dateFilterState = reactive({
   active: false,
   dateKey: '',
   label: '',
-})
-
-const dateFilteredNotes = computed(() => {
-  if (!dateFilterState.active || !dateFilterState.dateKey) return []
-  const key = dateFilterState.dateKey
-  return assistantStore.notes
-    .filter((note) => toDateKey(note.createdAt) === key)
-    .slice()
-    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+  list: [],
+  total: 0,
+  loading: false,
+  loadingMore: false,
+  pageNo: 0,
+  hasMore: false,
 })
 
 const showDateFilterChrome = computed(
@@ -654,6 +665,14 @@ function appendNoteToTagFilter(note) {
   tagFilterState.total += 1
 }
 
+function appendNoteToDateFilter(note) {
+  if (!dateFilterState.active || !note?.id || !dateFilterState.dateKey) return
+  if (toDateKey(note.createdAt) !== dateFilterState.dateKey) return
+  if (dateFilterState.list.some((item) => item.id === note.id)) return
+  dateFilterState.list = [note, ...dateFilterState.list]
+  dateFilterState.total += 1
+}
+
 function stashAndRemoveFromFilterLists(id) {
   const sid = String(id)
   const snapshot = deleteSnapshots.get(id) || {}
@@ -667,6 +686,15 @@ function stashAndRemoveFromFilterLists(id) {
     }
   }
 
+  if (dateFilterState.active) {
+    const index = dateFilterState.list.findIndex((note) => String(note.id) === sid)
+    if (index >= 0) {
+      snapshot.dateNote = dateFilterState.list[index]
+      dateFilterState.list = dateFilterState.list.filter((note) => String(note.id) !== sid)
+      dateFilterState.total = Math.max(0, dateFilterState.total - 1)
+    }
+  }
+
   if (isSearchActive.value) {
     const index = searchState.list.findIndex((note) => String(note.id) === sid)
     if (index >= 0) {
@@ -676,7 +704,7 @@ function stashAndRemoveFromFilterLists(id) {
     }
   }
 
-  if (snapshot.tagNote || snapshot.searchNote) {
+  if (snapshot.tagNote || snapshot.dateNote || snapshot.searchNote) {
     deleteSnapshots.set(id, snapshot)
   }
 }
@@ -687,6 +715,10 @@ function restoreFromDeleteSnapshot(id) {
 
   if (snapshot.tagNote) {
     appendNoteToTagFilter(snapshot.tagNote)
+  }
+
+  if (snapshot.dateNote) {
+    appendNoteToDateFilter(snapshot.dateNote)
   }
 
   if (snapshot.searchNote && isSearchActive.value) {
@@ -713,6 +745,15 @@ function removeNotesFromHomeLists(ids = []) {
     tagFilterState.list = next
     if (removedCount > 0) {
       tagFilterState.total = Math.max(0, tagFilterState.total - removedCount)
+    }
+  }
+
+  if (dateFilterState.active) {
+    const next = dateFilterState.list.filter((note) => !idSet.has(String(note.id)))
+    const removedCount = dateFilterState.list.length - next.length
+    dateFilterState.list = next
+    if (removedCount > 0) {
+      dateFilterState.total = Math.max(0, dateFilterState.total - removedCount)
     }
   }
 
@@ -745,6 +786,7 @@ const handleFragmentRestored = (note) => {
   if (!note?.id) return
   assistantStore.insertRestoredNote(note)
   appendNoteToTagFilter(note)
+  appendNoteToDateFilter(note)
   openToast('已放回碎片列表', 'success', { duration: 1600 })
 }
 
@@ -1186,6 +1228,8 @@ const onNoteListScroll = () => {
 
     if (isSearchActive.value) {
       loadMoreSearch()
+    } else if (dateFilterState.active) {
+      loadMoreDateNotes()
     } else if (tagFilterState.active) {
       loadMoreTagNotes()
     } else {
@@ -1201,10 +1245,24 @@ const appendTagNotes = (list) => {
   tagFilterState.list = [...tagFilterState.list, ...next]
 }
 
+const appendDateNotes = (list) => {
+  const existing = new Set(dateFilterState.list.map((note) => note.id))
+  const next = list.filter((note) => note?.id && !existing.has(note.id))
+  if (!next.length) return
+  dateFilterState.list = [...dateFilterState.list, ...next]
+}
+
 const clearDateFilter = () => {
+  dateFilterToken += 1
   dateFilterState.active = false
   dateFilterState.dateKey = ''
   dateFilterState.label = ''
+  dateFilterState.list = []
+  dateFilterState.total = 0
+  dateFilterState.loading = false
+  dateFilterState.loadingMore = false
+  dateFilterState.pageNo = 0
+  dateFilterState.hasMore = false
 }
 
 const clearTagFilter = () => {
@@ -1225,15 +1283,93 @@ const clearSearch = () => {
   searchKeyword.value = ''
 }
 
-const handleStatsOpenDay = (dateKey) => {
+const reloadActiveDateFilter = async ({ dateKey, label } = {}) => {
+  const resolvedKey = dateKey ?? dateFilterState.dateKey
+  if (!resolvedKey) return
+
+  const myToken = ++dateFilterToken
+  dateFilterState.active = true
+  dateFilterState.dateKey = resolvedKey
+  dateFilterState.label = label ?? formatDisplayDate(resolvedKey)
+  dateFilterState.loading = true
+  dateFilterState.loadingMore = false
+  dateFilterState.list = []
+  dateFilterState.total = 0
+  dateFilterState.pageNo = 0
+  dateFilterState.hasMore = false
+
+  try {
+    const result = await fetchBlockListByDate(resolvedKey, null, {
+      pageNo: 1,
+      pageSize: NOTE_LIST_PAGE_SIZE,
+    })
+    if (myToken !== dateFilterToken) {
+      if (!dateFilterState.dateKey) dateFilterState.active = false
+      return
+    }
+    dateFilterState.list = result.list
+    dateFilterState.total = result.total
+    dateFilterState.pageNo = result.pageNo
+    dateFilterState.hasMore = result.hasMore
+  } catch (error) {
+    if (myToken !== dateFilterToken) {
+      if (!dateFilterState.dateKey) dateFilterState.active = false
+      return
+    }
+    dateFilterState.list = []
+    dateFilterState.total = 0
+    notifyError(error)
+  } finally {
+    if (myToken === dateFilterToken) dateFilterState.loading = false
+  }
+}
+
+const loadMoreDateNotes = async () => {
+  if (
+    !dateFilterState.active ||
+    !dateFilterState.hasMore ||
+    dateFilterState.loading ||
+    dateFilterState.loadingMore
+  ) {
+    return
+  }
+
+  const myToken = dateFilterToken
+  dateFilterState.loadingMore = true
+  try {
+    const result = await fetchBlockListByDate(dateFilterState.dateKey, null, {
+      pageNo: dateFilterState.pageNo + 1,
+      pageSize: NOTE_LIST_PAGE_SIZE,
+    })
+    if (myToken !== dateFilterToken) return
+    appendDateNotes(result.list)
+    dateFilterState.pageNo = result.pageNo
+    dateFilterState.hasMore = result.hasMore
+  } catch (error) {
+    if (myToken !== dateFilterToken) return
+    notifyError(error)
+  } finally {
+    if (myToken === dateFilterToken) dateFilterState.loadingMore = false
+  }
+}
+
+const openDayInList = async (dateKey) => {
   if (!dateKey) return
   clearTagFilter()
   clearSearch()
-  dateFilterState.active = true
-  dateFilterState.dateKey = dateKey
-  dateFilterState.label = formatDisplayDate(dateKey)
+  activeTab.value = 'home'
   noteViewMode.value = 'list'
-  nextTick(() => scrollNoteListToTop())
+  await reloadActiveDateFilter({ dateKey, label: formatDisplayDate(dateKey) })
+  await nextTick()
+  scrollNoteListToTop()
+}
+
+const handleStatsOpenDay = (dateKey) => {
+  void openDayInList(dateKey)
+}
+
+const handleHeatmapOpenDay = (dateKey) => {
+  void openDayInList(dateKey)
 }
 
 const handleTagSelect = async (tag) => {
@@ -1603,6 +1739,7 @@ const handleSubmit = async ({ text, images, tagId, tagName }) => {
       },
     )
     appendNoteToTagFilter(note)
+    appendNoteToDateFilter(note)
     inputValue.value = ''
     inputBarRef.value?.reset()
   } catch (error) {

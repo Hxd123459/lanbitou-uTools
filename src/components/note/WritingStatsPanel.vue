@@ -64,17 +64,19 @@
         title="点击 +1 天预览特效，Shift+点击 重置"
         @click="onStreakCardClick"
       >
-        <motion.span
-          v-if="streakBadge"
-          :key="`streak-badge-${streakTier}`"
-          class="writing-stats-streak-badge"
-          :initial="reduced ? false : { opacity: 0, y: -4, scale: 0.92 }"
-          :animate="{ opacity: 1, y: 0, scale: 1 }"
-          :transition="streakBadgeTransition"
-        >
-          {{ streakBadge }}
-        </motion.span>
-        <span class="writing-stats-kpi-label">连续写作</span>
+        <div class="writing-stats-streak-head">
+          <span class="writing-stats-kpi-label">连续写作</span>
+          <motion.span
+            v-if="streakBadge"
+            :key="`streak-badge-${streakTier}`"
+            class="writing-stats-streak-badge"
+            :initial="reduced ? false : { opacity: 0, y: -4, scale: 0.92 }"
+            :animate="{ opacity: 1, y: 0, scale: 1 }"
+            :transition="streakBadgeTransition"
+          >
+            {{ streakBadge }}
+          </motion.span>
+        </div>
         <motion.span
           :key="`streak-val-${streakTier}-${displayStreak}`"
           class="writing-stats-kpi-value writing-stats-streak-value"
@@ -300,7 +302,7 @@ const {
   currentStreak,
   lineChartActiveDays,
   lineChartTotalWords,
-} = useWritingStats()
+} = useWritingStats({ active: () => props.active })
 
 const goalInputText = ref(String(dailyGoal.value))
 const weekdayLabels = ['一', '', '三', '', '五', '', '日']
@@ -703,8 +705,17 @@ watch(dailyGoal, (value) => {
   user-select: none;
 }
 
-.writing-stats-kpi--streak:has(.writing-stats-streak-badge) .writing-stats-kpi-label {
-  padding-top: 18px;
+.writing-stats-streak-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+}
+
+.writing-stats-streak-head .writing-stats-kpi-label {
+  flex: 1;
+  min-width: 0;
 }
 
 .writing-stats-kpi--streak.is-streak-warm {
@@ -771,10 +782,7 @@ watch(dailyGoal, (value) => {
 }
 
 .writing-stats-streak-badge {
-  position: absolute;
-  top: 10px;
-  left: 12px;
-  z-index: 1;
+  flex-shrink: 0;
   display: inline-flex;
   align-items: center;
   padding: 2px 8px;
@@ -783,7 +791,7 @@ watch(dailyGoal, (value) => {
   font-weight: 600;
   line-height: 1.4;
   letter-spacing: 0.02em;
-  max-width: calc(100% - 24px);
+  max-width: 58%;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;

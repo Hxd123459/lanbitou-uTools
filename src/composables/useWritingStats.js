@@ -1,4 +1,5 @@
-import { computed, ref, watch } from 'vue'
+import { computed, ref, unref, watch } from 'vue'
+import { fetchWritingDailyStats } from '../api/note'
 import { useAssistantStore } from '../stores/assistantStore'
 
 export const WRITING_DAILY_GOAL_KEY = 'lanbitou/writing-daily-goal'
@@ -123,9 +124,93 @@ function buildMonthLabelForWeek(week, previousMonth) {
   return { label: '', month: previousMonth ?? month }
 }
 
-export function useWritingStats() {
+function mapsFromRecords(records) {
+  const words = new Map()
+  const fragments = new Map()
+  records.forEach((note) => {
+    const key = toDateKey(note.createdAt)
+    if (!key) return
+    fragments.set(key, (fragments.get(key) || 0) + 1)
+    words.set(key, (words.get(key) || 0) + getNoteCharCount(note))
+  })
+  return { words, fragments }
+}
+
+function mergeDailyStatsMap(fetchedMap, notes, field = 'words') {
+  const map = new Map(fetchedMap)
+  const live = mapsFromRecords(notes)
+  const liveMap = field === 'fragments' ? live.fragments : live.words
+  liveMap.forEach((count, key) => {
+    map.set(key, Math.max(map.get(key) || 0, count))
+  })
+  return map
+}
+
+function mapsFromDailyStats({ wordsByDate = {}, fragmentsByDate = {} } = {}) {
+  return {
+    words: new Map(Object.entries(wordsByDate)),
+    fragments: new Map(Object.entries(fragmentsByDate)),
+  }
+}
+
+export function useDailyWritingStats(options = {}) {
   const assistantStore = useAssistantStore()
+  const statsWordsByDate = ref(new Map())
+  const statsFragmentsByDate = ref(new Map())
+  let loadToken = 0
+
+  const refreshStats = async () => {
+    const token = ++loadToken
+    try {
+      const result = await fetchWritingDailyStats()
+      if (token !== loadToken) return
+      const { words, fragments } = mapsFromDailyStats(result)
+      statsWordsByDate.value = words
+      statsFragmentsByDate.value = fragments
+    } catch {
+      if (token !== loadToken) return
+    }
+  }
+
+  const resolveActive = () => unref(options.active) ?? true
+
+  const liveNotes = computed(() =>
+    assistantStore.notes.filter((note) => !note?.pendingDelete),
+  )
+
+  watch(
+    () => resolveActive(),
+    (isActive) => {
+      if (isActive) void refreshStats()
+    },
+    { immediate: true },
+  )
+
+  watch(
+    () => assistantStore.notes.length,
+    () => {
+      if (resolveActive()) void refreshStats()
+    },
+  )
+
+  const wordsByDate = computed(() =>
+    mergeDailyStatsMap(statsWordsByDate.value, liveNotes.value, 'words'),
+  )
+
+  const fragmentsByDate = computed(() =>
+    mergeDailyStatsMap(statsFragmentsByDate.value, liveNotes.value, 'fragments'),
+  )
+
+  return {
+    wordsByDate,
+    fragmentsByDate,
+    refreshStats,
+  }
+}
+
+export function useWritingStats(options = {}) {
   const dailyGoal = ref(readDailyGoal())
+  const { wordsByDate, fragmentsByDate } = useDailyWritingStats(options)
 
   const saveDailyGoal = (value) => {
     const next = Math.max(50, Math.min(99999, Math.round(Number(value) || DEFAULT_DAILY_GOAL)))
@@ -133,26 +218,6 @@ export function useWritingStats() {
     writeDailyGoal(next)
     return next
   }
-
-  const wordsByDate = computed(() => {
-    const map = new Map()
-    assistantStore.notes.forEach((note) => {
-      const key = toDateKey(note.createdAt)
-      if (!key) return
-      map.set(key, (map.get(key) || 0) + getNoteCharCount(note))
-    })
-    return map
-  })
-
-  const fragmentsByDate = computed(() => {
-    const map = new Map()
-    assistantStore.notes.forEach((note) => {
-      const key = toDateKey(note.createdAt)
-      if (!key) return
-      map.set(key, (map.get(key) || 0) + 1)
-    })
-    return map
-  })
 
   const todayKey = computed(() => toDateKey(new Date()))
 
