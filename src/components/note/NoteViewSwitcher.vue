@@ -129,9 +129,33 @@
           </motion.button>
         </AnimatePresence>
       </div>
+
+      <motion.button
+        type="button"
+        class="switcher-btn"
+        :class="{ 'is-active': modelValue === 'stats' }"
+        role="tab"
+        :aria-selected="modelValue === 'stats'"
+        :while-hover="presets.button.hover"
+        :while-tap="presets.button.tap"
+        :transition="presets.button.transition"
+        @click="$emit('update:modelValue', 'stats')"
+      >
+        <span class="switcher-icon" aria-hidden="true">
+          <svg
+            viewBox="0 0 1024 1024"
+            width="14"
+            height="14"
+            fill="currentColor"
+          >
+            <path d="M25.6 537.1392a25.6 25.6 0 1 1 0-51.2h141.1072a25.6 25.6 0 0 0 24.5248-18.2272l118.1184-393.7792a51.2 51.2 0 0 1 98.0992 0L665.6 934.4l118.1184-393.728a76.8 76.8 0 0 1 73.5744-54.784H998.4a25.6 25.6 0 1 1 0 51.2h-141.1072a25.6 25.6 0 0 0-24.5248 18.2272l-118.1184 393.7792a51.2 51.2 0 0 1-98.0992 0L358.4 88.6272 240.2816 482.4064a76.8 76.8 0 0 1-73.5744 54.784H25.6z" />
+          </svg>
+        </span>
+        <span>统计</span>
+      </motion.button>
     </div>
 
-    <div class="switcher-search-area">
+    <div v-show="modelValue !== 'stats'" class="switcher-search-area">
       <AnimatePresence mode="wait" :initial="false">
         <motion.button
           v-if="!searchExpanded"

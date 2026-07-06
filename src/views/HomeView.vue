@@ -43,7 +43,25 @@
           :class="{ 'note-list--selecting': selectedNoteIds.size > 0 }"
           @scroll="onNoteListScroll"
         >
-          <header v-if="showTagFilterChrome" class="tag-filter-summary">
+          <header v-if="showDateFilterChrome" class="tag-filter-summary">
+            <span class="tag-filter-summary-label">
+              日期
+              <span class="tag-filter-summary-name">「{{ dateFilterState.label }}」</span>
+            </span>
+            <span class="tag-filter-summary-count">共 {{ dateFilteredNotes.length }} 条</span>
+            <motion.button
+              type="button"
+              class="tag-filter-summary-clear"
+              :while-hover="presets.button.hover"
+              :while-tap="presets.button.tap"
+              :transition="presets.button.transition"
+              @click="clearDateFilter"
+            >
+              清空
+            </motion.button>
+          </header>
+
+          <header v-else-if="showTagFilterChrome" class="tag-filter-summary">
             <span class="tag-filter-summary-label">
               标签
               <span class="tag-filter-summary-name">「{{ tagFilterState.tagName }}」</span>
@@ -91,6 +109,7 @@
               noteViewMode !== 'selected' &&
               !isSearchActive &&
               !tagFilterState.active &&
+              !dateFilterState.active &&
               assistantStore.loadingNotes &&
               !assistantStore.visibleNotes.length
             "
@@ -104,6 +123,7 @@
               noteViewMode !== 'selected' &&
               !isSearchActive &&
               !tagFilterState.active &&
+              !dateFilterState.active &&
               !assistantStore.visibleNotes.length &&
               !assistantStore.loadingNotes
             "
@@ -130,6 +150,7 @@
               (noteViewMode === 'list' || noteViewMode === 'select') &&
               !isSearchActive &&
               !tagFilterState.active &&
+              !dateFilterState.active &&
               !displayedNotes.length
             "
             class="empty-state"
@@ -157,6 +178,39 @@
                 selectable
                 selection-removable
                 selected
+                @toggle-select="toggleNoteSelect(note.id)"
+                @tag-select="handleTagSelect"
+              />
+            </li>
+          </ul>
+
+          <p
+            v-else-if="showDateFilterChrome && !dateFilteredNotes.length"
+            class="empty-state"
+          >
+            {{ dateFilterState.label ? `「${dateFilterState.label}」` : '' }} 暂无碎片笔记。
+          </p>
+
+          <ul
+            v-else-if="showDateFilterChrome"
+            class="note-list-items"
+          >
+            <li
+              v-for="note in dateFilteredNotes"
+              :key="`date-${dateFilterState.dateKey}-${note.id}`"
+              class="note-list-item"
+            >
+              <NoteCard
+                :note="note"
+                :selectable="showNoteSelectable && !isNoteBulkAiTagBusy(note.id)"
+                :selected="showNoteSelectable && isNoteSelected(note.id)"
+                :tag-ai-loading="isNoteBulkAiTagBusy(note.id)"
+                @edit-save="handleEditSave"
+                @delete="handleDelete"
+                @copied="handleCopied"
+                @copy-failed="handleCopyFailed"
+                @pin="handlePin"
+                @image-too-large="handleImageTooLarge"
                 @toggle-select="toggleNoteSelect(note.id)"
                 @tag-select="handleTagSelect"
               />
@@ -217,7 +271,7 @@
           </ul>
 
           <AnimatePresence
-            v-else-if="!tagFilterState.active"
+            v-else-if="!tagFilterState.active && !dateFilterState.active"
             mode="popLayout"
             as="ul"
             class="note-list-items note-list-anim"
@@ -296,6 +350,12 @@
           @deleted="handleTagDeleted"
           @updated="handleTagUpdated"
         />
+
+        <WritingStatsPanel
+          v-show="noteViewMode === 'stats'"
+          :active="activeTab === 'home' && noteViewMode === 'stats'"
+          @open-day="handleStatsOpenDay"
+        />
       </div>
 
       <!-- AI 对话 -->
@@ -373,6 +433,7 @@ import NoteBulkTagMenu from '../components/note/NoteBulkTagMenu.vue'
 import BulkAiTagProgress from '../components/note/BulkAiTagProgress.vue'
 import NoteCard from '../components/note/NoteCard.vue'
 import NoteTagCloud from '../components/note/NoteTagCloud.vue'
+import WritingStatsPanel from '../components/note/WritingStatsPanel.vue'
 import NoteViewSwitcher from '../components/note/NoteViewSwitcher.vue'
 import { isUntaggedTag } from '../constants/noteTag'
 import { invalidateTagList } from '../composables/tagListSync'
@@ -397,6 +458,7 @@ import {
   searchNotes,
 } from '../api/note'
 import { useAssistantStore } from '../stores/assistantStore'
+import { formatDisplayDate, toDateKey } from '../composables/useWritingStats'
 
 const { presets } = useMotionPresets()
 
@@ -469,6 +531,7 @@ const searchState = reactive({
 const isSearchActive = computed(() => searchKeyword.value.length > 0)
 
 const displayedNotes = computed(() => {
+  if (dateFilterState.active) return dateFilteredNotes.value
   if (tagFilterState.active) return tagFilterState.list
   if (isSearchActive.value) return searchState.list
   return assistantStore.visibleNotes
@@ -490,6 +553,9 @@ const selectedNotesList = computed(() => {
     registerSelectedNote(note, byId)
   }
   for (const note of tagFilterState.list) {
+    registerSelectedNote(note, byId)
+  }
+  for (const note of dateFilteredNotes.value) {
     registerSelectedNote(note, byId)
   }
   return ids.map((id) => byId.get(String(id))).filter(Boolean)
@@ -540,6 +606,25 @@ const tagFilterState = reactive({
   hasMore: false,
 })
 let tagFilterToken = 0
+
+const dateFilterState = reactive({
+  active: false,
+  dateKey: '',
+  label: '',
+})
+
+const dateFilteredNotes = computed(() => {
+  if (!dateFilterState.active || !dateFilterState.dateKey) return []
+  const key = dateFilterState.dateKey
+  return assistantStore.notes
+    .filter((note) => toDateKey(note.createdAt) === key)
+    .slice()
+    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+})
+
+const showDateFilterChrome = computed(
+  () => dateFilterState.active && noteViewMode.value !== 'selected',
+)
 
 const inputContextTag = computed(() => {
   if (!tagFilterState.active || !tagFilterState.tagId) return null
@@ -701,11 +786,14 @@ const onNoteViewModeChange = (mode) => {
     noteViewMode.value = noteSelectingActive.value ? 'select' : 'list'
     return
   }
-  if ((mode === 'list' || mode === 'tags') && shouldExitEmptySelecting()) {
+  if ((mode === 'list' || mode === 'tags' || mode === 'stats') && shouldExitEmptySelecting()) {
     exitNoteSelectingSession()
   }
-  if (mode === 'tags' && tagFilterState.active) {
+  if ((mode === 'tags' || mode === 'stats') && tagFilterState.active) {
     clearTagFilter()
+  }
+  if ((mode === 'tags' || mode === 'stats') && dateFilterState.active) {
+    clearDateFilter()
   }
   noteViewMode.value = mode
   if ((mode === 'list' || mode === 'select') && prev === 'tags') {
@@ -1113,6 +1201,12 @@ const appendTagNotes = (list) => {
   tagFilterState.list = [...tagFilterState.list, ...next]
 }
 
+const clearDateFilter = () => {
+  dateFilterState.active = false
+  dateFilterState.dateKey = ''
+  dateFilterState.label = ''
+}
+
 const clearTagFilter = () => {
   tagFilterToken += 1
   tagFilterState.active = false
@@ -1131,8 +1225,20 @@ const clearSearch = () => {
   searchKeyword.value = ''
 }
 
+const handleStatsOpenDay = (dateKey) => {
+  if (!dateKey) return
+  clearTagFilter()
+  clearSearch()
+  dateFilterState.active = true
+  dateFilterState.dateKey = dateKey
+  dateFilterState.label = formatDisplayDate(dateKey)
+  noteViewMode.value = 'list'
+  nextTick(() => scrollNoteListToTop())
+}
+
 const handleTagSelect = async (tag) => {
   noteViewMode.value = 'list'
+  clearDateFilter()
   if (searchKeyword.value) clearSearch()
 
   const tagId = tag?.tagId
