@@ -25,6 +25,7 @@ export function createTiptapExtensions(options = {}) {
     markdownPaste = true,
     enableImage = false,
     enableFragmentIntro = false,
+    fragmentIntroOptions = {},
   } = options
 
   const extensions = [
@@ -78,7 +79,7 @@ export function createTiptapExtensions(options = {}) {
   }
 
   if (enableFragmentIntro) {
-    extensions.push(createFragmentIntroBlockExtension())
+    extensions.push(createFragmentIntroBlockExtension(fragmentIntroOptions))
   }
 
   return extensions

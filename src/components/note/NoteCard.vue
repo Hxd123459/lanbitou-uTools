@@ -110,7 +110,7 @@
         <span v-else-if="isPinnedBottom" class="pin-badge pin-badge-bottom"
           >置底</span
         >
-        <span class="note-time">{{ timeText }}</span>
+        <span class="note-time">{{ metaTimeText }}</span>
       </div>
       <div v-if="!selectable && !note?.isPending" class="meta-right">
       <div class="meta-actions">
@@ -745,6 +745,16 @@ const originalTagId = computed(() => {
   return id != null && id !== '' ? String(id) : null
 })
 const timeText = computed(() => formatTime(props.note?.createdAt))
+const noteCharCount = computed(() => {
+  const text = contentText.value.replace(/\s/g, '')
+  return text.length
+})
+const metaTimeText = computed(() => {
+  const time = timeText.value
+  const count = noteCharCount.value
+  if (!count) return time
+  return `${time} · ${count}字`
+})
 
 const {
   menuOpen: tagMenuOpen,

@@ -101,14 +101,27 @@ export function buildEditorContentFromMarkdown(markdown, editor) {
   }
 }
 
-export function setEditorMarkdownContent(editor, markdown, { emitUpdate = false } = {}) {
+export function setEditorMarkdownContent(
+  editor,
+  markdown,
+  { emitUpdate = false, preserveSelection = false } = {},
+) {
   if (!editor || editor.isDestroyed) return false
   try {
+    const selection = preserveSelection ? editor.state.selection : null
     const payload = buildEditorContentFromMarkdown(markdown, editor)
     editor.commands.setContent(payload.content, {
       contentType: payload.contentType,
       emitUpdate,
     })
+    if (selection) {
+      const maxPos = editor.state.doc.content.size
+      const from = Math.min(selection.from, maxPos)
+      const to = Math.min(selection.to, maxPos)
+      if (from >= 0 && to >= from) {
+        editor.commands.setTextSelection({ from, to })
+      }
+    }
     return true
   } catch (error) {
     console.warn('[烂笔头] markdown 解析失败', error)

@@ -172,6 +172,7 @@ const emit = defineEmits([
   'restore',
   'image-too-large',
   'update:selectedInsertPreset',
+  'cancel-fragment-intro',
 ])
 
 const fragmentNotesModel = computed({
@@ -203,7 +204,15 @@ const editor = useEditor({
   editable: !props.disabled,
   immediatelyRender: false,
   extensions: [
-    ...createTiptapExtensions({ enableImage: true, enableFragmentIntro: true }),
+    ...createTiptapExtensions({
+      enableImage: true,
+      enableFragmentIntro: true,
+      fragmentIntroOptions: {
+        onCancelFragmentIntro: (fragmentIds) => {
+          emit('cancel-fragment-intro', fragmentIds)
+        },
+      },
+    }),
     NodeRange,
     createImagePasteExtension(getImagePasteContext),
   ],
@@ -243,7 +252,10 @@ watch(
     const resolved = resolveAttachmentRefsInMarkdown(value || '')
     const currentResolved = resolveAttachmentRefsInMarkdown(current || '')
     if (resolved === currentResolved) return
-    setEditorMarkdownContent(editor.value, value || '', { emitUpdate: false })
+    setEditorMarkdownContent(editor.value, value || '', {
+      emitUpdate: false,
+      preserveSelection: true,
+    })
   },
 )
 

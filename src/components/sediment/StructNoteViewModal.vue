@@ -158,10 +158,11 @@
             :restoring-id="restoringFragmentId"
             enable-fragment-picker
             :restorable-ids="baselineFragmentIds"
-            :disabled="saving || aiProcessing"
+            :disabled="aiProcessing"
             class="note-view-editor"
             @insert="insertFragment"
             @insert-all="insertAllFragments"
+            @cancel-fragment-intro="handleCancelFragmentIntro"
             @update:selected-insert-preset="selectedInsertPreset = $event"
             @restore="handleRestoreFragment"
             @image-too-large="emit('error', new Error('单张图片不能超过 10MB'))"
@@ -175,7 +176,7 @@
                 maxlength="80"
                 placeholder="请输入标题"
                 spellcheck="false"
-                :disabled="saving || aiProcessing"
+                :disabled="aiProcessing"
               />
               <div class="struct-note-title-divider" aria-hidden="true" />
             </template>
@@ -192,7 +193,7 @@ import { AnimatePresence, motion } from 'motion-v'
 import { getStructNote, updateStructNote, findStructFolderItemByNoteId } from '../../api/structNote'
 import { fetchFolderPathStack, moveStructItem } from '../../api/structFolder'
 import { fetchNotesByIds, restoreArchivedFragment, archiveFragmentNotes } from '../../api/note'
-import { resolveIntroducedFragmentIds, normalizeIntroducedFragmentMethods } from '../../composables/useStructNoteFragments'
+import { resolveIntroducedFragmentIds, normalizeIntroducedFragmentMethods, unmarkIntroducedFragments } from '../../composables/useStructNoteFragments'
 import { useStructNoteFragmentInsert } from '../../composables/useStructNoteFragmentInsert'
 import { useMotionPresets } from '../../composables/useMotionPresets'
 import StructNoteFolderBreadcrumb from './StructNoteFolderBreadcrumb.vue'
@@ -352,6 +353,16 @@ const structNoteId = computed(
   () => props.noteItem?.noteId ?? props.noteItem?.id ?? note.value?.id ?? '',
 )
 
+const handleCancelFragmentIntro = (fragmentIds) => {
+  const next = unmarkIntroducedFragments(
+    insertedFragmentIds.value,
+    introducedFragmentMethods.value,
+    fragmentIds,
+  )
+  insertedFragmentIds.value = next.insertedIds
+  introducedFragmentMethods.value = next.introducedMethods
+}
+
 const handleRestoreFragment = async (fragmentNote) => {
   const fragmentId = fragmentNote?.id
   const noteId = structNoteId.value
@@ -423,6 +434,9 @@ const persistSourceFragments = async (noteId) => {
     .map(String)
   const previousSet = new Set(sourceFragmentIds.value.map(String))
   const newIds = allFragmentIds.filter((id) => !previousSet.has(id))
+  const fragmentsChanged =
+    allFragmentIds.length !== previousSet.size
+    || allFragmentIds.some((id) => !previousSet.has(id))
 
   let archivedIds = []
   if (newIds.length) {
@@ -430,12 +444,14 @@ const persistSourceFragments = async (noteId) => {
   }
 
   sourceFragmentIds.value = allFragmentIds
-  if (allFragmentIds.length) {
-    await loadSourceFragments(allFragmentIds, { preserveInserted: true })
-  } else {
-    localFragmentNotes.value = []
-    baselineFragmentIds.value = []
-    fragmentsMode.value = 'compose'
+  if (fragmentsChanged) {
+    if (allFragmentIds.length) {
+      await loadSourceFragments(allFragmentIds, { preserveInserted: true })
+    } else {
+      localFragmentNotes.value = []
+      baselineFragmentIds.value = []
+      fragmentsMode.value = 'compose'
+    }
   }
 
   if (archivedIds.length) {
@@ -480,8 +496,10 @@ const handleSave = async (isAuto = false) => {
   if (!canSave.value || saving.value || aiProcessing.value) return
   if (!isDirty.value) return
 
-  saving.value = true
-  saveStatus.value = 'saving'
+  if (!isAuto) {
+    saving.value = true
+    saveStatus.value = 'saving'
+  }
   const title = resolveTitleForSave()
   const noteId = props.noteItem.noteId ?? props.noteItem.id
   try {
@@ -519,7 +537,9 @@ const handleSave = async (isAuto = false) => {
       saveStatus.value = 'idle'
     }
   } finally {
-    saving.value = false
+    if (!isAuto) {
+      saving.value = false
+    }
   }
 }
 

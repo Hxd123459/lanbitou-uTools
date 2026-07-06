@@ -72,6 +72,29 @@ export function appendProcessedBlockToContent(
   return trimmed ? `${trimmed}\n\n${markedBlock}` : markedBlock
 }
 
+export function unmarkIntroducedFragments(insertedIds, introducedMethods, fragmentIds) {
+  const ids = (Array.isArray(fragmentIds) ? fragmentIds : String(fragmentIds ?? '').split(','))
+    .map((id) => String(id).trim())
+    .filter(Boolean)
+  if (!ids.length) {
+    return {
+      insertedIds: insertedIds instanceof Set ? new Set(insertedIds) : new Set(insertedIds ?? []),
+      introducedMethods: { ...(introducedMethods ?? {}) },
+    }
+  }
+
+  const idSet = new Set(ids)
+  const currentInserted = insertedIds instanceof Set ? insertedIds : new Set(insertedIds ?? [])
+  const nextInserted = new Set(
+    [...currentInserted].filter((id) => !idSet.has(String(id))),
+  )
+  const nextMethods = { ...(introducedMethods ?? {}) }
+  for (const id of ids) {
+    delete nextMethods[id]
+  }
+  return { insertedIds: nextInserted, introducedMethods: nextMethods }
+}
+
 export function normalizeIntroducedFragmentMethods(methods) {
   if (!methods || typeof methods !== 'object' || Array.isArray(methods)) return {}
   const out = {}

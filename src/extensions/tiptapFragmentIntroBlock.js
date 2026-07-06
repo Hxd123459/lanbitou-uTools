@@ -51,6 +51,12 @@ export const FragmentIntroBlock = Node.create({
 
   isolating: true,
 
+  addOptions() {
+    return {
+      onCancelFragmentIntro: null,
+    }
+  },
+
   addAttributes() {
     return {
       fragmentIds: {
@@ -131,6 +137,13 @@ export const FragmentIntroBlock = Node.create({
   },
 
   addNodeView() {
+    const onCancelFragmentIntro = this.options.onCancelFragmentIntro
+
+    const preventEditorBlur = (event) => {
+      event.preventDefault()
+      event.stopPropagation()
+    }
+
     return ({ node, editor, getPos }) => {
       const dom = document.createElement('div')
       dom.className = 'aw-fragment-intro-block'
@@ -141,11 +154,6 @@ export const FragmentIntroBlock = Node.create({
 
       const label = document.createElement('span')
       label.className = 'aw-fragment-intro-badge-label'
-      label.textContent = buildBadgeLabel(
-        node.attrs.fragmentIds,
-        node.attrs.method,
-        node.attrs.introducedAt,
-      )
 
       const actions = document.createElement('div')
       actions.className = 'aw-fragment-intro-actions'
@@ -154,36 +162,48 @@ export const FragmentIntroBlock = Node.create({
       cancelBtn.type = 'button'
       cancelBtn.className = 'aw-fragment-intro-cancel'
       cancelBtn.textContent = '取消'
-      cancelBtn.addEventListener('mousedown', (event) => {
-        event.preventDefault()
-        event.stopPropagation()
-      })
-      cancelBtn.addEventListener('click', (event) => {
-        event.preventDefault()
-        event.stopPropagation()
-        const pos = typeof getPos === 'function' ? getPos() : null
-        if (typeof pos !== 'number') return
-        editor.commands.removeFragmentIntroBlock(pos)
-      })
-
+ 
       const assimilateBtn = document.createElement('button')
       assimilateBtn.type = 'button'
       assimilateBtn.className = 'aw-fragment-intro-assimilate'
       assimilateBtn.textContent = '融入正文'
-      assimilateBtn.addEventListener('mousedown', (event) => {
-        event.preventDefault()
-        event.stopPropagation()
-      })
-      assimilateBtn.addEventListener('click', (event) => {
-        event.preventDefault()
-        event.stopPropagation()
+
+      const syncBadgeLabel = (currentNode) => {
+        label.textContent = buildBadgeLabel(
+          currentNode.attrs.fragmentIds,
+          currentNode.attrs.method,
+          currentNode.attrs.introducedAt,
+        )
+      }
+
+      const resolveBlockPos = () => {
         const pos = typeof getPos === 'function' ? getPos() : null
+        return typeof pos === 'number' ? pos : null
+      }
+
+      cancelBtn.addEventListener('mousedown', preventEditorBlur)
+      cancelBtn.addEventListener('click', (event) => {
+        preventEditorBlur(event)
+        const pos = resolveBlockPos()
+        if (typeof pos !== 'number') return
+        const fragmentIds = String(node.attrs.fragmentIds ?? '').trim()
+        const removed = editor.commands.removeFragmentIntroBlock(pos)
+        if (removed && fragmentIds) {
+          onCancelFragmentIntro?.(fragmentIds)
+        }
+      })
+
+      assimilateBtn.addEventListener('mousedown', preventEditorBlur)
+      assimilateBtn.addEventListener('click', (event) => {
+        preventEditorBlur(event)
+        const pos = resolveBlockPos()
         if (typeof pos !== 'number') return
         editor.commands.assimilateFragmentIntroBlock(pos)
       })
 
       actions.append(cancelBtn, assimilateBtn)
       badge.append(label, actions)
+      syncBadgeLabel(node)
 
       const contentDOM = document.createElement('div')
       contentDOM.className = 'aw-fragment-intro-content'
@@ -195,11 +215,7 @@ export const FragmentIntroBlock = Node.create({
         contentDOM,
         update: (updatedNode) => {
           if (updatedNode.type.name !== this.name) return false
-          label.textContent = buildBadgeLabel(
-            updatedNode.attrs.fragmentIds,
-            updatedNode.attrs.method,
-            updatedNode.attrs.introducedAt,
-          )
+          syncBadgeLabel(updatedNode)
           return true
         },
       }
@@ -207,6 +223,6 @@ export const FragmentIntroBlock = Node.create({
   },
 })
 
-export function createFragmentIntroBlockExtension() {
-  return FragmentIntroBlock
+export function createFragmentIntroBlockExtension(options = {}) {
+  return FragmentIntroBlock.configure(options)
 }

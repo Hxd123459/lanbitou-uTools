@@ -86,6 +86,7 @@
           :min-height="240"
           @insert="insertFragment"
           @insert-all="insertAllFragments"
+          @cancel-fragment-intro="handleCancelFragmentIntro"
           @update:selected-insert-preset="selectedInsertPreset = $event"
           @image-too-large="emit('error', new Error('单张图片不能超过 10MB'))"
         >
@@ -118,6 +119,7 @@ import { useMotionPresets } from '../../composables/useMotionPresets'
 import { useStructNoteFragmentInsert } from '../../composables/useStructNoteFragmentInsert'
 import {
   getFragmentContent,
+  unmarkIntroducedFragments,
 } from '../../composables/useStructNoteFragments'
 import StructNoteFolderBreadcrumb from './StructNoteFolderBreadcrumb.vue'
 import StructNoteMarkdownEditor from './StructNoteMarkdownEditor.vue'
@@ -246,6 +248,16 @@ const resolveTitleForSave = async () => {
   const mm = `${now.getMonth() + 1}`.padStart(2, '0')
   const dd = `${now.getDate()}`.padStart(2, '0')
   return `未命名长文 ${yyyy}-${mm}-${dd}`
+}
+
+const handleCancelFragmentIntro = (fragmentIds) => {
+  const next = unmarkIntroducedFragments(
+    insertedFragmentIds.value,
+    introducedFragmentMethods.value,
+    fragmentIds,
+  )
+  insertedFragmentIds.value = next.insertedIds
+  introducedFragmentMethods.value = next.introducedMethods
 }
 
 const handleSave = async () => {
