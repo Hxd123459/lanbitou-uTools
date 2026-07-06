@@ -1,0 +1,882 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="description" content="烂笔头 — 灵感碎片随手记，AI 串联沉淀成文。uTools 插件，本地优先。">
+  <meta name="theme-color" content="#fbfaf9">
+  <title>烂笔头 · 好记性不如烂笔头</title>
+  <style>
+    :root {
+      --color-primary: #18181b;
+      --color-secondary-text: #3f3f46;
+      --color-accent: #2563eb;
+      --color-bg: #fbfaf9;
+      --color-surface: #ffffff;
+      --color-text: #09090b;
+      --color-border: #e4e4e7;
+      --radius-md: 12px;
+      --radius-lg: 14px;
+      --btn-radius: 8px;
+      --btn-primary-bg: rgba(24, 24, 27, 0.92);
+      --btn-primary-bg-hover: rgba(24, 24, 27, 1);
+      --btn-primary-fg: #ffffff;
+      --btn-primary-shadow: 0 4px 12px rgba(24, 24, 27, 0.18);
+      --shadow-card: 0 2px 10px rgba(24, 24, 27, 0.06);
+      --shadow-float: 0 8px 30px rgba(24, 24, 27, 0.1);
+      --focus-ring: 0 0 0 2px rgba(37, 99, 235, 0.2);
+      --font-base: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Helvetica Neue", Arial, sans-serif;
+      --font-display: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", var(--font-base);
+      --header-h: 64px;
+      --safe-top: env(safe-area-inset-top, 0px);
+      --safe-bottom: env(safe-area-inset-bottom, 0px);
+      --safe-left: env(safe-area-inset-left, 0px);
+      --safe-right: env(safe-area-inset-right, 0px);
+    }
+
+    *, *::before, *::after { box-sizing: border-box; }
+
+    html {
+      scroll-behavior: smooth;
+      -webkit-text-size-adjust: 100%;
+    }
+
+    body {
+      margin: 0;
+      background: var(--color-bg);
+      color: var(--color-text);
+      font-family: var(--font-base);
+      line-height: 1.5;
+      overflow-x: hidden;
+    }
+
+    img, svg { display: block; max-width: 100%; }
+
+    a { color: inherit; }
+
+    .landing-header {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      height: calc(var(--header-h) + var(--safe-top));
+      padding: var(--safe-top) max(16px, var(--safe-left)) 0 max(16px, var(--safe-right));
+      background: rgba(251, 250, 249, 0.88);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border-bottom: 1px solid transparent;
+    }
+
+    .landing-header.is-scrolled {
+      border-bottom-color: var(--color-border);
+    }
+
+    .brand-area {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      min-width: 0;
+      text-decoration: none;
+    }
+
+    .logo-wrap {
+      flex-shrink: 0;
+      width: 44px;
+      height: 44px;
+      display: grid;
+      place-items: center;
+      border-radius: 10px;
+      background: #fff;
+      border: 1px solid var(--color-border);
+      box-shadow: 0 2px 8px rgba(24, 24, 27, 0.06);
+      overflow: hidden;
+    }
+
+    .logo-wrap img {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      padding: 4px;
+    }
+
+    .logo-fallback {
+      font-size: 22px;
+      line-height: 1;
+    }
+
+    .brand-text { min-width: 0; }
+
+    .brand-title {
+      margin: 0;
+      font-family: var(--font-display);
+      font-size: 18px;
+      font-weight: 600;
+      letter-spacing: 1px;
+      line-height: 1.1;
+      white-space: nowrap;
+    }
+
+    .brand-slogan {
+      margin: 2px 0 0;
+      font-size: 11px;
+      color: var(--color-secondary-text);
+      letter-spacing: 0.5px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .nav-toggle {
+      display: none;
+      width: 44px;
+      height: 44px;
+      padding: 0;
+      border: 1px solid var(--color-border);
+      border-radius: var(--btn-radius);
+      background: var(--color-surface);
+      color: var(--color-text);
+      cursor: pointer;
+      flex-shrink: 0;
+    }
+
+    .nav-toggle svg { margin: auto; }
+
+    .landing-nav {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .landing-nav-link {
+      padding: 8px 12px;
+      min-height: 36px;
+      display: inline-flex;
+      align-items: center;
+      font-size: 13px;
+      color: var(--color-secondary-text);
+      text-decoration: none;
+      border-radius: var(--btn-radius);
+      white-space: nowrap;
+    }
+
+    .landing-nav-link:hover,
+    .landing-nav-link:focus-visible {
+      color: var(--color-text);
+      background: rgba(24, 24, 27, 0.05);
+      outline: none;
+    }
+
+    .landing-nav-link--cta {
+      color: var(--btn-primary-fg);
+      background: var(--btn-primary-bg);
+      box-shadow: var(--btn-primary-shadow);
+    }
+
+    .landing-nav-link--cta:hover,
+    .landing-nav-link--cta:focus-visible {
+      color: var(--btn-primary-fg);
+      background: var(--btn-primary-bg-hover);
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      border: 0;
+      border-radius: var(--btn-radius);
+      font-family: inherit;
+      font-size: 14px;
+      font-weight: 500;
+      letter-spacing: 0.2px;
+      cursor: pointer;
+      text-decoration: none;
+      user-select: none;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    .btn-primary {
+      min-height: 44px;
+      padding: 0 22px;
+      background: var(--btn-primary-bg);
+      color: var(--btn-primary-fg);
+      box-shadow: var(--btn-primary-shadow);
+    }
+
+    .btn-primary:hover { background: var(--btn-primary-bg-hover); }
+    .btn-primary:focus-visible { outline: none; box-shadow: var(--btn-primary-shadow), var(--focus-ring); }
+
+    .btn-ghost {
+      min-height: 44px;
+      padding: 0 18px;
+      border: 1px solid var(--color-border);
+      background: var(--color-surface);
+      color: var(--color-secondary-text);
+    }
+
+    .btn-ghost:hover {
+      border-color: rgba(24, 24, 27, 0.4);
+      background: rgba(24, 24, 27, 0.04);
+      color: var(--color-text);
+    }
+
+    .container {
+      width: min(1080px, 100%);
+      margin: 0 auto;
+      padding-left: max(20px, var(--safe-left));
+      padding-right: max(20px, var(--safe-right));
+    }
+
+    .hero {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 48px;
+      align-items: center;
+      padding: 32px 0 80px;
+    }
+
+    .reveal {
+      opacity: 0;
+      transform: translateY(12px);
+      transition: opacity 0.45s ease, transform 0.45s ease;
+    }
+
+    .reveal.is-visible {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    .hero-badge {
+      display: inline-block;
+      margin: 0 0 16px;
+      padding: 5px 12px;
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--color-accent);
+      background: rgba(37, 99, 235, 0.08);
+      border-radius: 999px;
+    }
+
+    .hero-title {
+      margin: 0 0 16px;
+      font-family: var(--font-display);
+      font-size: clamp(32px, 8vw, 52px);
+      font-weight: 600;
+      line-height: 1.15;
+      letter-spacing: 0.5px;
+    }
+
+    .hero-title-accent { color: var(--color-accent); }
+
+    .hero-desc {
+      margin: 0 0 28px;
+      max-width: 440px;
+      font-size: clamp(15px, 3.8vw, 16px);
+      line-height: 1.65;
+      color: var(--color-secondary-text);
+    }
+
+    .hero-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+
+    .hero-visual {
+      display: flex;
+      justify-content: center;
+    }
+
+    .app-mock {
+      display: flex;
+      width: 100%;
+      max-width: 460px;
+      aspect-ratio: 4 / 3;
+      border-radius: var(--radius-lg);
+      border: 1px solid var(--color-border);
+      background: var(--color-surface);
+      box-shadow: var(--shadow-float);
+      overflow: hidden;
+    }
+
+    .app-mock-sidebar {
+      flex: 0 0 56px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      padding: 10px 6px;
+      background: var(--color-bg);
+      border-right: 1px solid var(--color-border);
+    }
+
+    .mock-brand {
+      width: 32px;
+      height: 32px;
+      margin: 0 auto 6px;
+      border-radius: 8px;
+      background: linear-gradient(135deg, #e4e4e7, #fafafa);
+      border: 1px solid var(--color-border);
+    }
+
+    .mock-nav {
+      height: 24px;
+      border-radius: 6px;
+      background: rgba(24, 24, 27, 0.04);
+    }
+
+    .mock-nav--active { background: rgba(24, 24, 27, 0.1); }
+
+    .app-mock-main {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      padding: 10px;
+      min-width: 0;
+    }
+
+    .mock-toolbar {
+      display: flex;
+      gap: 6px;
+      margin-bottom: 8px;
+    }
+
+    .mock-chip {
+      width: 40px;
+      height: 18px;
+      border-radius: 999px;
+      background: rgba(24, 24, 27, 0.08);
+    }
+
+    .mock-chip--muted { width: 28px; opacity: 0.5; }
+
+    .mock-cards {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      overflow: hidden;
+    }
+
+    .mock-card {
+      padding: 8px;
+      border-radius: var(--radius-md);
+      border: 1px solid var(--color-border);
+      background: var(--color-bg);
+    }
+
+    .mock-line {
+      height: 5px;
+      margin-bottom: 5px;
+      border-radius: 3px;
+      background: rgba(24, 24, 27, 0.08);
+    }
+
+    .mock-line--title {
+      width: 60%;
+      height: 7px;
+      background: rgba(24, 24, 27, 0.14);
+    }
+
+    .mock-line--short { width: 40%; margin-bottom: 6px; }
+
+    .mock-tags { display: flex; gap: 4px; }
+
+    .mock-tag {
+      width: 24px;
+      height: 12px;
+      border-radius: 999px;
+      background: rgba(37, 99, 235, 0.12);
+    }
+
+    .mock-input {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-top: 8px;
+      padding: 7px 9px;
+      border-radius: var(--radius-md);
+      border: 1px solid var(--color-border);
+      background: var(--color-surface);
+      box-shadow: var(--shadow-card);
+    }
+
+    .mock-input-text {
+      font-size: 10px;
+      color: var(--color-secondary-text);
+      opacity: 0.6;
+    }
+
+    .mock-input-btn {
+      width: 20px;
+      height: 20px;
+      border-radius: 6px;
+      background: var(--btn-primary-bg);
+    }
+
+    .section { padding-bottom: 72px; }
+
+    .section-head {
+      margin-bottom: 28px;
+      text-align: center;
+    }
+
+    .section-title {
+      margin: 0 0 8px;
+      font-family: var(--font-display);
+      font-size: clamp(22px, 5vw, 28px);
+      font-weight: 600;
+      letter-spacing: 0.5px;
+    }
+
+    .section-desc {
+      margin: 0;
+      font-size: 15px;
+      color: var(--color-secondary-text);
+    }
+
+    .feature-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 14px;
+    }
+
+    .feature-card {
+      padding: 22px;
+      border-radius: var(--radius-lg);
+      border: 1px solid var(--color-border);
+      background: var(--color-surface);
+      box-shadow: var(--shadow-card);
+    }
+
+    .feature-icon {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 44px;
+      height: 44px;
+      margin-bottom: 14px;
+      border-radius: 10px;
+      color: var(--color-accent);
+      background: rgba(37, 99, 235, 0.08);
+    }
+
+    .feature-title {
+      margin: 0 0 8px;
+      font-size: 16px;
+      font-weight: 600;
+    }
+
+    .feature-desc {
+      margin: 0;
+      font-size: 14px;
+      line-height: 1.6;
+      color: var(--color-secondary-text);
+    }
+
+    .workflow-steps {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 16px;
+      margin: 0;
+      padding: 0;
+      list-style: none;
+    }
+
+    .workflow-step {
+      display: flex;
+      gap: 14px;
+      padding: 22px;
+      border-radius: var(--radius-lg);
+      border: 1px solid var(--color-border);
+      background: var(--color-surface);
+    }
+
+    .workflow-num {
+      flex-shrink: 0;
+      display: grid;
+      place-items: center;
+      width: 36px;
+      height: 36px;
+      font-size: 16px;
+      font-weight: 600;
+      color: var(--color-accent);
+      background: rgba(37, 99, 235, 0.1);
+      border-radius: 10px;
+    }
+
+    .workflow-title {
+      margin: 0 0 6px;
+      font-size: 16px;
+      font-weight: 600;
+    }
+
+    .workflow-desc {
+      margin: 0;
+      font-size: 14px;
+      line-height: 1.6;
+      color: var(--color-secondary-text);
+    }
+
+    .cta-band { padding-bottom: 72px; }
+
+    .cta-inner {
+      max-width: 720px;
+      margin: 0 auto;
+      padding: 40px 24px;
+      text-align: center;
+      border-radius: var(--radius-lg);
+      border: 1px solid var(--color-border);
+      background: linear-gradient(160deg, #ffffff 0%, #f4f4f5 100%);
+      box-shadow: var(--shadow-float);
+    }
+
+    .cta-title {
+      margin: 0 0 10px;
+      font-family: var(--font-display);
+      font-size: clamp(20px, 5vw, 26px);
+      font-weight: 600;
+    }
+
+    .cta-desc {
+      margin: 0 0 24px;
+      font-size: 15px;
+      color: var(--color-secondary-text);
+    }
+
+    .landing-footer {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 12px;
+      padding: 28px max(20px, var(--safe-left)) calc(36px + var(--safe-bottom)) max(20px, var(--safe-right));
+      border-top: 1px solid var(--color-border);
+    }
+
+    .footer-copy {
+      margin: 0;
+      font-size: 12px;
+      color: var(--color-secondary-text);
+      text-align: center;
+    }
+
+    /* Tablet */
+    @media (max-width: 900px) {
+      .hero {
+        grid-template-columns: 1fr;
+        gap: 36px;
+        padding-bottom: 56px;
+      }
+
+      .hero-visual { order: -1; }
+
+      .feature-grid,
+      .workflow-steps {
+        grid-template-columns: repeat(2, 1fr);
+      }
+    }
+
+    /* Mobile */
+    @media (max-width: 640px) {
+      .nav-toggle { display: inline-flex; align-items: center; justify-content: center; }
+
+      .landing-nav {
+        position: fixed;
+        top: calc(var(--header-h) + var(--safe-top));
+        left: 0;
+        right: 0;
+        flex-direction: column;
+        align-items: stretch;
+        gap: 4px;
+        padding: 12px max(16px, var(--safe-left)) 16px max(16px, var(--safe-right));
+        background: rgba(251, 250, 249, 0.96);
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
+        border-bottom: 1px solid var(--color-border);
+        transform: translateY(-110%);
+        opacity: 0;
+        pointer-events: none;
+        transition: transform 0.25s ease, opacity 0.25s ease;
+      }
+
+      .landing-nav.is-open {
+        transform: translateY(0);
+        opacity: 1;
+        pointer-events: auto;
+      }
+
+      .landing-nav-link {
+        justify-content: center;
+        min-height: 44px;
+        font-size: 15px;
+      }
+
+      .brand-slogan { display: none; }
+
+      .hero { padding-top: 12px; }
+
+      .hero-actions {
+        flex-direction: column;
+        align-items: stretch;
+      }
+
+      .hero-actions .btn { width: 100%; }
+
+      .feature-grid,
+      .workflow-steps {
+        grid-template-columns: 1fr;
+      }
+
+      .cta-inner { padding: 32px 20px; }
+    }
+
+    @media (max-width: 380px) {
+      .brand-title { font-size: 16px; }
+      .logo-wrap { width: 40px; height: 40px; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      html { scroll-behavior: auto; }
+      .reveal {
+        opacity: 1;
+        transform: none;
+        transition: none;
+      }
+      .landing-nav { transition: none; }
+    }
+  </style>
+</head>
+<body>
+  <header class="landing-header" id="header">
+    <a href="#" class="brand-area" aria-label="烂笔头首页">
+      <div class="logo-wrap">
+        <img src="./logo.png" alt="" width="44" height="44" onerror="this.replaceWith(Object.assign(document.createElement('span'),{className:'logo-fallback',textContent:'✎'}))">
+      </div>
+      <div class="brand-text">
+        <h1 class="brand-title">烂笔头</h1>
+        <p class="brand-slogan">好记性，不如烂笔头</p>
+      </div>
+    </a>
+
+    <button class="nav-toggle" type="button" aria-label="打开菜单" aria-expanded="false" aria-controls="nav">
+      <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+        <path d="M4 7h16M4 12h16M4 17h16"/>
+      </svg>
+    </button>
+
+    <nav class="landing-nav" id="nav" aria-label="页面导航">
+      <a href="#features" class="landing-nav-link">功能</a>
+      <a href="#workflow" class="landing-nav-link">工作流</a>
+      <a href="#download" class="landing-nav-link landing-nav-link--cta">立即使用</a>
+    </nav>
+  </header>
+
+  <main>
+    <section class="hero container">
+      <div class="hero-content reveal">
+        <p class="hero-badge">uTools 插件 · 本地优先</p>
+        <h2 class="hero-title">灵感碎片，<span class="hero-title-accent">沉淀成文</span></h2>
+        <p class="hero-desc">
+          烂笔头帮你随手记下每一闪念，用 AI 串联碎片、起草长文，
+          让「好记性不如烂笔头」真正落地。
+        </p>
+        <div class="hero-actions">
+          <a href="#download" class="btn btn-primary">立即体验</a>
+          <a href="#features" class="btn btn-ghost">了解更多</a>
+        </div>
+      </div>
+
+      <div class="hero-visual reveal" aria-hidden="true">
+        <div class="app-mock">
+          <div class="app-mock-sidebar">
+            <div class="mock-brand"></div>
+            <div class="mock-nav mock-nav--active"></div>
+            <div class="mock-nav"></div>
+            <div class="mock-nav"></div>
+            <div class="mock-nav"></div>
+          </div>
+          <div class="app-mock-main">
+            <div class="mock-toolbar">
+              <span class="mock-chip"></span>
+              <span class="mock-chip mock-chip--muted"></span>
+            </div>
+            <div class="mock-cards">
+              <div class="mock-card">
+                <div class="mock-line mock-line--title"></div>
+                <div class="mock-line"></div>
+                <div class="mock-line mock-line--short"></div>
+                <div class="mock-tags"><span class="mock-tag"></span><span class="mock-tag"></span></div>
+              </div>
+              <div class="mock-card">
+                <div class="mock-line mock-line--title"></div>
+                <div class="mock-line"></div>
+                <div class="mock-line mock-line--short"></div>
+                <div class="mock-tags"><span class="mock-tag"></span><span class="mock-tag"></span></div>
+              </div>
+              <div class="mock-card">
+                <div class="mock-line mock-line--title"></div>
+                <div class="mock-line"></div>
+                <div class="mock-line mock-line--short"></div>
+                <div class="mock-tags"><span class="mock-tag"></span><span class="mock-tag"></span></div>
+              </div>
+            </div>
+            <div class="mock-input">
+              <span class="mock-input-text">写下此刻的想法…</span>
+              <span class="mock-input-btn"></span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="features" class="section container">
+      <div class="section-head reveal">
+        <h3 class="section-title">为思考者设计</h3>
+        <p class="section-desc">从捕获到沉淀，一条流畅的知识流水线</p>
+      </div>
+      <div class="feature-grid">
+        <article class="feature-card reveal">
+          <div class="feature-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5.5h7v7H4z"/><path d="M15 4h5v5.5L16.5 14H13V8.5L15 4z"/><path d="M8 15.5h7v5.5H8z"/></svg>
+          </div>
+          <h4 class="feature-title">碎片随手记</h4>
+          <p class="feature-desc">底部输入栏快速捕获文字与图片，不打断当前思路，灵感零摩擦入库。</p>
+        </article>
+        <article class="feature-card reveal">
+          <div class="feature-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3c5 0 9 3.6 9 8s-4 8-9 8c-.9 0-1.8-.1-2.6-.3L3 21l1.8-4.2A7.7 7.7 0 0 1 3 11c0-4.4 4-8 9-8z"/><path d="M9.5 11h.01M14.5 11h.01"/></svg>
+          </div>
+          <h4 class="feature-title">问 AI</h4>
+          <p class="feature-desc">基于你的笔记上下文对话，检索、归纳、追问，让 AI 真正读懂你的知识库。</p>
+        </article>
+        <article class="feature-card reveal">
+          <div class="feature-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2 2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+          </div>
+          <h4 class="feature-title">沉淀成文</h4>
+          <p class="feature-desc">将碎片组装为结构化长文，Markdown 编辑、AI 辅助起草，从笔记到文章一站完成。</p>
+        </article>
+        <article class="feature-card reveal">
+          <div class="feature-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+          </div>
+          <h4 class="feature-title">全局搜索</h4>
+          <p class="feature-desc">跨碎片与沉淀全文检索，标签筛选、日期范围，秒级定位任何一条记录。</p>
+        </article>
+        <article class="feature-card reveal">
+          <div class="feature-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/><path d="M3 12c0 1.66 4 3 9 3s9-1.34 9-3"/></svg>
+          </div>
+          <h4 class="feature-title">本地存储</h4>
+          <p class="feature-desc">uTools 插件形态，数据保存在本地，支持备份与恢复，隐私完全可控。</p>
+        </article>
+        <article class="feature-card reveal">
+          <div class="feature-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="5" height="5" rx="1"/><rect x="10" y="3" width="5" height="5" rx="1"/><rect x="17" y="3" width="4" height="5" rx="1"/><rect x="3" y="10" width="5" height="5" rx="1"/><rect x="10" y="10" width="5" height="5" rx="1"/><rect x="17" y="10" width="4" height="5" rx="1"/></svg>
+          </div>
+          <h4 class="feature-title">批量智能</h4>
+          <p class="feature-desc">多选碎片批量打标签、AI 归类，整理大量笔记也能轻松应对。</p>
+        </article>
+      </div>
+    </section>
+
+    <section id="workflow" class="section container">
+      <div class="section-head reveal">
+        <h3 class="section-title">三步，从碎片到文章</h3>
+        <p class="section-desc">不强迫你立刻整理，但随时能把零散想法拼起来</p>
+      </div>
+      <ol class="workflow-steps">
+        <li class="workflow-step reveal">
+          <span class="workflow-num">1</span>
+          <div>
+            <h4 class="workflow-title">随手记</h4>
+            <p class="workflow-desc">在任何场景下唤起 uTools，一句话、一张图，立刻变成碎片入库。</p>
+          </div>
+        </li>
+        <li class="workflow-step reveal">
+          <span class="workflow-num">2</span>
+          <div>
+            <h4 class="workflow-title">问与搜</h4>
+            <p class="workflow-desc">用全局搜索或 AI 对话，从海量碎片里找到关联与脉络。</p>
+          </div>
+        </li>
+        <li class="workflow-step reveal">
+          <span class="workflow-num">3</span>
+          <div>
+            <h4 class="workflow-title">沉淀成文</h4>
+            <p class="workflow-desc">挑选碎片插入沉淀笔记，AI 帮你起草框架，你只需润色定稿。</p>
+          </div>
+        </li>
+      </ol>
+    </section>
+
+    <section id="download" class="cta-band container">
+      <div class="cta-inner reveal">
+        <h3 class="cta-title">好记性，不如烂笔头</h3>
+        <p class="cta-desc">在 uTools 中搜索「烂笔头」即可安装使用</p>
+        <a href="https://u.tools" class="btn btn-primary" target="_blank" rel="noopener noreferrer">前往 uTools</a>
+      </div>
+    </section>
+  </main>
+
+  <footer class="landing-footer">
+    <a href="#" class="brand-area">
+      <div class="logo-wrap">
+        <img src="./logo.png" alt="" width="44" height="44" onerror="this.replaceWith(Object.assign(document.createElement('span'),{className:'logo-fallback',textContent:'✎'}))">
+      </div>
+      <div class="brand-text">
+        <span class="brand-title">烂笔头</span>
+      </div>
+    </a>
+    <p class="footer-copy">© 烂笔头 · 数据存本地，思考归你</p>
+  </footer>
+
+  <script>
+    (function () {
+      var header = document.getElementById('header');
+      var nav = document.getElementById('nav');
+      var toggle = document.querySelector('.nav-toggle');
+
+      function closeNav() {
+        nav.classList.remove('is-open');
+        toggle.setAttribute('aria-expanded', 'false');
+        toggle.setAttribute('aria-label', '打开菜单');
+      }
+
+      toggle.addEventListener('click', function () {
+        var open = nav.classList.toggle('is-open');
+        toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+        toggle.setAttribute('aria-label', open ? '关闭菜单' : '打开菜单');
+      });
+
+      nav.querySelectorAll('a').forEach(function (link) {
+        link.addEventListener('click', closeNav);
+      });
+
+      window.addEventListener('scroll', function () {
+        header.classList.toggle('is-scrolled', window.scrollY > 8);
+      }, { passive: true });
+
+      if ('IntersectionObserver' in window) {
+        var observer = new IntersectionObserver(function (entries) {
+          entries.forEach(function (entry) {
+            if (entry.isIntersecting) {
+              entry.target.classList.add('is-visible');
+              observer.unobserve(entry.target);
+            }
+          });
+        }, { threshold: 0.12, rootMargin: '0px 0px -40px 0px' });
+
+        document.querySelectorAll('.reveal').forEach(function (el) {
+          observer.observe(el);
+        });
+      } else {
+        document.querySelectorAll('.reveal').forEach(function (el) {
+          el.classList.add('is-visible');
+        });
+      }
+    })();
+  </script>
+</body>
+</html>
