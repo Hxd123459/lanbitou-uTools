@@ -1723,6 +1723,16 @@ const handleSubmit = async ({ text, images, tagId, tagName }) => {
     })
   }
 
+  const isListPanelVisible =
+    noteViewMode.value === 'list'
+    || noteViewMode.value === 'select'
+    || noteViewMode.value === 'selected'
+  if (!isListPanelVisible) {
+    noteViewMode.value = 'list'
+    await nextTick()
+    scrollNoteListToTop()
+  }
+
   noteSubmitting.value = true
   uploadProgress.value = 0
   try {

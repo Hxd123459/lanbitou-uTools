@@ -61,8 +61,6 @@
       <article
         class="writing-stats-kpi writing-stats-kpi--streak"
         :class="streakTier ? `is-streak-${streakTier}` : null"
-        title="点击 +1 天预览特效，Shift+点击 重置"
-        @click="onStreakCardClick"
       >
         <div class="writing-stats-streak-head">
           <span class="writing-stats-kpi-label">连续写作</span>
@@ -312,7 +310,6 @@ const tooltip = ref({ visible: false, text: '', x: 0, y: 0 })
 const enterSeed = ref(0)
 const enterAnimationEnabled = ref(true)
 const hasPlayedEnterAnimation = ref(false)
-const streakTestOffset = ref(0)
 
 watch(
   () => props.active,
@@ -337,7 +334,7 @@ const chartClipId = computed(() =>
     : 'writing-stats-chart-clip-static',
 )
 
-const displayStreak = computed(() => currentStreak.value + streakTestOffset.value)
+const displayStreak = computed(() => currentStreak.value)
 
 const streakTier = computed(() => {
   const days = displayStreak.value
@@ -479,14 +476,6 @@ const onHeatmapDayClick = (day) => {
   if (!day.inRange) return
   hideTooltip()
   emit('open-day', day.key)
-}
-
-const onStreakCardClick = (event) => {
-  if (event.shiftKey) {
-    streakTestOffset.value = 0
-    return
-  }
-  streakTestOffset.value += 1
 }
 
 watch(dailyGoal, (value) => {
@@ -701,8 +690,6 @@ watch(dailyGoal, (value) => {
 .writing-stats-kpi--streak {
   position: relative;
   overflow: hidden;
-  cursor: pointer;
-  user-select: none;
 }
 
 .writing-stats-streak-head {
