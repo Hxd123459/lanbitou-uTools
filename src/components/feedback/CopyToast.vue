@@ -5,6 +5,7 @@
       key="copy-toast"
       class="copy-toast"
       :class="type"
+      :style="{ zIndex }"
       :initial="presets.toast.initial"
       :animate="presets.toast.animate"
       :exit="presets.toast.exit"
@@ -70,6 +71,10 @@ defineProps({
   dismissMode: {
     type: String,
     default: 'auto',
+  },
+  zIndex: {
+    type: Number,
+    default: 120,
   },
 })
 

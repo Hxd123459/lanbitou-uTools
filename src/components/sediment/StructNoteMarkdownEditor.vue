@@ -58,6 +58,14 @@
     </div>
     <EditorContent :editor="editor" class="struct-note-md-editor__content tiptap-content" />
   </div>
+
+  <CopyToast
+    :visible="showToast"
+    :text="toastText"
+    :type="toastType"
+    :z-index="250"
+    @close="closeToast"
+  />
 </template>
 
 <script setup>
@@ -70,7 +78,10 @@ import {
 } from '../../utils/attachmentMarkdown'
 import { setEditorMarkdownContent } from '../../utils/fragmentIntroMarkers'
 import { createTiptapExtensions } from '../../composables/useTiptapExtensions'
+import { createImageCopyExtension } from '../../extensions/tiptapImageCopy'
 import { createImagePasteExtension } from '../../extensions/tiptapImagePaste'
+import { useCopyNote } from '../../composables/useCopyNote'
+import CopyToast from '../feedback/CopyToast.vue'
 import {
   mountStructNoteDragHandle,
   unmountStructNoteDragHandle,
@@ -194,9 +205,26 @@ const rootStyle = computed(() => ({
 const dragHandleRef = ref(null)
 let dragHandleApi = null
 
+const {
+  showToast,
+  toastText,
+  toastType,
+  closeToast,
+  openToast,
+} = useCopyNote()
+
 const getImagePasteContext = () => ({
   noteId: props.noteId,
   onImageTooLarge: () => emit('image-too-large'),
+})
+
+const getImageCopyContext = () => ({
+  onCopied: () => {
+    openToast('已复制图片', 'success', { duration: 1600 })
+  },
+  onCopyFailed: () => {
+    openToast('复制失败', 'error', { duration: 1600 })
+  },
 })
 
 const editor = useEditor({
@@ -215,6 +243,7 @@ const editor = useEditor({
     }),
     NodeRange,
     createImagePasteExtension(getImagePasteContext),
+    createImageCopyExtension(getImageCopyContext),
   ],
   editorProps: {
     attributes: {
@@ -330,6 +359,8 @@ onBeforeUnmount(() => {
 .struct-note-md-editor :deep(.struct-note-md-prosemirror) {
   min-height: var(--struct-note-md-min-height);
   outline: none;
+  padding-inline: 10px;
+  box-sizing: border-box;
 }
 
 .struct-note-md-editor.is-disabled :deep(.struct-note-md-prosemirror) {

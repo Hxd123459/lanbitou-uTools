@@ -51,3 +51,8 @@
   pointer-events: none;
   z-index: -1;
 }
+
+.struct-note-md-editor .tiptap-content img.tiptap-image.ProseMirror-selectednode,
+.struct-note-md-editor .tiptap-content img.tiptap-image.ProseMirror-selectednoderange {
+  box-shadow: 0 0 14px rgba(24, 24, 27, 0.58);
+}
