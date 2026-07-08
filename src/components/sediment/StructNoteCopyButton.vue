@@ -3,7 +3,7 @@
     <motion.button
       type="button"
       class="btn btn-icon-text struct-note-copy-btn"
-      title="复制 Markdown（含图片）"
+      title="复制正文（图文，可粘贴到其他平台）"
       :disabled="disabled || !canCopy"
       :while-hover="disabled || !canCopy ? undefined : presets.button.hover"
       :while-tap="disabled || !canCopy ? undefined : presets.button.tap"

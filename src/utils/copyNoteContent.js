@@ -4,6 +4,7 @@ import { resolveResourceUrl } from '../api/http'
 import {
   blobToDataUrl,
   blobToEmbeddableDataUrl,
+  blobToClipboardPng,
   compressImageBlob,
   MAX_CLIPBOARD_MD_BYTES,
   utf8ByteLength,
@@ -78,6 +79,64 @@ async function fetchImageBlob(url) {
   return res.blob()
 }
 
+/** Windows / Office 兼容的 CF_HTML 格式 */
+function wrapCfHtml(fragment) {
+  const body =
+    '<!DOCTYPE html><html><head><meta charset="utf-8"></head><body>' +
+    '<!--StartFragment-->' +
+    fragment +
+    '<!--EndFragment-->' +
+    '</body></html>'
+
+  const encoder = new TextEncoder()
+  const byteLen = (str) => encoder.encode(str).length
+  const pad = (n) => String(n).padStart(10, '0')
+
+  const startHtmlPos = body.indexOf('<html>')
+  const endHtmlPos = body.length
+  const startFragPos = body.indexOf('<!--StartFragment-->') + '<!--StartFragment-->'.length
+  const endFragPos = body.indexOf('<!--EndFragment-->')
+
+  let header = ''
+  for (let i = 0; i < 4; i += 1) {
+    const startHtml = byteLen(header) + byteLen(body.slice(0, startHtmlPos))
+    const endHtml = byteLen(header) + byteLen(body.slice(0, endHtmlPos))
+    const startFragment = byteLen(header) + byteLen(body.slice(0, startFragPos))
+    const endFragment = byteLen(header) + byteLen(body.slice(0, endFragPos))
+    header =
+      `Version:0.9\r\nStartHTML:${pad(startHtml)}\r\nEndHTML:${pad(endHtml)}` +
+      `\r\nStartFragment:${pad(startFragment)}\r\nEndFragment:${pad(endFragment)}\r\n`
+  }
+
+  return header + body
+}
+
+async function writeMultiFormatClipboard({ plain, htmlFragment, imageBlob }) {
+  if (!navigator.clipboard?.write || !window.ClipboardItem) {
+    if (plain) {
+      await writeTextToClipboard(plain)
+      return
+    }
+    throw new Error('clipboard unsupported')
+  }
+
+  const payload = {}
+  if (plain) {
+    payload['text/plain'] = new Blob([plain], { type: 'text/plain' })
+  }
+  if (htmlFragment) {
+    payload['text/html'] = new Blob([wrapCfHtml(htmlFragment)], { type: 'text/html' })
+  }
+  if (imageBlob) {
+    const pngBlob = await blobToClipboardPng(imageBlob)
+    payload['image/png'] = pngBlob
+  }
+
+  if (!Object.keys(payload).length) throw new Error('empty clipboard payload')
+
+  await navigator.clipboard.write([new ClipboardItem(payload)])
+}
+
 export async function copyNotePlainText(note) {
   const plain = getNotePlainText(note)
   if (!plain) throw new Error('empty')
@@ -113,26 +172,29 @@ export async function copyNoteWithImages(note) {
     htmlParts.push(`<div>${escapeHtml(plain).replace(/\n/g, '<br>')}</div>`)
   }
   imageDataUrls.forEach((dataUrl) => {
-    htmlParts.push(`<img src="${dataUrl}" />`)
+    htmlParts.push(`<p><img src="${dataUrl}" alt="图片" /></p>`)
   })
-  const html = htmlParts.join('')
+  const htmlFragment = htmlParts.join('')
 
   const plainFallback =
     plain ||
     imageDataUrls.map((_, index) => `[图片${index + 1}]`).join('\n')
 
-  if (navigator.clipboard?.write && window.ClipboardItem) {
-    await navigator.clipboard.write([
-      new ClipboardItem({
-        'text/plain': new Blob([plainFallback], { type: 'text/plain' }),
-        'text/html': new Blob([html], { type: 'text/html' }),
-      }),
-    ])
-  } else if (plain) {
-    await writeTextToClipboard(plain)
-  } else {
-    throw new Error('clipboard unsupported')
+  let imageBlob = null
+  if (!plain && imageDataUrls.length === 1) {
+    try {
+      const blob = await fetchImageBlob(images.find((img) => img?.url)?.url)
+      imageBlob = blob
+    } catch {
+      // html/plain fallback below
+    }
   }
+
+  await writeMultiFormatClipboard({
+    plain: plainFallback,
+    htmlFragment,
+    imageBlob,
+  })
 
   return { mode: 'rich', imageCount: imageDataUrls.length }
 }
@@ -148,20 +210,46 @@ const MD_IMAGE_RE = /!\[([^\]]*)\]\(([^)]+)\)/g
 async function resolveMarkdownExportImage(src) {
   const trimmed = String(src ?? '').trim()
   if (!trimmed) {
-    return { url: '', htmlSrc: '', embedded: false, skipped: false }
+    return { url: '', htmlSrc: '', embedded: false, skipped: false, blob: null, mime: '' }
   }
 
   if (trimmed.startsWith('data:')) {
-    return { url: trimmed, htmlSrc: trimmed, embedded: true, skipped: false }
+    try {
+      const blob = await fetchImageBlob(trimmed)
+      const clipboardBlob = await compressImageBlob(blob)
+      return {
+        url: trimmed,
+        htmlSrc: trimmed,
+        embedded: true,
+        skipped: false,
+        blob: clipboardBlob,
+        mime: clipboardBlob.type || blob.type || 'image/png',
+      }
+    } catch {
+      return { url: trimmed, htmlSrc: trimmed, embedded: true, skipped: false, blob: null, mime: '' }
+    }
   }
 
   if (/^https?:\/\//i.test(trimmed)) {
-    return { url: trimmed, htmlSrc: trimmed, embedded: true, skipped: false }
+    try {
+      const blob = await fetchImageBlob(trimmed)
+      const clipboardBlob = await compressImageBlob(blob)
+      return {
+        url: trimmed,
+        htmlSrc: trimmed,
+        embedded: true,
+        skipped: false,
+        blob: clipboardBlob,
+        mime: clipboardBlob.type || blob.type || 'image/png',
+      }
+    } catch {
+      return { url: trimmed, htmlSrc: trimmed, embedded: true, skipped: false, blob: null, mime: '' }
+    }
   }
 
   if (trimmed.startsWith('/')) {
     const publicUrl = resolveResourceUrl(trimmed)
-    return { url: publicUrl, htmlSrc: publicUrl, embedded: true, skipped: false }
+    return { url: publicUrl, htmlSrc: publicUrl, embedded: true, skipped: false, blob: null, mime: '' }
   }
 
   let blobUrl = trimmed
@@ -169,36 +257,58 @@ async function resolveMarkdownExportImage(src) {
     const attachmentId = decodeURIComponent(trimmed.slice(LB_ATT_SCHEME.length))
     blobUrl = getAttachmentBlobUrl(attachmentId)
     if (!blobUrl) {
-      return { url: '', htmlSrc: '', embedded: false, skipped: true }
+      return { url: '', htmlSrc: '', embedded: false, skipped: true, blob: null, mime: '' }
     }
   }
 
   if (!trimmed.startsWith('blob:') && !trimmed.startsWith(LB_ATT_SCHEME)) {
-    return { url: trimmed, htmlSrc: trimmed, embedded: false, skipped: false }
+    return { url: trimmed, htmlSrc: trimmed, embedded: false, skipped: false, blob: null, mime: '' }
   }
 
   try {
     const blob = await fetchImageBlob(blobUrl)
     const dataUrl = await blobToEmbeddableDataUrl(blob)
+    const clipboardBlob = await compressImageBlob(blob)
+    const mime = clipboardBlob.type || blob.type || 'image/png'
+
     if (dataUrl) {
-      return { url: dataUrl, htmlSrc: dataUrl, embedded: true, skipped: false }
+      return {
+        url: dataUrl,
+        htmlSrc: dataUrl,
+        embedded: true,
+        skipped: false,
+        blob: clipboardBlob,
+        mime,
+      }
     }
 
-    const compressed = await compressImageBlob(blob)
-    const htmlDataUrl = await blobToDataUrl(compressed)
-    return { url: '', htmlSrc: htmlDataUrl, embedded: false, skipped: true }
+    const htmlDataUrl = await blobToDataUrl(clipboardBlob)
+    return {
+      url: '',
+      htmlSrc: htmlDataUrl,
+      embedded: false,
+      skipped: true,
+      blob: clipboardBlob,
+      mime,
+    }
   } catch {
-    return { url: '', htmlSrc: '', embedded: false, skipped: true }
+    return { url: '', htmlSrc: '', embedded: false, skipped: true, blob: null, mime: '' }
   }
 }
 
 function buildExportMarkdown(text, replacements) {
-  let result = text
-  for (const [src, resolved] of replacements) {
-    const nextUrl = resolved.url ?? ''
-    result = result.split(`](${src})`).join(`](${nextUrl})`)
-  }
-  return result
+  return String(text ?? '').replace(MD_IMAGE_RE, (match, alt, src) => {
+    const resolved = replacements.get(src)
+    if (!resolved) return match
+
+    const url =
+      resolved.url ||
+      (resolved.htmlSrc?.startsWith('https://') ? resolved.htmlSrc : '')
+
+    if (url) return `![${alt}](${url})`
+    if (resolved.htmlSrc) return `![${alt}](${resolved.htmlSrc})`
+    return alt ? `[${alt}]` : '[图片]'
+  })
 }
 
 function buildExportHtml(text, replacements) {
@@ -229,23 +339,31 @@ function buildExportHtml(text, replacements) {
   return parts.join('')
 }
 
-async function writeMarkdownExportToClipboard(markdown, html) {
+function isImageOnlyMarkdown(text, matches) {
+  if (matches.length !== 1) return false
+  const withoutImage = text.replace(MD_IMAGE_RE, '').trim()
+  return !withoutImage
+}
+
+function pickSingleImageBlob(matches, replacements) {
+  if (matches.length !== 1) return null
+  const src = matches[0][2]
+  const resolved = replacements.get(src)
+  if (!resolved?.blob) return null
+  return { blob: resolved.blob, mime: resolved.mime || 'image/png' }
+}
+
+async function writeMarkdownExportToClipboard({ markdown, htmlFragment, imageBlob }) {
   const mdBytes = utf8ByteLength(markdown)
   if (mdBytes > MAX_CLIPBOARD_MD_BYTES) {
     throw new Error('clipboard too large')
   }
 
-  if (html && navigator.clipboard?.write && window.ClipboardItem) {
-    await navigator.clipboard.write([
-      new ClipboardItem({
-        'text/plain': new Blob([markdown], { type: 'text/plain' }),
-        'text/html': new Blob([html], { type: 'text/html' }),
-      }),
-    ])
-    return
-  }
-
-  await writeTextToClipboard(markdown)
+  await writeMultiFormatClipboard({
+    plain: markdown,
+    htmlFragment,
+    imageBlob,
+  })
 }
 
 export async function copyMarkdownWithImages(markdown) {
@@ -271,11 +389,13 @@ export async function copyMarkdownWithImages(markdown) {
   let skippedCount = 0
 
   for (const resolved of srcReplacements.values()) {
-    if (resolved.embedded && resolved.url) imageCount += 1
+    if ((resolved.embedded && resolved.url) || resolved.htmlSrc) imageCount += 1
     if (resolved.skipped) skippedCount += 1
   }
 
-  const html = buildExportHtml(text, srcReplacements)
+  const htmlFragment = buildExportHtml(text, srcReplacements)
+  const imageOnly = isImageOnlyMarkdown(text, matches)
+  const singleImage = imageOnly ? pickSingleImageBlob(matches, srcReplacements) : null
 
   if (utf8ByteLength(result) > MAX_CLIPBOARD_MD_BYTES) {
     for (const [src, resolved] of srcReplacements) {
@@ -284,10 +404,21 @@ export async function copyMarkdownWithImages(markdown) {
       }
     }
     result = buildExportMarkdown(text, srcReplacements)
-    imageCount = [...srcReplacements.values()].filter((r) => r.embedded && r.url).length
+    imageCount = [...srcReplacements.values()].filter((r) => r.htmlSrc).length
     skippedCount = [...srcReplacements.values()].filter((r) => r.skipped || !r.url).length
   }
 
-  await writeMarkdownExportToClipboard(result, html)
-  return { mode: 'markdown-export', imageCount, skippedCount }
+  await writeMarkdownExportToClipboard({
+    markdown: result,
+    htmlFragment,
+    imageBlob: singleImage?.blob ?? null,
+  })
+
+  return {
+    mode: 'markdown-export',
+    imageCount,
+    skippedCount,
+    imageOnly,
+    hasBinaryImage: Boolean(singleImage?.blob),
+  }
 }

@@ -59,6 +59,27 @@ function canvasToBlob(canvas, type, quality) {
   })
 }
 
+/** 剪贴板 image/* 写入通常仅支持 PNG，统一转换 */
+export async function blobToClipboardPng(blob) {
+  if (!blob?.type?.startsWith('image/')) return blob
+  if (blob.type === 'image/png') return blob
+
+  const bitmap = await createImageBitmap(blob)
+  const canvas = document.createElement('canvas')
+  canvas.width = bitmap.width
+  canvas.height = bitmap.height
+  const ctx = canvas.getContext('2d')
+  if (!ctx) {
+    bitmap.close?.()
+    return blob
+  }
+  ctx.drawImage(bitmap, 0, 0)
+  bitmap.close?.()
+
+  const png = await canvasToBlob(canvas, 'image/png')
+  return png || blob
+}
+
 export async function blobToDataUrl(blob) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader()
