@@ -73,6 +73,14 @@ export const STRUCT_NOTE_EDITOR_COMMANDS = [
     icon: slashMenuIcons.code,
     run: (chain) => chain.setCodeBlock(),
   },
+  {
+    id: 'attachment',
+    label: '附件',
+    keywords: ['附件', 'file', 'attachment', 'upload', '文件'],
+    icon: slashMenuIcons.attachment,
+    pickAttachment: true,
+    run: (chain) => chain,
+  },
 ]
 
 export function runStructNoteEditorCommand(editor, command) {

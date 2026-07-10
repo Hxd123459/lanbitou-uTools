@@ -97,7 +97,7 @@
               class="struct-note-title-input"
               type="text"
               maxlength="80"
-              placeholder="标题（可留空，保存时自动生成）"
+              placeholder="标题）"
               spellcheck="false"
               :disabled="saving || aiProcessing"
               @input="titleTouched = true"

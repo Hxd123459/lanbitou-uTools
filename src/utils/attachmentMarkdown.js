@@ -65,14 +65,20 @@ function resolveAttachmentRef(ref) {
 }
 
 const IMAGE_MARKDOWN_RE = /!\[([^\]]*)\]\((lb-att:\/\/[^)]+)\)/g
+const FILE_LINK_MARKDOWN_RE = /(?<!!)\[([^\]]*)\]\((lb-att:\/\/[^)]+)\)/g
 
 export function resolveAttachmentRefsInMarkdown(markdown) {
   const text = String(markdown ?? '')
   if (!text.includes(LB_ATT_SCHEME)) return text
-  return text.replace(IMAGE_MARKDOWN_RE, (match, alt, ref) => {
-    const resolved = resolveAttachmentRef(ref)
-    return `![${alt}](${resolved})`
+  let resolved = text.replace(IMAGE_MARKDOWN_RE, (match, alt, ref) => {
+    const next = resolveAttachmentRef(ref)
+    return `![${alt}](${next})`
   })
+  resolved = resolved.replace(FILE_LINK_MARKDOWN_RE, (match, label, ref) => {
+    const next = resolveAttachmentRef(ref)
+    return `[${label}](${next})`
+  })
+  return resolved
 }
 
 export function persistAttachmentRefsInMarkdown(markdown) {
@@ -116,7 +122,7 @@ export function buildFragmentImageMarkdown(note) {
 
   return images
     .map((img, idx) => {
-      const label = `图片${idx + 1}`
+      const label = img?.name || img?.fileName || `图片${idx + 1}`
       if (noteId && img?.id && isUtoolsMode()) {
         return `![${label}](${toAttachmentMarkdownRef(noteId, img.id)})`
       }
@@ -125,4 +131,29 @@ export function buildFragmentImageMarkdown(note) {
     })
     .filter(Boolean)
     .join('\n\n')
+}
+
+export function buildFragmentFileMarkdown(note) {
+  const attachments = Array.isArray(note?.attachments) ? note.attachments : []
+  const files = attachments.filter((item) => item?.kind === 'file')
+  const noteId = note?.id
+  if (!files.length) return ''
+
+  return files
+    .map((file, idx) => {
+      const label = file?.name || file?.fileName || `附件${idx + 1}`
+      if (noteId && file?.id && isUtoolsMode()) {
+        return `[${label}](${toAttachmentMarkdownRef(noteId, file.id)})`
+      }
+      const url = file?.url || ''
+      return url ? `[${label}](${url})` : ''
+    })
+    .filter(Boolean)
+    .join('\n\n')
+}
+
+export function buildFragmentAttachmentMarkdown(note) {
+  const imagesMd = buildFragmentImageMarkdown(note)
+  const filesMd = buildFragmentFileMarkdown(note)
+  return [imagesMd, filesMd].filter(Boolean).join('\n\n')
 }

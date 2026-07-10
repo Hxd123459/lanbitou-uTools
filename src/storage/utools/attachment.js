@@ -1,3 +1,4 @@
+import { isImageMimeType } from '../../constants/uploadLimits'
 import { ATTACHMENT_PREFIX } from './constants'
 import { dbGetAttachment, dbGetAttachmentType, dbPostAttachment, dbRemove } from './dbClient'
 import { createId, detectMimeType, fileToUint8Array } from './utils'
@@ -53,6 +54,7 @@ export async function saveImageFiles(noteId, files = [], { onProgress } = {}) {
       id: imageId,
       attachmentId,
       mimeType,
+      fileName: file.name || `附件${index + 1}`,
       sortOrder: index,
     })
     if (typeof onProgress === 'function') {
@@ -78,10 +80,15 @@ export function imagesToBlocks(noteId, images = []) {
   return (images || [])
     .slice()
     .sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0))
-    .map((img) => ({
-      id: img.id,
-      type: 'image',
-      fileUrl: getAttachmentBlobUrl(img.attachmentId || buildAttachmentId(noteId, img.id)),
-      sortOrder: img.sortOrder ?? 0,
-    }))
+    .map((img) => {
+      const mimeType = img.mimeType || 'application/octet-stream'
+      return {
+        id: img.id,
+        type: isImageMimeType(mimeType) ? 'image' : 'file',
+        fileName: img.fileName || '',
+        mimeType,
+        fileUrl: getAttachmentBlobUrl(img.attachmentId || buildAttachmentId(noteId, img.id)),
+        sortOrder: img.sortOrder ?? 0,
+      }
+    })
 }

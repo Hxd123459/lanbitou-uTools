@@ -305,75 +305,28 @@
         @keyup="onEditorCaretChange"
       />
 
-      <div v-if="draftImageItems.length || canAddMoreImages" class="thumb-strip">
-        <motion.div
-          v-for="(item, idx) in draftImageItems"
-          :key="item.key"
-          class="thumb"
-          :initial="presets.thumbPop.initial"
-          :animate="presets.thumbPop.animate"
-          :transition="presets.thumbPop.transition"
-        >
-          <img
-            :src="item.previewUrl || item.url"
-            alt="预览"
-            draggable="false"
-          />
-          <motion.button
-            type="button"
-            class="thumb-remove"
-            :disabled="saving"
-            aria-label="移除图片"
-            :while-hover="presets.button.hover"
-            :while-tap="presets.button.tap"
-            :transition="presets.button.transition"
-            @click="removeDraftImage(idx)"
-          >
-            <svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true">
-              <path
-                d="M6 6l12 12M18 6L6 18"
-                stroke="currentColor"
-                stroke-width="2.4"
-                stroke-linecap="round"
-                fill="none"
-              />
-            </svg>
-          </motion.button>
-        </motion.div>
-
-        <motion.div
-          v-if="canAddMoreImages"
-          :initial="presets.thumbPop.initial"
-          :animate="presets.thumbPop.animate"
-          :transition="presets.thumbPop.transition"
-        >
-          <AppButton
-            class="btn btn-dashed-tile thumb-add"
-            :disabled="saving"
-            aria-label="添加图片"
-            title="继续添加图片"
-            @click="openEditFilePicker"
-          >
-            <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
-              <path
-                d="M12 5v14M5 12h14"
-                stroke="currentColor"
-                stroke-width="1.8"
-                stroke-linecap="round"
-                fill="none"
-              />
-            </svg>
-          </AppButton>
-        </motion.div>
-      </div>
+      <AttachmentStrip
+        v-if="editStripItems.length"
+        :items="editStripItems"
+        :disabled="saving"
+        class="editor-attachment-strip"
+        @remove="removeDraftAttachment"
+      />
 
       <input
-        ref="editFileInputRef"
+        ref="editImageInputRef"
         type="file"
         accept="image/*"
         multiple
         class="hidden-file-input"
-        @change="onPickImages"
+        @change="onPickEditImages"
+      />
+      <input
+        ref="editFileInputRef"
+        type="file"
+        multiple
+        class="hidden-file-input"
+        @change="onPickEditFiles"
       />
 
       <div class="editor-bar">
@@ -414,14 +367,10 @@
 
           <AppButton
             class="btn btn-icon"
-            :disabled="saving || draftImageItems.length >= MAX_IMAGES"
-            :title="
-              draftImageItems.length >= MAX_IMAGES
-                ? `最多 ${MAX_IMAGES} 张`
-                : '从本地选择图片'
-            "
+            :disabled="saving || !canAddEditImage"
+            :title="canAddEditImage ? '从本地选择图片' : `最多 ${MAX_ATTACHMENTS} 个附件`"
             aria-label="选择本地图片"
-            @click="openEditFilePicker"
+            @click="openEditImagePicker"
           >
             <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
               <rect
@@ -445,13 +394,31 @@
               />
             </svg>
           </AppButton>
-          <span
-            v-if="draftImageItems.length"
-            class="counter"
-            :class="{ 'counter-full': draftImageItems.length >= MAX_IMAGES }"
+          <AppButton
+            class="btn btn-icon"
+            :disabled="saving || !canAddEditFile"
+            :title="canAddEditFile ? '从本地选择附件' : `最多 ${MAX_ATTACHMENTS} 个附件`"
+            aria-label="选择本地附件"
+            @click="openEditFilePicker"
           >
-            {{ draftImageItems.length }}<span class="counter-divider">/</span
-            >{{ MAX_IMAGES }}
+            <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+              <path
+                d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"
+                stroke="currentColor"
+                stroke-width="1.8"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                fill="none"
+              />
+            </svg>
+          </AppButton>
+          <span
+            v-if="draftAttachmentCount"
+            class="counter"
+            :class="{ 'counter-full': draftAttachmentCount >= MAX_ATTACHMENTS }"
+          >
+            {{ draftAttachmentCount }}<span class="counter-divider">/</span
+            >{{ MAX_ATTACHMENTS }}
           </span>
         </div>
         <div class="editor-bar-right">
@@ -489,7 +456,7 @@
           @updated="scheduleHighlight"
         />
         <p
-          v-else-if="!images.length"
+          v-else-if="!hasVisibleContent"
           class="note-text-fallback"
         >
           {{ '（暂无内容）' }}
@@ -497,6 +464,11 @@
       </div>
 
       <NoteImageGallery v-if="images.length" :images="images" />
+      <NoteFileList
+        v-if="fileAttachments.length"
+        :attachments="fileAttachments"
+        :compact="compact"
+      />
     </template>
     </div>
 
@@ -612,7 +584,8 @@ import {
   watch,
 } from 'vue'
 import { AnimatePresence, motion } from 'motion-v'
-import { isImageFileSizeAllowed } from '../../constants/uploadLimits'
+import { MAX_ATTACHMENTS } from '../../constants/uploadLimits'
+import { useAttachmentDraft } from '../../composables/useAttachmentDraft'
 import { useMotionPresets } from '../../composables/useMotionPresets'
 import { useTagHashPicker } from '../../composables/useTagHashPicker'
 import { markClipboardImageHandledByPaste } from '../../composables/useUtoolsClipboardEnter'
@@ -620,8 +593,12 @@ import {
   extractClipboardImageFiles,
   insertTextAtTextareaCursor,
 } from '../../utils/tiptapImageInsert'
+import { extractClipboardAttachmentFiles } from '../../utils/tiptapAttachmentInsert'
+import { getAttachmentKind } from '../../utils/attachmentDisplay'
 import { useAssistantStore } from '../../stores/assistantStore'
 import AppButton from '../motion/AppButton.vue'
+import AttachmentStrip from './AttachmentStrip.vue'
+import NoteFileList from './NoteFileList.vue'
 import '../../assets/styles/tiptap-slash-menu.css'
 import TiptapPreview from '../common/TiptapPreview.vue'
 import NoteImageGallery from './NoteImageGallery.vue'
@@ -696,21 +673,33 @@ const emit = defineEmits([
   'copy-failed',
   'pin',
   'image-too-large',
+  'file-too-large',
   'toggle-select',
   'tag-select',
 ])
 
 const assistantStore = useAssistantStore()
 
-const MAX_IMAGES = 20
 const EDITOR_MIN_HEIGHT = 60
 const EDITOR_MAX_HEIGHT = 480
 
 const draftContent = ref('')
 const selectedTag = ref(null)
-const draftImageItems = ref([])
+const {
+  items: draftAttachmentItems,
+  stripItems: buildEditStripItems,
+  remaining: remainingDraftAttachmentSlots,
+  appendFiles: appendDraftAttachmentFiles,
+  removeItem: removeDraftAttachmentItem,
+  resetItems: resetDraftAttachments,
+  cloneFromNoteAttachments,
+  getNewFiles: getDraftNewFiles,
+  getRetainedIds: getDraftRetainedIds,
+  payloadChanged: draftAttachmentsChanged,
+} = useAttachmentDraft({ maxCount: MAX_ATTACHMENTS })
 const saving = ref(false)
 const editorRef = ref(null)
+const editImageInputRef = ref(null)
 const editFileInputRef = ref(null)
 const contentRootRef = ref(null)
 const isMac = ref(false)
@@ -722,7 +711,7 @@ let lastListScrollTop = 0
 let selectClickTimer = null
 
 const CARD_INTERACTIVE_SELECTOR =
-  'a, button, input, textarea, label, .thumb-strip, .gallery, .tile, .note-select-control, .note-tag, .lightbox, [data-note-copy-menu]'
+  'a, button, input, textarea, label, .attachment-strip, .editor-attachment-strip, .gallery, .file-list, .tile, .note-select-control, .note-tag, .lightbox, [data-note-copy-menu]'
 
 const HIGHLIGHT_CLASS = 'note-highlight'
 const HIGHLIGHT_SKIP_SELECTOR = 'pre, code, .hljs'
@@ -736,8 +725,20 @@ const shortcutLabel = computed(() => (isMac.value ? '⌘' : 'Ctrl'))
 const contentText = computed(
   () => props.note?.markdownContent || props.note?.text || '',
 )
+const attachments = computed(() => {
+  if (Array.isArray(props.note?.attachments) && props.note.attachments.length) {
+    return props.note.attachments
+  }
+  return Array.isArray(props.note?.images) ? props.note.images : []
+})
 const images = computed(() =>
-  Array.isArray(props.note?.images) ? props.note.images : [],
+  attachments.value.filter((item) => getAttachmentKind(item) === 'image'),
+)
+const fileAttachments = computed(() =>
+  attachments.value.filter((item) => getAttachmentKind(item) === 'file'),
+)
+const hasVisibleContent = computed(
+  () => !!contentText.value || images.value.length > 0 || fileAttachments.value.length > 0,
 )
 const titleText = computed(() => props.note?.title || '')
 const originalTagId = computed(() => {
@@ -848,27 +849,27 @@ const recallTransition = (delay = 0) => ({
   ease: 'easeInOut',
   delay,
 })
-const originalOrderedImageIds = computed(() =>
-  (Array.isArray(props.note?.images) ? props.note.images : [])
-    .map((img) => img.id)
-    .filter((id) => id != null),
+const originalOrderedAttachmentIds = computed(() =>
+  attachments.value.map((item) => item.id).filter((id) => id != null),
 )
 
-const imagesPayloadChanged = computed(() => {
-  const draftExisting = draftImageItems.value
-    .map((i) => i.existingId)
-    .filter((id) => id != null)
-  const orig = originalOrderedImageIds.value
-  if (draftExisting.length !== orig.length) return true
-  for (let i = 0; i < orig.length; i++) {
-    if (draftExisting[i] !== orig[i]) return true
-  }
-  return draftImageItems.value.some((i) => i.file)
-})
-
-const canAddMoreImages = computed(
-  () => !saving.value && draftImageItems.value.length < MAX_IMAGES,
+const imagesPayloadChanged = computed(() =>
+  draftAttachmentsChanged(originalOrderedAttachmentIds.value),
 )
+
+const editStripItems = computed(() => buildEditStripItems())
+const draftAttachmentCount = computed(() => draftAttachmentItems.value.length)
+const canAddEditImage = computed(
+  () => !saving.value && remainingDraftAttachmentSlots() > 0,
+)
+const canAddEditFile = computed(
+  () => !saving.value && remainingDraftAttachmentSlots() > 0,
+)
+
+const handleDraftAppendResult = (result) => {
+  if (result.imageTooLarge) emit('image-too-large')
+  if (result.fileTooLarge) emit('file-too-large')
+}
 
 const tagChanged = computed(() => {
   const draftId = selectedTag.value?.tagId ?? null
@@ -886,27 +887,10 @@ const hasChanges = computed(
 
 const hasSavableContent = computed(
   () =>
-    draftContent.value.trim().length > 0 || draftImageItems.value.length > 0,
+    draftContent.value.trim().length > 0 || draftAttachmentCount.value > 0,
 )
 
 const canSave = computed(() => hasChanges.value && hasSavableContent.value)
-
-function revokeDraftNewUrls() {
-  draftImageItems.value.forEach((item) => {
-    if (item.previewUrl) URL.revokeObjectURL(item.previewUrl)
-  })
-}
-
-function cloneImagesForDraft() {
-  const list = Array.isArray(props.note?.images) ? props.note.images : []
-  return list.map((img, idx) => ({
-    key: `ex_${img.id ?? `n${idx}`}`,
-    existingId: img.id ?? null,
-    url: img.url || '',
-    file: null,
-    previewUrl: null,
-  }))
-}
 
 const measureEditorHeight = (el) => {
   editorHeight.value = EDITOR_MIN_HEIGHT
@@ -988,13 +972,13 @@ const clearSelectedTag = () => {
 
 const enterEdit = async () => {
   if (props.note?.isPending || saving.value || isEditing.value) return
-  revokeDraftNewUrls()
+  resetDraftAttachments()
   draftContent.value = contentText.value
   const tagId = originalTagId.value
   const tagName = titleText.value
   selectedTag.value =
     tagId || tagName ? { tagId, tagName: tagName || '' } : null
-  draftImageItems.value = cloneImagesForDraft()
+  draftAttachmentItems.value = cloneFromNoteAttachments(attachments.value)
   loadTags()
   editorHeight.value = EDITOR_MIN_HEIGHT
   assistantStore.setEditingNoteId(props.note.id)
@@ -1008,55 +992,40 @@ const cancelEdit = () => {
   if (saving.value) return
   unbindListScroll()
   editorHeight.value = EDITOR_MIN_HEIGHT
-  revokeDraftNewUrls()
+  resetDraftAttachments()
   draftContent.value = ''
   selectedTag.value = null
   closeTagMenu()
-  draftImageItems.value = []
   if (assistantStore.editingNoteId === props.note.id) {
     assistantStore.setEditingNoteId(null)
   }
 }
 
-const removeDraftImage = (idx) => {
-  const item = draftImageItems.value[idx]
-  if (!item || saving.value) return
-  if (item.previewUrl) URL.revokeObjectURL(item.previewUrl)
-  draftImageItems.value.splice(idx, 1)
+const removeDraftAttachment = (key) => {
+  if (saving.value) return
+  removeDraftAttachmentItem(key)
 }
 
-const appendDraftFiles = (files) => {
-  if (saving.value) return
-  const tooBig = files.filter((f) => !isImageFileSizeAllowed(f))
-  if (tooBig.length) emit('image-too-large')
-  const ok = files.filter((f) => isImageFileSizeAllowed(f))
-  const remaining = MAX_IMAGES - draftImageItems.value.length
-  if (remaining <= 0) return
-  const accepted = ok.slice(0, remaining)
-  accepted.forEach((file) => {
-    draftImageItems.value.push({
-      key: `new_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`,
-      existingId: null,
-      url: '',
-      file,
-      previewUrl: URL.createObjectURL(file),
-    })
-  })
+const openEditImagePicker = () => {
+  if (saving.value || !canAddEditImage.value) return
+  editImageInputRef.value?.click()
 }
 
 const openEditFilePicker = () => {
-  if (saving.value) return
-  if (draftImageItems.value.length >= MAX_IMAGES) return
+  if (saving.value || !canAddEditFile.value) return
   editFileInputRef.value?.click()
 }
 
-const onPickImages = (event) => {
-  const input = event.target
-  const picked = Array.from(input.files || []).filter((f) =>
-    /^image\//i.test(f.type),
-  )
-  if (picked.length) appendDraftFiles(picked)
-  input.value = ''
+const onPickEditImages = (event) => {
+  const picked = Array.from(event.target.files || [])
+  if (picked.length) handleDraftAppendResult(appendDraftAttachmentFiles(picked))
+  event.target.value = ''
+}
+
+const onPickEditFiles = (event) => {
+  const picked = Array.from(event.target.files || [])
+  if (picked.length) handleDraftAppendResult(appendDraftAttachmentFiles(picked))
+  event.target.value = ''
 }
 
 const onEditorPaste = (event) => {
@@ -1064,7 +1033,11 @@ const onEditorPaste = (event) => {
   const clipboardData = event.clipboardData
   if (!clipboardData) return
 
-  const files = extractClipboardImageFiles(clipboardData)
+  const imageFiles = extractClipboardImageFiles(clipboardData)
+  const otherFiles = extractClipboardAttachmentFiles(clipboardData).filter(
+    (file) => !imageFiles.includes(file),
+  )
+  const files = [...imageFiles, ...otherFiles]
   if (!files.length) return
 
   event.preventDefault()
@@ -1082,7 +1055,7 @@ const onEditorPaste = (event) => {
     )
   }
 
-  appendDraftFiles(files)
+  handleDraftAppendResult(appendDraftAttachmentFiles(files))
 }
 
 const onEditorKeydown = (event) => {
@@ -1114,21 +1087,16 @@ const saveEdit = async () => {
       content: draftContent.value,
     }
     if (imagesPayloadChanged.value) {
-      payload.retainedImageIds = draftImageItems.value
-        .filter((i) => i.existingId != null)
-        .map((i) => i.existingId)
-      payload.newImages = draftImageItems.value
-        .filter((i) => i.file)
-        .map((i) => i.file)
+      payload.retainedImageIds = getDraftRetainedIds()
+      payload.newImages = getDraftNewFiles()
     }
     await Promise.resolve(emit('edit-save', payload))
     unbindListScroll()
     editorHeight.value = EDITOR_MIN_HEIGHT
-    revokeDraftNewUrls()
+    resetDraftAttachments()
     draftContent.value = ''
     selectedTag.value = null
     closeTagMenu()
-    draftImageItems.value = []
     if (assistantStore.editingNoteId === props.note.id) {
       assistantStore.setEditingNoteId(null)
     }
@@ -1281,8 +1249,7 @@ watch(
       selectedTag.value = null
       closeTagMenu()
       closeCopyMenu()
-      revokeDraftNewUrls()
-      draftImageItems.value = []
+      resetDraftAttachments()
     }
   },
 )
@@ -1290,7 +1257,7 @@ watch(
 onBeforeUnmount(() => {
   clearSelectClickTimer()
   unbindListScroll()
-  revokeDraftNewUrls()
+  resetDraftAttachments()
   document.removeEventListener('click', onCopyMenuDocumentClick, true)
   document.removeEventListener('keydown', onCopyMenuKeydown, true)
 })
@@ -1887,6 +1854,27 @@ button.note-tag:focus-visible {
 .note-editor:disabled {
   opacity: 0.7;
   cursor: not-allowed;
+}
+
+.editor-attachment-strip {
+  margin-top: 12px;
+}
+
+.note-card.is-compact :deep(.file-list) {
+  margin-top: 6px;
+}
+
+.note-card.is-compact :deep(.file-chip) {
+  min-height: 28px;
+  padding: 3px 8px;
+}
+
+.note-card.is-compact :deep(.file-chip-name) {
+  font-size: 10px;
+}
+
+.note-card.is-compact :deep(.file-chip-ext) {
+  font-size: 9px;
 }
 
 .thumb-strip {

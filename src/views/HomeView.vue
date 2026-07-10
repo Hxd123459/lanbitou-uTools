@@ -18,6 +18,7 @@
         @submit="handleSubmit"
         @limit-exceeded="handleLimitExceeded"
         @image-too-large="handleImageTooLarge"
+        @file-too-large="handleFileTooLarge"
       />
     </template>
 
@@ -220,6 +221,7 @@
                 @copy-failed="handleCopyFailed"
                 @pin="handlePin"
                 @image-too-large="handleImageTooLarge"
+                @file-too-large="handleFileTooLarge"
                 @toggle-select="toggleNoteSelect(note.id)"
                 @tag-select="handleTagSelect"
               />
@@ -246,6 +248,7 @@
                 @copy-failed="handleCopyFailed"
                 @pin="handlePin"
                 @image-too-large="handleImageTooLarge"
+                @file-too-large="handleFileTooLarge"
                 @toggle-select="toggleNoteSelect(note.id)"
                 @tag-select="handleTagSelect"
               />
@@ -273,6 +276,7 @@
                 @copy-failed="handleCopyFailed"
                 @pin="handlePin"
                 @image-too-large="handleImageTooLarge"
+                @file-too-large="handleFileTooLarge"
                 @toggle-select="toggleNoteSelect(note.id)"
                 @tag-select="handleTagSelect"
               />
@@ -306,6 +310,7 @@
                 @copy-failed="handleCopyFailed"
                 @pin="handlePin"
                 @image-too-large="handleImageTooLarge"
+                @file-too-large="handleFileTooLarge"
                 @toggle-select="toggleNoteSelect(note.id)"
                 @tag-select="handleTagSelect"
               />
@@ -1761,11 +1766,15 @@ const handleSubmit = async ({ text, images, tagId, tagName }) => {
 }
 
 const handleLimitExceeded = (max) => {
-  openToast(`最多支持 ${max} 张图片`, 'error', { duration: 1800 })
+  openToast(`最多支持 ${max} 个附件`, 'error', { duration: 1800 })
 }
 
 const handleImageTooLarge = () => {
   openToast('单张图片须小于 10 MB', 'error', { duration: 2200 })
+}
+
+const handleFileTooLarge = () => {
+  openToast('单个附件须小于 10 MB', 'error', { duration: 2200 })
 }
 
 const handleEditSave = async ({

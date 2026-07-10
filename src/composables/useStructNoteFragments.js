@@ -1,4 +1,4 @@
-import { buildFragmentImageMarkdown } from '../utils/attachmentMarkdown'
+import { buildFragmentAttachmentMarkdown } from '../utils/attachmentMarkdown'
 import { wrapFragmentIntroBlock } from '../utils/fragmentIntroMarkers'
 
 export const FRAGMENT_INTRO_RAW = 'raw'
@@ -11,8 +11,21 @@ export function getFragmentContent(note) {
   return note?.markdownContent || note?.text || note?.rawContent || note?.summary || ''
 }
 
-export function getFragmentImages(note) {
+export function getFragmentAttachments(note) {
+  if (Array.isArray(note?.attachments) && note.attachments.length) {
+    return note.attachments
+  }
   return Array.isArray(note?.images) ? note.images : []
+}
+
+export function getFragmentImages(note) {
+  return getFragmentAttachments(note).filter(
+    (item) => !item?.kind || item.kind === 'image',
+  )
+}
+
+export function getFragmentFiles(note) {
+  return getFragmentAttachments(note).filter((item) => item?.kind === 'file')
 }
 
 export function getFragmentPreview(note) {
@@ -29,11 +42,11 @@ export function getFragmentChipLabel(note) {
 
 export function buildFragmentBlock(note) {
   const text = getFragmentContent(note).trim()
-  const imagesMd = buildFragmentImageMarkdown(note)
-  if (!text && !imagesMd) return ''
-  if (!text) return imagesMd
-  if (!imagesMd) return text
-  return `${text}\n\n${imagesMd}`
+  const attachmentsMd = buildFragmentAttachmentMarkdown(note)
+  if (!text && !attachmentsMd) return ''
+  if (!text) return attachmentsMd
+  if (!attachmentsMd) return text
+  return `${text}\n\n${attachmentsMd}`
 }
 
 export function appendFragmentToContent(content, note) {
@@ -46,7 +59,7 @@ export function appendFragmentToContent(content, note) {
 export function buildFragmentImagesMarkdown(notes) {
   const list = Array.isArray(notes) ? notes : [notes]
   return list
-    .map((note) => buildFragmentImageMarkdown(note))
+    .map((note) => buildFragmentAttachmentMarkdown(note))
     .filter(Boolean)
     .join('\n\n')
 }

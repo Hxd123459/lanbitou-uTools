@@ -4,6 +4,7 @@ import {
   createBlock,
   deleteBlock,
   fetchNoteList,
+  mapBlockImages,
   mapBlockResources,
   NOTE_LIST_PAGE_SIZE,
   setPinBlock,
@@ -221,7 +222,8 @@ export const useAssistantStore = defineStore('assistant', () => {
       target.tagId = data.tagId ?? resolvedTagId ?? null
       target.text = data.content || text
       target.markdownContent = data.content || text
-      target.images = mapBlockResources(data.blocks)
+      target.images = mapBlockImages(data.blocks)
+      target.attachments = mapBlockResources(data.blocks)
       target.isPending = false
       noteIdSet.value.add(finalId)
       return target
@@ -261,7 +263,8 @@ export const useAssistantStore = defineStore('assistant', () => {
       target.tagId = tagId
     }
     if (Array.isArray(data?.blocks)) {
-      target.images = mapBlockResources(data.blocks)
+      target.images = mapBlockImages(data.blocks)
+      target.attachments = mapBlockResources(data.blocks)
     }
     return target
   }

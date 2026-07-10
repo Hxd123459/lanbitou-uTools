@@ -19,25 +19,49 @@
           @keyup="onCaretChange"
         />
 
-        <div v-if="images.length" class="thumb-strip">
+        <div v-if="stripItems.length" class="thumb-strip">
           <motion.div
-            v-for="item in images"
-            :key="item.id"
+            v-for="item in stripItems"
+            :key="item.key"
             class="thumb"
             :initial="presets.thumbPop.initial"
             :animate="presets.thumbPop.animate"
             :transition="presets.thumbPop.transition"
           >
-            <img :src="item.url" alt="预览" />
+            <img
+              v-if="item.kind === 'image'"
+              :src="item.previewUrl || item.url"
+              alt="预览"
+              draggable="false"
+            />
+            <div v-else class="thumb-file">
+              <svg
+                viewBox="0 0 24 24"
+                width="14"
+                height="14"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.6"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                aria-hidden="true"
+              >
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                <polyline points="14 2 14 8 20 8" />
+              </svg>
+              <span class="thumb-file-name" :title="item.name">
+                {{ truncateFileName(item.name, 8) }}
+              </span>
+            </div>
             <motion.button
               type="button"
               class="thumb-remove"
               :disabled="submitting"
-              aria-label="移除图片"
+              :aria-label="item.kind === 'image' ? '移除图片' : '移除附件'"
               :while-hover="presets.button.hover"
               :while-tap="presets.button.tap"
               :transition="presets.button.transition"
-              @click="removeImage(item.id)"
+              @click="removeAttachment(item.key)"
             >
               <svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true">
                 <path
@@ -50,24 +74,6 @@
               </svg>
             </motion.button>
           </motion.div>
-
-          <AppButton
-            v-if="!submitting && images.length < MAX_IMAGES"
-            class="btn btn-dashed-tile thumb-add"
-            aria-label="添加图片"
-            title="继续添加图片"
-            @click="openFilePicker"
-          >
-            <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
-              <path
-                d="M12 5v14M5 12h14"
-                stroke="currentColor"
-                stroke-width="1.8"
-                stroke-linecap="round"
-                fill="none"
-              />
-            </svg>
-          </AppButton>
         </div>
 
         <div
@@ -124,14 +130,10 @@
 
           <AppButton
             class="btn btn-icon"
-            :disabled="submitting || images.length >= MAX_IMAGES"
-            :title="
-              images.length >= MAX_IMAGES
-                ? `最多 ${MAX_IMAGES} 张`
-                : '从本地选择图片'
-            "
+            :disabled="submitting || !canAddImage"
+            :title="canAddImage ? '从本地选择图片' : `最多 ${MAX_ATTACHMENTS} 个附件`"
             aria-label="选择本地图片"
-            @click="openFilePicker"
+            @click="openImagePicker"
           >
             <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
               <rect
@@ -155,15 +157,34 @@
               />
             </svg>
           </AppButton>
+
+          <AppButton
+            class="btn btn-icon"
+            :disabled="submitting || !canAddFile"
+            :title="canAddFile ? '从本地选择附件' : `最多 ${MAX_ATTACHMENTS} 个附件`"
+            aria-label="选择本地附件"
+            @click="openFilePicker"
+          >
+            <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+              <path
+                d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"
+                stroke="currentColor"
+                stroke-width="1.8"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                fill="none"
+              />
+            </svg>
+          </AppButton>
         </div>
 
         <div class="footer-right">
           <span
-            v-if="images.length"
+            v-if="attachmentCount"
             class="counter"
-            :class="{ 'counter-full': images.length >= MAX_IMAGES }"
+            :class="{ 'counter-full': attachmentCount >= MAX_ATTACHMENTS }"
           >
-            {{ images.length }}<span class="counter-divider">/</span>{{ MAX_IMAGES }}
+            {{ attachmentCount }}<span class="counter-divider">/</span>{{ MAX_ATTACHMENTS }}
           </span>
           <span v-if="submitting" class="status">
             {{ showProgress ? `上传中 ${progressPercent}%` : '提交中…' }}
@@ -184,9 +205,16 @@
       </div>
 
       <input
-        ref="fileInputRef"
+        ref="imageInputRef"
         type="file"
         accept="image/*"
+        multiple
+        class="hidden-file-input"
+        @change="onImagePicked"
+      />
+      <input
+        ref="fileInputRef"
+        type="file"
         multiple
         class="hidden-file-input"
         @change="onFilePicked"
@@ -242,10 +270,13 @@
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { AnimatePresence, motion } from 'motion-v'
-import { isImageFileSizeAllowed } from '../../constants/uploadLimits'
+import { MAX_ATTACHMENTS } from '../../constants/uploadLimits'
+import { useAttachmentDraft } from '../../composables/useAttachmentDraft'
 import { useMotionPresets } from '../../composables/useMotionPresets'
 import { useTagHashPicker } from '../../composables/useTagHashPicker'
 import { markClipboardImageHandledByPaste } from '../../composables/useUtoolsClipboardEnter'
+import { extractClipboardAttachmentFiles } from '../../utils/tiptapAttachmentInsert'
+import { truncateFileName } from '../../utils/attachmentDisplay'
 import {
   extractClipboardImageFiles,
   insertTextAtTextareaCursor,
@@ -286,18 +317,27 @@ const emit = defineEmits([
   'submit',
   'limit-exceeded',
   'image-too-large',
+  'file-too-large',
 ])
 
 const { presets } = useMotionPresets()
 
 const MIN_HEIGHT = 80
 const MAX_HEIGHT = 280
-const MAX_IMAGES = 20
 
 const textareaRef = ref(null)
+const imageInputRef = ref(null)
 const fileInputRef = ref(null)
 const isMac = ref(false)
-const images = ref([])
+const {
+  items: attachmentItems,
+  stripItems: buildStripItems,
+  remaining: remainingAttachmentSlots,
+  appendFiles,
+  removeItem: removeAttachmentItem,
+  resetItems: resetAttachments,
+  getNewFiles,
+} = useAttachmentDraft({ maxCount: MAX_ATTACHMENTS })
 const inputHeight = ref(MIN_HEIGHT)
 const initialHeight = ref(MIN_HEIGHT)
 const savedHeight = ref(null)
@@ -352,12 +392,20 @@ const progressPercent = computed(() =>
   Math.max(0, Math.min(100, Math.round((props.uploadProgress || 0) * 100))),
 )
 const showProgress = computed(
-  () => props.submitting && images.value.length > 0 && progressPercent.value < 100,
+  () => props.submitting && attachmentCount.value > 0 && progressPercent.value < 100,
+)
+const attachmentCount = computed(() => attachmentItems.value.length)
+const stripItems = computed(() => buildStripItems())
+const canAddImage = computed(
+  () => !props.submitting && remainingAttachmentSlots() > 0,
+)
+const canAddFile = computed(
+  () => !props.submitting && remainingAttachmentSlots() > 0,
 )
 const canSubmit = computed(
   () =>
     !props.submitting &&
-    (props.modelValue.trim().length > 0 || images.value.length > 0),
+    (props.modelValue.trim().length > 0 || attachmentCount.value > 0),
 )
 
 const measureHeight = (el) => {
@@ -386,7 +434,7 @@ const onBlur = () => {
   isFocused.value = false
   onTagTextareaBlur()
   nextTick(async () => {
-    if (!props.modelValue.trim() && !images.value.length) {
+    if (!props.modelValue.trim() && !attachmentCount.value) {
       inputHeight.value = MIN_HEIGHT
       return
     }
@@ -424,13 +472,24 @@ const onKeydown = (event) => {
   onSubmit()
 }
 
+const handleAppendResult = (result) => {
+  if (result.imageTooLarge) emit('image-too-large')
+  if (result.fileTooLarge) emit('file-too-large')
+  if (result.limitExceeded) emit('limit-exceeded', MAX_ATTACHMENTS)
+  if (result.accepted) nextTick(adjustHeight)
+}
+
 const onPaste = (event) => {
   if (props.submitting) return
   if (document.activeElement !== textareaRef.value) return
   const clipboardData = event.clipboardData
   if (!clipboardData) return
 
-  const files = extractClipboardImageFiles(clipboardData)
+  const imageFiles = extractClipboardImageFiles(clipboardData)
+  const otherFiles = extractClipboardAttachmentFiles(clipboardData).filter(
+    (file) => !imageFiles.includes(file),
+  )
+  const files = [...imageFiles, ...otherFiles]
   if (!files.length) return
 
   event.preventDefault()
@@ -446,55 +505,48 @@ const onPaste = (event) => {
     )
   }
 
-  addImages(files)
+  handleAppendResult(appendFiles(files))
+}
+
+const openImagePicker = () => {
+  if (props.submitting || !canAddImage.value) {
+    if (!canAddImage.value) emit('limit-exceeded', MAX_ATTACHMENTS)
+    return
+  }
+  imageInputRef.value?.click()
 }
 
 const openFilePicker = () => {
-  if (props.submitting) return
-  if (images.value.length >= MAX_IMAGES) {
-    emit('limit-exceeded', MAX_IMAGES)
+  if (props.submitting || !canAddFile.value) {
+    if (!canAddFile.value) emit('limit-exceeded', MAX_ATTACHMENTS)
     return
   }
   fileInputRef.value?.click()
 }
 
-const onFilePicked = (event) => {
-  const picked = Array.from(event.target.files || []).filter((f) =>
-    f.type.startsWith('image/'),
-  )
-  if (picked.length) addImages(picked)
+const onImagePicked = (event) => {
+  const picked = Array.from(event.target.files || [])
+  if (picked.length) handleAppendResult(appendFiles(picked))
   event.target.value = ''
 }
 
-const addImages = (files) => {
-  const tooBig = files.filter((f) => !isImageFileSizeAllowed(f))
-  if (tooBig.length) emit('image-too-large')
-  const ok = files.filter((f) => isImageFileSizeAllowed(f))
-  const remaining = MAX_IMAGES - images.value.length
-  if (remaining <= 0) {
-    emit('limit-exceeded', MAX_IMAGES)
-    return
-  }
-  const accepted = ok.slice(0, remaining)
-  accepted.forEach((file) => {
-    const id = `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
-    images.value.push({ id, file, url: URL.createObjectURL(file) })
-  })
-  if (ok.length > remaining) emit('limit-exceeded', MAX_IMAGES)
+const onFilePicked = (event) => {
+  const picked = Array.from(event.target.files || [])
+  if (picked.length) handleAppendResult(appendFiles(picked))
+  event.target.value = ''
+}
+
+const removeAttachment = (key) => {
+  removeAttachmentItem(key)
   nextTick(adjustHeight)
 }
 
-const removeImage = (id) => {
-  const idx = images.value.findIndex((item) => item.id === id)
-  if (idx === -1) return
-  URL.revokeObjectURL(images.value[idx].url)
-  images.value.splice(idx, 1)
-  nextTick(adjustHeight)
+const addImages = (files) => {
+  handleAppendResult(appendFiles(files))
 }
 
 const reset = () => {
-  images.value.forEach((item) => URL.revokeObjectURL(item.url))
-  images.value = []
+  resetAttachments()
   selectedTag.value = null
   closeTagMenu()
   inputHeight.value = MIN_HEIGHT
@@ -508,10 +560,10 @@ const focus = () => {
 const onSubmit = () => {
   if (props.submitting) return
   const text = props.modelValue
-  if (!text.trim() && images.value.length === 0) return
+  if (!text.trim() && attachmentCount.value === 0) return
   emit('submit', {
     text,
-    images: images.value.map((item) => item.file),
+    images: getNewFiles(),
     tagId: effectiveTag.value?.tagId ?? null,
     tagName: effectiveTag.value?.tagName ?? '',
   })
@@ -533,7 +585,7 @@ watch(
 )
 
 watch(
-  () => images.value.length,
+  () => attachmentCount.value,
   () => nextTick(adjustHeight),
 )
 
@@ -567,7 +619,7 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
-  images.value.forEach((item) => URL.revokeObjectURL(item.url))
+  resetAttachments()
 })
 
 defineExpose({ reset, addImages, focus })
@@ -691,15 +743,15 @@ defineExpose({ reset, addImages, focus })
 .thumb-strip {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: 6px;
   padding: 6px 16px 10px;
 }
 
 .thumb {
   position: relative;
-  width: 64px;
-  height: 64px;
-  border-radius: 8px;
+  width: 48px;
+  height: 48px;
+  border-radius: 6px;
   overflow: visible;
   background: var(--color-bg);
   border: 1px solid var(--color-border);
@@ -710,16 +762,41 @@ defineExpose({ reset, addImages, focus })
   width: 100%;
   height: 100%;
   object-fit: cover;
-  border-radius: 7px;
+  border-radius: 5px;
   display: block;
+}
+
+.thumb-file {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  padding: 4px;
+  box-sizing: border-box;
+  color: var(--color-accent);
+}
+
+.thumb-file-name {
+  max-width: 100%;
+  font-size: 9px;
+  font-weight: 500;
+  line-height: 1.2;
+  text-align: center;
+  color: var(--color-secondary-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .thumb-remove {
   position: absolute;
-  top: -6px;
-  right: -6px;
-  width: 18px;
-  height: 18px;
+  top: -5px;
+  right: -5px;
+  width: 16px;
+  height: 16px;
   padding: 0;
   border: 0;
   border-radius: 999px;
@@ -739,13 +816,6 @@ defineExpose({ reset, addImages, focus })
 .thumb-remove:disabled {
   opacity: 0.5;
   cursor: not-allowed;
-}
-
-.thumb-add {
-  width: 64px;
-  height: 64px;
-  border-radius: 8px;
-  flex-shrink: 0;
 }
 
 .upload-progress {

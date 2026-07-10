@@ -111,6 +111,17 @@ function createSlashMenuController(editor) {
     const slash = getSlashState(editor.view)
     if (!slash) return
 
+    if (command.pickAttachment) {
+      editor.storage.attachment?.pick?.()
+      editor
+        .chain()
+        .focus()
+        .deleteRange({ from: slash.from, to: slash.to })
+        .run()
+      hideMenu()
+      return
+    }
+
     const chain = editor
       .chain()
       .focus()

@@ -20,14 +20,21 @@ export function shiftDateString(dateString, offsetDays) {
 export function mapBlockResources(blocks) {
   if (!Array.isArray(blocks)) return []
   return blocks
-    .filter((b) => b && b.type === 'image' && b.fileUrl)
+    .filter((b) => b && (b.type === 'image' || b.type === 'file') && b.fileUrl)
     .slice()
     .sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0))
     .map((b) => ({
       id: b.id,
       url: resolveResourceUrl(b.fileUrl),
       sortOrder: b.sortOrder ?? 0,
+      kind: b.type === 'file' ? 'file' : 'image',
+      name: b.fileName || '',
+      mimeType: b.mimeType || '',
     }))
+}
+
+export function mapBlockImages(blocks) {
+  return mapBlockResources(blocks).filter((item) => item.kind === 'image')
 }
 
 function mapBlockToNote(item) {
@@ -45,7 +52,8 @@ function mapBlockToNote(item) {
     pinWeightType: item.pinWeightType || 'DEFAULT',
     aiNoteRecallId: item.aiNoteRecallId ?? null,
     tagId: item.tagId ?? null,
-    images: mapBlockResources(item.blocks),
+    images: mapBlockImages(item.blocks),
+    attachments: mapBlockResources(item.blocks),
   }
 }
 
@@ -324,7 +332,8 @@ export async function fetchNotesByIds(ids = []) {
     createdAt: item.createTime,
     tagId: item.tagId ?? null,
     pinWeightType: item.pinWeightType || 'DEFAULT',
-    images: mapBlockResources(item.blocks),
+    images: mapBlockImages(item.blocks),
+    attachments: mapBlockResources(item.blocks),
   }))
 }
 
@@ -349,7 +358,8 @@ export async function restoreArchivedFragment(fragmentId, structNoteId = null) {
     createdAt: item.createTime,
     tagId: item.tagId ?? null,
     pinWeightType: item.pinWeightType || 'DEFAULT',
-    images: mapBlockResources(item.blocks),
+    images: mapBlockImages(item.blocks),
+    attachments: mapBlockResources(item.blocks),
   }
 }
 

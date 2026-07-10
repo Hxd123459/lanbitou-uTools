@@ -46,5 +46,12 @@ export function detectMimeType(file, index = 0) {
   if (/\.png$/i.test(name)) return 'image/png'
   if (/\.webp$/i.test(name)) return 'image/webp'
   if (/\.gif$/i.test(name)) return 'image/gif'
-  return 'image/png'
+  if (/\.pdf$/i.test(name)) return 'application/pdf'
+  if (/\.docx?$/i.test(name)) return 'application/msword'
+  if (/\.xlsx?$/i.test(name)) return 'application/vnd.ms-excel'
+  if (/\.pptx?$/i.test(name)) return 'application/vnd.ms-powerpoint'
+  if (/\.zip$/i.test(name)) return 'application/zip'
+  if (/\.txt$/i.test(name)) return 'text/plain'
+  if (/\.md$/i.test(name)) return 'text/markdown'
+  return 'application/octet-stream'
 }

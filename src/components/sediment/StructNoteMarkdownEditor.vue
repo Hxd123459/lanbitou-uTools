@@ -66,6 +66,13 @@
     :z-index="250"
     @close="closeToast"
   />
+  <input
+    ref="attachmentInputRef"
+    type="file"
+    multiple
+    class="struct-note-attachment-input"
+    @change="onAttachmentPicked"
+  />
 </template>
 
 <script setup>
@@ -82,7 +89,8 @@ import {
 } from '../../utils/fragmentIntroMarkers'
 import { createTiptapExtensions } from '../../composables/useTiptapExtensions'
 import { createImageCopyExtension } from '../../extensions/tiptapImageCopy'
-import { createImagePasteExtension } from '../../extensions/tiptapImagePaste'
+import { createAttachmentPasteExtension } from '../../extensions/tiptapAttachmentPaste'
+import { prepareAttachmentForInsert } from '../../utils/tiptapAttachmentInsert'
 import { useCopyNote } from '../../composables/useCopyNote'
 import CopyToast from '../feedback/CopyToast.vue'
 import {
@@ -185,6 +193,7 @@ const emit = defineEmits([
   'insert-all',
   'restore',
   'image-too-large',
+  'file-too-large',
   'update:selectedInsertPreset',
   'cancel-fragment-intro',
 ])
@@ -206,6 +215,7 @@ const rootStyle = computed(() => ({
 }))
 
 const dragHandleRef = ref(null)
+const attachmentInputRef = ref(null)
 let dragHandleApi = null
 
 const {
@@ -219,6 +229,7 @@ const {
 const getImagePasteContext = () => ({
   noteId: props.noteId,
   onImageTooLarge: () => emit('image-too-large'),
+  onFileTooLarge: () => emit('file-too-large'),
 })
 
 const getImageCopyContext = () => ({
@@ -261,7 +272,7 @@ const editor = useEditor({
       },
     }),
     NodeRange,
-    createImagePasteExtension(getImagePasteContext),
+    createAttachmentPasteExtension(getImagePasteContext),
     createImageCopyExtension(getImageCopyContext),
   ],
   editorProps: {
@@ -270,6 +281,9 @@ const editor = useEditor({
     },
   },
   onCreate: ({ editor: currentEditor }) => {
+    currentEditor.storage.attachment = {
+      pick: () => attachmentInputRef.value?.click(),
+    }
     setEditorMarkdownContent(currentEditor, props.modelValue, { emitUpdate: false })
     lastEmittedMarkdown = normalizeMarkdownForCompare(props.modelValue)
   },
@@ -355,6 +369,56 @@ const appendMarkdownChunk = (chunk) => {
   }
 }
 
+const insertAttachmentResult = async (result) => {
+  const currentEditor = editor.value
+  if (!currentEditor || currentEditor.isDestroyed || result.error) return false
+  if (result.kind === 'image' && result.src) {
+    currentEditor.chain().focus().setImage({ src: result.src, alt: result.alt }).run()
+    return true
+  }
+  if (result.kind === 'file' && result.href) {
+    currentEditor
+      .chain()
+      .focus()
+      .insertContent({
+        type: 'text',
+        text: result.label,
+        marks: [
+          {
+            type: 'link',
+            attrs: {
+              href: result.href,
+              target: '_blank',
+              rel: 'noopener noreferrer',
+            },
+          },
+        ],
+      })
+      .insertContent(' ')
+      .run()
+    return true
+  }
+  return false
+}
+
+const onAttachmentPicked = async (event) => {
+  const files = Array.from(event.target.files || []).filter(Boolean)
+  event.target.value = ''
+  if (!files.length || !editor.value) return
+  for (const file of files) {
+    const result = await prepareAttachmentForInsert(file, props.noteId)
+    if (result.error === 'image-too-large') {
+      emit('image-too-large')
+      continue
+    }
+    if (result.error === 'file-too-large') {
+      emit('file-too-large')
+      continue
+    }
+    await insertAttachmentResult(result)
+  }
+}
+
 const setStreamingMarkdown = (value, { emitUpdate = false } = {}) => {
   setMarkdownContent(value, { emitUpdate, preserveSelection: 'end' })
 }
@@ -398,5 +462,29 @@ onBeforeUnmount(() => {
 
 .struct-note-md-editor.is-disabled :deep(.struct-note-md-prosemirror) {
   opacity: 0.72;
+}
+
+.struct-note-attachment-input {
+  display: none;
+}
+
+.struct-note-md-editor :deep(a[href^='blob:']),
+.struct-note-md-editor :deep(a[href^='lb-att://']) {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--color-border);
+  background: rgba(37, 99, 235, 0.05);
+  color: var(--color-accent);
+  text-decoration: none;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.struct-note-md-editor :deep(a[href^='blob:']:hover),
+.struct-note-md-editor :deep(a[href^='lb-att://']:hover) {
+  background: rgba(37, 99, 235, 0.1);
 }
 </style>

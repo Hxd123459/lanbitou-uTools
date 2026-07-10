@@ -166,6 +166,7 @@
             @update:selected-insert-preset="selectedInsertPreset = $event"
             @restore="handleRestoreFragment"
             @image-too-large="emit('error', new Error('单张图片不能超过 10MB'))"
+            @file-too-large="emit('error', new Error('单个附件不能超过 10MB'))"
           >
             <template #prefix>
               <input

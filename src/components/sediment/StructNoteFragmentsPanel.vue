@@ -187,10 +187,15 @@
                       :content="getFragmentContent(note)"
                       :show-fallback="false"
                     />
-                    <p v-else-if="!getFragmentImages(note).length" class="struct-note-fragment-empty">（暂无内容）</p>
+                    <p v-else-if="!getFragmentAttachments(note).length" class="struct-note-fragment-empty">（暂无内容）</p>
                     <NoteImageGallery
                       v-if="getFragmentImages(note).length"
                       :images="getFragmentImages(note)"
+                    />
+                    <NoteFileList
+                      v-if="getFragmentFiles(note).length"
+                      :attachments="getFragmentFiles(note)"
+                      compact
                     />
                   </div>
                 </div>
@@ -326,12 +331,19 @@ import { computed, nextTick, ref, watch } from 'vue'
 import { AnimatePresence, motion } from 'motion-v'
 import { fetchNotesByIds } from '../../api/note'
 import { getIntroduceMethodLabel } from '../../ai/sedimentDraftService'
-import { getFragmentContent, getFragmentImages, formatFragmentTime } from '../../composables/useStructNoteFragments'
+import {
+  getFragmentAttachments,
+  getFragmentContent,
+  getFragmentFiles,
+  getFragmentImages,
+  formatFragmentTime,
+} from '../../composables/useStructNoteFragments'
 import { useMotionPresets } from '../../composables/useMotionPresets'
 import StructNoteFragmentAiPicker from './StructNoteFragmentAiPicker.vue'
 import GlobalSearchQueryBar from '../search/GlobalSearchQueryBar.vue'
 import TiptapPreview from '../common/TiptapPreview.vue'
 import NoteImageGallery from '../note/NoteImageGallery.vue'
+import NoteFileList from '../note/NoteFileList.vue'
 import NoteCard from '../note/NoteCard.vue'
 
 const props = defineProps({
@@ -441,6 +453,7 @@ const mapRestoredToPickerNote = (item) => ({
   createdAt: item.createdAt || item.createTime,
   tagId: item.tagId ?? null,
   images: item.images || [],
+  attachments: item.attachments || item.images || [],
   _searchPreview: false,
 })
 

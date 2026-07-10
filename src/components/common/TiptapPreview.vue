@@ -69,3 +69,26 @@ onBeforeUnmount(() => {
   editor.value?.destroy()
 })
 </script>
+
+<style scoped>
+.tiptap-preview-fallback {
+  margin: 0;
+  color: var(--color-secondary-text);
+  font-size: 13px;
+}
+
+.tiptap-preview :deep(a[href^='blob:']),
+.tiptap-preview :deep(a[href^='lb-att://']) {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--color-border);
+  background: rgba(37, 99, 235, 0.05);
+  color: var(--color-accent);
+  text-decoration: none;
+  font-size: 13px;
+  line-height: 1.5;
+}
+</style>

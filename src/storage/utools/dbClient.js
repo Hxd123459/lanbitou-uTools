@@ -9,7 +9,11 @@ function getDb() {
 
 function wrapResult(result, action) {
   if (result?.error) {
-    throw new ApiError(result.name || 'DB_ERROR', result.message || `${action}失败`)
+    const rawMessage = result.message || `${action}失败`
+    if (/attachment data up to 10/i.test(rawMessage)) {
+      throw new ApiError('FILE_TOO_LARGE', '单个附件不能超过 10MB')
+    }
+    throw new ApiError(result.name || 'DB_ERROR', rawMessage)
   }
   return result
 }
