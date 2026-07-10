@@ -147,7 +147,6 @@ export function useStructNoteFragmentInsert({
       const [resolved] = await refreshFragmentNotes([note])
       await insertFragmentWithPreset(resolved || note, preset)
       await nextTick()
-      contentEditorRef.value?.setMarkdownContent?.(draftContent.value, { emitUpdate: true })
       contentEditorRef.value?.focus()
     } catch (error) {
       onError?.(error instanceof Error ? error : new Error('AI 整理失败'))
@@ -203,7 +202,6 @@ export function useStructNoteFragmentInsert({
         markFragmentIntroduced(note.id, preset)
       }
       await nextTick()
-      contentEditorRef.value?.setMarkdownContent?.(draftContent.value, { emitUpdate: true })
       contentEditorRef.value?.focus()
     } catch (error) {
       onError?.(error instanceof Error ? error : new Error('AI 整理失败'))

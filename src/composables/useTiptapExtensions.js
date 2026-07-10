@@ -8,7 +8,9 @@ import TaskList from '@tiptap/extension-task-list'
 import { common, createLowlight } from 'lowlight'
 import { MarkdownPasteExtension } from '../extensions/tiptapMarkdownPaste'
 import { createFragmentIntroBlockExtension } from '../extensions/tiptapFragmentIntroBlock'
+import { OrderedListStyleExtension } from '../extensions/tiptapOrderedListStyle'
 import { SlashCommandExtension } from '../extensions/tiptapSlashCommand'
+import { StructNoteShortcutsExtension } from '../extensions/tiptapStructNoteShortcuts'
 import {
   CodeSafeBold,
   CodeSafeItalic,
@@ -56,6 +58,7 @@ export function createTiptapExtensions(options = {}) {
       placeholder,
       showOnlyWhenEditable: true,
     }),
+    OrderedListStyleExtension,
   ]
 
   if (enableImage) {
@@ -71,6 +74,7 @@ export function createTiptapExtensions(options = {}) {
   }
 
   if (slashCommand) {
+    extensions.push(StructNoteShortcutsExtension)
     extensions.push(SlashCommandExtension)
   }
 

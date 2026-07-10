@@ -1,4 +1,7 @@
-import { resolveAttachmentRefsInMarkdown } from './attachmentMarkdown'
+import {
+  persistAttachmentRefsInMarkdown,
+  resolveAttachmentRefsInMarkdown,
+} from './attachmentMarkdown'
 
 const FRAG_BLOCK_RE =
   /<!--\s*aw-frag-start\s+ids=([^\s>]+)\s+method=([^\s>]+)(?:\s+at=([^\s>]+))?\s*-->([\s\S]*?)<!--\s*aw-frag-end\s+ids=\1\s*-->/g
@@ -101,6 +104,12 @@ export function buildEditorContentFromMarkdown(markdown, editor) {
   }
 }
 
+export function normalizeMarkdownForCompare(markdown) {
+  return persistAttachmentRefsInMarkdown(
+    resolveAttachmentRefsInMarkdown(String(markdown ?? '')),
+  )
+}
+
 export function setEditorMarkdownContent(
   editor,
   markdown,
@@ -108,13 +117,21 @@ export function setEditorMarkdownContent(
 ) {
   if (!editor || editor.isDestroyed) return false
   try {
-    const selection = preserveSelection ? editor.state.selection : null
+    const selection =
+      preserveSelection === true
+        ? editor.state.selection
+        : preserveSelection === 'end'
+          ? 'end'
+          : null
     const payload = buildEditorContentFromMarkdown(markdown, editor)
     editor.commands.setContent(payload.content, {
       contentType: payload.contentType,
       emitUpdate,
     })
-    if (selection) {
+    if (selection === 'end') {
+      const endPos = editor.state.doc.content.size
+      editor.commands.setTextSelection(endPos)
+    } else if (selection) {
       const maxPos = editor.state.doc.content.size
       const from = Math.min(selection.from, maxPos)
       const to = Math.min(selection.to, maxPos)

@@ -1,75 +1,10 @@
 import { Extension } from '@tiptap/core'
 import { Plugin, PluginKey } from '@tiptap/pm/state'
-import { slashMenuIcons } from '../constants/slashMenuIcons'
+import { STRUCT_NOTE_EDITOR_COMMANDS } from '../constants/structNoteEditorCommands'
+import { formatTiptapShortcut } from '../utils/formatTiptapShortcut'
 
 const MENU_CLASS = 'struct-note-slash-menu'
 const pluginKey = new PluginKey('slashCommand')
-
-const SLASH_COMMANDS = [
-  {
-    id: 'paragraph',
-    label: '正文',
-    keywords: ['正文', 'text', 'paragraph', 'p'],
-    icon: slashMenuIcons.paragraph,
-    run: (chain) => chain.setParagraph(),
-  },
-  {
-    id: 'h1',
-    label: '标题 1',
-    keywords: ['标题1', 'h1', 'heading1'],
-    icon: slashMenuIcons.h1,
-    run: (chain) => chain.setHeading({ level: 1 }),
-  },
-  {
-    id: 'h2',
-    label: '标题 2',
-    keywords: ['标题2', 'h2', 'heading2'],
-    icon: slashMenuIcons.h2,
-    run: (chain) => chain.setHeading({ level: 2 }),
-  },
-  {
-    id: 'h3',
-    label: '标题 3',
-    keywords: ['标题3', 'h3', 'heading3'],
-    icon: slashMenuIcons.h3,
-    run: (chain) => chain.setHeading({ level: 3 }),
-  },
-  {
-    id: 'ol',
-    label: '有序列表',
-    keywords: ['有序', 'ol', 'ordered', 'numbered'],
-    icon: slashMenuIcons.ol,
-    run: (chain) => chain.toggleOrderedList(),
-  },
-  {
-    id: 'ul',
-    label: '无序列表',
-    keywords: ['无序', 'ul', 'bullet', 'list'],
-    icon: slashMenuIcons.ul,
-    run: (chain) => chain.toggleBulletList(),
-  },
-  {
-    id: 'task',
-    label: '任务列表',
-    keywords: ['任务', 'todo', 'task', 'checkbox'],
-    icon: slashMenuIcons.task,
-    run: (chain) => chain.toggleTaskList(),
-  },
-  {
-    id: 'quote',
-    label: '引用',
-    keywords: ['引用', 'quote', 'blockquote'],
-    icon: slashMenuIcons.quote,
-    run: (chain) => chain.toggleBlockquote(),
-  },
-  {
-    id: 'code',
-    label: '代码块',
-    keywords: ['代码', 'code', 'codeblock'],
-    icon: slashMenuIcons.code,
-    run: (chain) => chain.setCodeBlock(),
-  },
-]
 
 function getSlashState(view) {
   const { $from } = view.state.selection
@@ -94,8 +29,8 @@ function getSlashState(view) {
 
 function filterCommands(query) {
   const q = query.trim().toLowerCase()
-  if (!q) return SLASH_COMMANDS
-  return SLASH_COMMANDS.filter(
+  if (!q) return STRUCT_NOTE_EDITOR_COMMANDS
+  return STRUCT_NOTE_EDITOR_COMMANDS.filter(
     (cmd) =>
       cmd.label.toLowerCase().includes(q) ||
       cmd.keywords.some((keyword) => keyword.toLowerCase().includes(q)),
@@ -137,7 +72,7 @@ function positionMenu(menu, view, slash) {
 function createSlashMenuController(editor) {
   let menuEl = null
   let selectedIndex = 0
-  let visibleCommands = SLASH_COMMANDS
+  let visibleCommands = STRUCT_NOTE_EDITOR_COMMANDS
   let suppressBlurHide = false
 
   const ensureMenu = () => {
@@ -216,6 +151,11 @@ function createSlashMenuController(editor) {
           >
             <span class="${MENU_CLASS}__icon" aria-hidden="true">${cmd.icon}</span>
             <span class="${MENU_CLASS}__label">${cmd.label}</span>
+            ${
+              cmd.shortcut
+                ? `<span class="${MENU_CLASS}__shortcut">${formatTiptapShortcut(cmd.shortcut)}</span>`
+                : ''
+            }
           </button>
         `,
       )

@@ -76,7 +76,10 @@ import {
   persistAttachmentRefsInMarkdown,
   resolveAttachmentRefsInMarkdown,
 } from '../../utils/attachmentMarkdown'
-import { setEditorMarkdownContent } from '../../utils/fragmentIntroMarkers'
+import {
+  normalizeMarkdownForCompare,
+  setEditorMarkdownContent,
+} from '../../utils/fragmentIntroMarkers'
 import { createTiptapExtensions } from '../../composables/useTiptapExtensions'
 import { createImageCopyExtension } from '../../extensions/tiptapImageCopy'
 import { createImagePasteExtension } from '../../extensions/tiptapImagePaste'
@@ -227,6 +230,22 @@ const getImageCopyContext = () => ({
   },
 })
 
+let lastEmittedMarkdown = ''
+
+const scrollSelectionIntoView = (currentEditor) => {
+  const column = currentEditor.view.dom.closest('.struct-note-editor-column')
+  if (!column) return
+  const { from } = currentEditor.state.selection
+  const coords = currentEditor.view.coordsAtPos(from)
+  const columnRect = column.getBoundingClientRect()
+  const margin = 48
+  if (coords.bottom > columnRect.bottom - margin) {
+    column.scrollTop += coords.bottom - columnRect.bottom + margin
+  } else if (coords.top < columnRect.top + margin) {
+    column.scrollTop -= columnRect.top + margin - coords.top
+  }
+}
+
 const editor = useEditor({
   content: '',
   editable: !props.disabled,
@@ -252,9 +271,15 @@ const editor = useEditor({
   },
   onCreate: ({ editor: currentEditor }) => {
     setEditorMarkdownContent(currentEditor, props.modelValue, { emitUpdate: false })
+    lastEmittedMarkdown = normalizeMarkdownForCompare(props.modelValue)
   },
   onUpdate: ({ editor: currentEditor }) => {
-    emit('update:modelValue', persistAttachmentRefsInMarkdown(currentEditor.getMarkdown()))
+    const markdown = persistAttachmentRefsInMarkdown(currentEditor.getMarkdown())
+    lastEmittedMarkdown = normalizeMarkdownForCompare(markdown)
+    emit('update:modelValue', markdown)
+  },
+  onSelectionUpdate: ({ editor: currentEditor }) => {
+    scrollSelectionIntoView(currentEditor)
   },
 })
 
@@ -276,15 +301,18 @@ watch(
   () => props.modelValue,
   (value) => {
     if (!editor.value) return
-    const current = editor.value.getMarkdown()
-    if ((value || '') === (current || '')) return
-    const resolved = resolveAttachmentRefsInMarkdown(value || '')
-    const currentResolved = resolveAttachmentRefsInMarkdown(current || '')
-    if (resolved === currentResolved) return
+    const normalized = normalizeMarkdownForCompare(value)
+    if (normalized === lastEmittedMarkdown) return
+    const currentNormalized = normalizeMarkdownForCompare(editor.value.getMarkdown())
+    if (normalized === currentNormalized) {
+      lastEmittedMarkdown = normalized
+      return
+    }
     setEditorMarkdownContent(editor.value, value || '', {
       emitUpdate: false,
       preserveSelection: true,
     })
+    lastEmittedMarkdown = normalized
   },
 )
 
@@ -308,8 +336,13 @@ const focus = () => {
   editor.value?.commands.focus('end')
 }
 
-const setMarkdownContent = (value, { emitUpdate = true } = {}) =>
-  setEditorMarkdownContent(editor.value, value, { emitUpdate })
+const setMarkdownContent = (value, { emitUpdate = true, preserveSelection = true } = {}) => {
+  const applied = setEditorMarkdownContent(editor.value, value, { emitUpdate, preserveSelection })
+  if (applied) {
+    lastEmittedMarkdown = normalizeMarkdownForCompare(value)
+  }
+  return applied
+}
 
 const appendMarkdownChunk = (chunk) => {
   if (!editor.value || editor.value.isDestroyed) return
@@ -323,7 +356,7 @@ const appendMarkdownChunk = (chunk) => {
 }
 
 const setStreamingMarkdown = (value, { emitUpdate = false } = {}) => {
-  setMarkdownContent(value, { emitUpdate })
+  setMarkdownContent(value, { emitUpdate, preserveSelection: 'end' })
 }
 
 defineExpose({ focus, setMarkdownContent, appendMarkdownChunk, setStreamingMarkdown })

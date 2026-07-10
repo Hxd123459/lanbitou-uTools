@@ -97,14 +97,12 @@ export function useStructNoteAiDraft({
         if (mode === 'append') {
           const appendBody = parseAppendContent(accumulated)
           const combined = combineWithBase(baseContent, appendBody)
-          draftContent.value = combined
           contentEditorRef.value?.setStreamingMarkdown(combined)
           return
         }
 
         const { content } = parseDraftTitleAndContent(accumulated)
         const body = content || accumulated
-        draftContent.value = body
         contentEditorRef.value?.setStreamingMarkdown(body)
       } catch (error) {
         clearStreamTimer()
@@ -147,22 +145,10 @@ export function useStructNoteAiDraft({
           const body =
             content || parseDraftTitleAndContent(draftAccumulated).content || draftAccumulated
           draftContent.value = body
-          try {
-            contentEditorRef.value?.setMarkdownContent(body, { emitUpdate: true })
-          } catch (error) {
-            onError?.(error instanceof Error ? error : new Error('AI 整理渲染失败'))
-            return
-          }
         } else {
           const appendBody = parseAppendContent(content || draftAccumulated)
           const finalContent = combineWithBase(baseContent, appendBody)
           draftContent.value = finalContent
-          try {
-            contentEditorRef.value?.setMarkdownContent(finalContent, { emitUpdate: true })
-          } catch (error) {
-            onError?.(error instanceof Error ? error : new Error('AI 整理渲染失败'))
-            return
-          }
         }
 
         markFragmentsInserted(pendingFragments)

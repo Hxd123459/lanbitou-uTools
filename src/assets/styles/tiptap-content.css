@@ -51,6 +51,22 @@
   padding-left: 1.25em;
 }
 
+.tiptap-content .ProseMirror ol {
+  list-style-type: decimal;
+}
+
+.tiptap-content .ProseMirror ol ol {
+  list-style-type: lower-alpha;
+}
+
+.tiptap-content .ProseMirror ol ol ol {
+  list-style-type: lower-roman;
+}
+
+.tiptap-content .ProseMirror ol ol ol ol {
+  list-style-type: decimal;
+}
+
 .tiptap-content .ProseMirror > :last-child,
 .tiptap-content .ProseMirror ul:last-child,
 .tiptap-content .ProseMirror ol:last-child {

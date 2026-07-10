@@ -193,6 +193,10 @@ import { AnimatePresence, motion } from 'motion-v'
 import { getStructNote, updateStructNote, findStructFolderItemByNoteId } from '../../api/structNote'
 import { fetchFolderPathStack, moveStructItem } from '../../api/structFolder'
 import { fetchNotesByIds, restoreArchivedFragment, archiveFragmentNotes } from '../../api/note'
+import {
+  finalizeInlineImagesInMarkdown,
+  hasPendingInlineImages,
+} from '../../utils/attachmentMarkdown'
 import { resolveIntroducedFragmentIds, normalizeIntroducedFragmentMethods, unmarkIntroducedFragments } from '../../composables/useStructNoteFragments'
 import { useStructNoteFragmentInsert } from '../../composables/useStructNoteFragmentInsert'
 import { useMotionPresets } from '../../composables/useMotionPresets'
@@ -510,14 +514,33 @@ const handleSave = async (isAuto = false) => {
 
     const introducedIds = [...insertedFragmentIds.value].map(String).filter(Boolean)
 
+    let content = draftContent.value.trim()
+
     await updateStructNote({
       id: noteId,
       title,
-      content: draftContent.value.trim(),
+      content,
       sourceFragmentIds: allFragmentIds,
       introducedFragmentIds: introducedIds,
       introducedFragmentMethods: { ...introducedFragmentMethods.value },
     })
+
+    if (hasPendingInlineImages(content)) {
+      const finalizedContent = await finalizeInlineImagesInMarkdown(noteId, content)
+      if (finalizedContent !== content) {
+        content = finalizedContent
+        await updateStructNote({
+          id: noteId,
+          title,
+          content,
+          sourceFragmentIds: allFragmentIds,
+          introducedFragmentIds: introducedIds,
+          introducedFragmentMethods: { ...introducedFragmentMethods.value },
+        })
+        draftContent.value = finalizedContent
+      }
+    }
+
     if (isFolderDirty.value && folderItemId.value) {
       await moveStructItem({
         id: folderItemId.value,
@@ -525,7 +548,6 @@ const handleSave = async (isAuto = false) => {
       })
     }
     await persistSourceFragments(noteId)
-    const content = draftContent.value.trim()
     draftTitle.value = title
     note.value = { ...note.value, title, name: title, content }
     syncLastSavedFromDraft()
