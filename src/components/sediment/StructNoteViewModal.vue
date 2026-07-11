@@ -154,6 +154,7 @@
             :ai-processing="aiProcessing"
             :processing-fragment-id="processingFragmentId"
             :all-fragments-inserted="allFragmentsInserted"
+            :introduced-attachments="introducedAttachments"
             :fragments-mode="fragmentsMode"
             :restoring-id="restoringFragmentId"
             enable-fragment-picker
@@ -163,6 +164,7 @@
             @insert="insertFragment"
             @insert-all="insertAllFragments"
             @cancel-fragment-intro="handleCancelFragmentIntro"
+            @remove-introduced-attachment="removeIntroducedAttachmentByKey"
             @update:selected-insert-preset="selectedInsertPreset = $event"
             @restore="handleRestoreFragment"
             @image-too-large="emit('error', new Error('单张图片不能超过 10MB'))"
@@ -200,6 +202,7 @@ import {
 } from '../../utils/attachmentMarkdown'
 import { resolveIntroducedFragmentIds, normalizeIntroducedFragmentMethods, unmarkIntroducedFragments } from '../../composables/useStructNoteFragments'
 import { useStructNoteFragmentInsert } from '../../composables/useStructNoteFragmentInsert'
+import { useIntroducedFragmentAttachments } from '../../composables/useIntroducedFragmentAttachments'
 import { useMotionPresets } from '../../composables/useMotionPresets'
 import StructNoteFolderBreadcrumb from './StructNoteFolderBreadcrumb.vue'
 import StructNoteMarkdownEditor from './StructNoteMarkdownEditor.vue'
@@ -253,6 +256,15 @@ const insertedFragmentIdList = computed(() =>
 )
 
 const {
+  items: introducedAttachments,
+  addFromFragment,
+  removeByKey: removeIntroducedAttachmentByKey,
+  removeByFragmentIds: removeIntroducedAttachmentsByFragmentIds,
+  reset: resetIntroducedAttachments,
+  syncFromIntroducedFragments,
+} = useIntroducedFragmentAttachments()
+
+const {
   selectedInsertPreset,
   aiProcessing,
   processingFragmentId,
@@ -265,6 +277,7 @@ const {
   localFragmentNotes,
   insertedFragmentIds,
   introducedFragmentMethods,
+  introducedAttachments: { addFromFragment },
   contentEditorRef,
   onAiUnavailable: () => emit('error', new Error('请先在设置中配置 AI 服务')),
   onError: (error) => emit('error', error),
@@ -366,6 +379,7 @@ const handleCancelFragmentIntro = (fragmentIds) => {
   )
   insertedFragmentIds.value = next.insertedIds
   introducedFragmentMethods.value = next.introducedMethods
+  removeIntroducedAttachmentsByFragmentIds(fragmentIds)
 }
 
 const handleRestoreFragment = async (fragmentNote) => {
@@ -389,6 +403,7 @@ const handleRestoreFragment = async (fragmentNote) => {
     const nextMethods = { ...introducedFragmentMethods.value }
     delete nextMethods[String(fragmentId)]
     introducedFragmentMethods.value = nextMethods
+    removeIntroducedAttachmentsByFragmentIds([fragmentId])
     await updateStructNote({
       id: noteId,
       title: resolveTitleForSave(),
@@ -590,6 +605,7 @@ const fetchDetail = async () => {
     introducedFragmentMethods.value = normalizeIntroducedFragmentMethods(
       data?.introducedFragmentMethods,
     )
+    syncFromIntroducedFragments(localFragmentNotes.value, insertedFragmentIds.value)
     await nextTick()
     titleInputRef.value?.focus()
   } catch {
@@ -650,6 +666,7 @@ watch(
       localFragmentNotes.value = []
       insertedFragmentIds.value = new Set()
       introducedFragmentMethods.value = {}
+      resetIntroducedAttachments()
       fragmentsOpen.value = false
       fragmentsMode.value = 'compose'
       sourceFragmentIds.value = []
@@ -806,7 +823,7 @@ onBeforeUnmount(() => {
   flex: 0 0 auto;
   width: 100%;
   height: 1px;
-  margin: 12px 0 14px;
+  margin: 12px 0 6px;
   background: rgba(24, 24, 27, 0.1);
 }
 

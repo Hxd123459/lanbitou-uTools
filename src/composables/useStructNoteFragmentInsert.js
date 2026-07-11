@@ -48,6 +48,7 @@ export function useStructNoteFragmentInsert({
   localFragmentNotes,
   insertedFragmentIds,
   introducedFragmentMethods,
+  introducedAttachments,
   contentEditorRef,
   onAiUnavailable,
   onError,
@@ -64,7 +65,7 @@ export function useStructNoteFragmentInsert({
     processingFragmentId.value = ''
   }
 
-  const markFragmentIntroduced = (fragmentId, method) => {
+  const markFragmentIntroduced = (fragmentId, method, note) => {
     const key = String(fragmentId)
     if (!key) return
     insertedFragmentIds.value = new Set([...insertedFragmentIds.value, key])
@@ -72,6 +73,7 @@ export function useStructNoteFragmentInsert({
       ...introducedFragmentMethods.value,
       [key]: method || FRAGMENT_INTRO_RAW,
     }
+    if (note) introducedAttachments?.addFromFragment?.(note)
   }
 
   const runAiForFragments = (fragments) =>
@@ -99,7 +101,7 @@ export function useStructNoteFragmentInsert({
     const fragmentId = String(note.id)
     if (insertedFragmentIds.value.has(fragmentId)) return false
     draftContent.value = appendFragmentToContent(draftContent.value, note)
-    markFragmentIntroduced(fragmentId, FRAGMENT_INTRO_RAW)
+    markFragmentIntroduced(fragmentId, FRAGMENT_INTRO_RAW, note)
     return true
   }
 
@@ -109,7 +111,7 @@ export function useStructNoteFragmentInsert({
 
     if (!fragmentHasAiText(note)) {
       draftContent.value = appendFragmentToContent(draftContent.value, note)
-      markFragmentIntroduced(fragmentId, preset)
+      markFragmentIntroduced(fragmentId, preset, note)
       return
     }
 
@@ -120,7 +122,7 @@ export function useStructNoteFragmentInsert({
       notes: [note],
       method: preset,
     })
-    markFragmentIntroduced(fragmentId, preset)
+    markFragmentIntroduced(fragmentId, preset, note)
   }
 
   const insertFragment = async (note) => {
@@ -199,7 +201,7 @@ export function useStructNoteFragmentInsert({
         method: preset,
       })
       for (const note of resolvedNotes) {
-        markFragmentIntroduced(note.id, preset)
+        markFragmentIntroduced(note.id, preset, note)
       }
       await nextTick()
       contentEditorRef.value?.focus()
