@@ -1,4 +1,5 @@
 import { unzipSync } from 'fflate'
+import { isImageMimeType } from '../constants/uploadLimits'
 import {
   buildAttachmentId,
   saveImageFiles,
@@ -16,9 +17,11 @@ import {
   LB_TYPE_FRAGMENT,
   LB_TYPE_SEDIMENT,
   SEDIMENT_DIR,
+  extensionToMime,
   isLanbitouBackup,
   joinZipPath,
   mimeToExtension,
+  normalizeBackupAttachmentMeta,
   parseFrontmatter,
 } from './format'
 
@@ -77,123 +80,69 @@ function lookupZipEntry(entryIndex, filePath) {
   return null
 }
 
-function extensionToMime(ext = '') {
-  const map = {
-    png: 'image/png',
-    jpg: 'image/jpeg',
-    jpeg: 'image/jpeg',
-    webp: 'image/webp',
-    gif: 'image/gif',
-  }
-  return map[String(ext).toLowerCase()] || 'application/octet-stream'
-}
-
-function normalizeImageBytes(bytes) {
-  if (!bytes) return null
-  if (bytes instanceof Uint8Array) return bytes
-  if (bytes instanceof ArrayBuffer) return new Uint8Array(bytes)
-  if (typeof bytes.length === 'number') return new Uint8Array(bytes)
-  return null
-}
-
-function discoverFragmentImages(entryIndex, noteId, imagesMeta = []) {
-  const normalizedMeta = imagesMeta
-    .filter((img) => img && typeof img === 'object' && !Array.isArray(img))
-    .map((img) => ({
-      id: img.id != null ? String(img.id) : '',
-      file: img.file ? String(img.file) : '',
-      mime: img.mime || img.mimeType || 'application/octet-stream',
-      sort: img.sort ?? img.sortOrder ?? 0,
-    }))
-    .filter((img) => img.file)
-
-  if (normalizedMeta.length) return normalizedMeta
-
-  const prefix = `${joinZipPath(FRAGMENTS_DIR, ATTACHMENTS_DIR, noteId)}/`
-  const discovered = []
-
-  for (const [key] of Object.entries(entryIndex)) {
-    const normalized = normalizeZipEntryKey(key)
-    if (!normalized.startsWith(prefix)) continue
-    const filename = normalized.slice(prefix.length)
-    if (!filename || filename.includes('/')) continue
-    const dot = filename.lastIndexOf('.')
-    const imageId = dot > 0 ? filename.slice(0, dot) : filename
-    const ext = dot > 0 ? filename.slice(dot + 1) : ''
-    discovered.push({
-      id: imageId,
-      file: normalized,
-      mime: extensionToMime(ext),
-      sort: discovered.length,
-    })
-  }
-
-  return discovered.sort((a, b) => (a.sort ?? 0) - (b.sort ?? 0))
-}
-
-function discoverSedimentImages(entryIndex, noteId, imagesMeta = []) {
-  const normalizedMeta = imagesMeta
-    .filter((img) => img && typeof img === 'object' && !Array.isArray(img))
-    .map((img) => ({
-      id: img.id != null ? String(img.id) : '',
-      file: img.file ? String(img.file) : '',
-      mime: img.mime || img.mimeType || 'application/octet-stream',
-      sort: img.sort ?? img.sortOrder ?? 0,
-    }))
-    .filter((img) => img.file)
-
-  if (normalizedMeta.length) return normalizedMeta
-
-  const prefix = `${joinZipPath(SEDIMENT_DIR, ATTACHMENTS_DIR, noteId)}/`
-  const discovered = []
-
-  for (const [key] of Object.entries(entryIndex)) {
-    const normalized = normalizeZipEntryKey(key)
-    if (!normalized.startsWith(prefix)) continue
-    const filename = normalized.slice(prefix.length)
-    if (!filename || filename.includes('/')) continue
-    const dot = filename.lastIndexOf('.')
-    const imageId = dot > 0 ? filename.slice(0, dot) : filename
-    const ext = dot > 0 ? filename.slice(dot + 1) : ''
-    discovered.push({
-      id: imageId,
-      file: normalized,
-      mime: extensionToMime(ext),
-      sort: discovered.length,
-    })
-  }
-
-  return discovered.sort((a, b) => (a.sort ?? 0) - (b.sort ?? 0))
-}
-
-async function restoreSedimentAttachments(entryIndex, noteId, imagesMeta = []) {
-  const images = discoverSedimentImages(entryIndex, noteId, imagesMeta)
-  for (const img of images) {
-    if (!img?.id) continue
-    const candidates = [
-      img.file,
-      joinZipPath(SEDIMENT_DIR, ATTACHMENTS_DIR, noteId, `${img.id}.${mimeToExtension(img.mime)}`),
-    ]
-    let fileBytes = null
-    for (const candidate of candidates) {
-      if (!candidate) continue
-      fileBytes = lookupZipEntry(entryIndex, candidate)
-      if (fileBytes) break
+function splitLegacyAttachmentMeta(imagesMeta = [], filesMeta = []) {
+  if (filesMeta.length) {
+    return {
+      images: normalizeBackupAttachmentMeta(imagesMeta),
+      files: normalizeBackupAttachmentMeta(filesMeta),
     }
-    const bytes = normalizeImageBytes(fileBytes)
-    if (!bytes?.length) continue
-    const attachmentId = buildAttachmentId(noteId, img.id)
-    dbPostAttachment(attachmentId, bytes, img.mime || 'application/octet-stream')
+  }
+  const normalized = normalizeBackupAttachmentMeta(imagesMeta)
+  return {
+    images: normalized.filter((item) => isImageMimeType(item.mime)),
+    files: normalized.filter((item) => !isImageMimeType(item.mime)),
   }
 }
 
-function buildImageFiles(entryIndex, noteId, imagesMeta = []) {
-  return imagesMeta
-    .map((img) => {
-      const ext = mimeToExtension(img.mime || img.mimeType)
+function discoverAttachmentEntries(entryIndex, noteId, imagesMeta = [], filesMeta = [], baseDir) {
+  const { images: normalizedImages, files: normalizedFiles } = splitLegacyAttachmentMeta(
+    imagesMeta,
+    filesMeta,
+  )
+  if (normalizedImages.length || normalizedFiles.length) {
+    return [...normalizedImages, ...normalizedFiles].sort(
+      (a, b) => (a.sort ?? 0) - (b.sort ?? 0),
+    )
+  }
+
+  const prefix = `${joinZipPath(baseDir, ATTACHMENTS_DIR, noteId)}/`
+  const discovered = []
+
+  for (const [key] of Object.entries(entryIndex)) {
+    const normalized = normalizeZipEntryKey(key)
+    if (!normalized.startsWith(prefix)) continue
+    const filename = normalized.slice(prefix.length)
+    if (!filename || filename.includes('/')) continue
+    const dot = filename.lastIndexOf('.')
+    const assetId = dot > 0 ? filename.slice(0, dot) : filename
+    const ext = dot > 0 ? filename.slice(dot + 1) : ''
+    discovered.push({
+      id: assetId,
+      file: normalized,
+      mime: extensionToMime(ext),
+      sort: discovered.length,
+      name: '',
+    })
+  }
+
+  return discovered.sort((a, b) => (a.sort ?? 0) - (b.sort ?? 0))
+}
+
+function discoverFragmentAttachments(entryIndex, noteId, imagesMeta = [], filesMeta = []) {
+  return discoverAttachmentEntries(entryIndex, noteId, imagesMeta, filesMeta, FRAGMENTS_DIR)
+}
+
+function discoverSedimentAttachments(entryIndex, noteId, imagesMeta = [], filesMeta = []) {
+  return discoverAttachmentEntries(entryIndex, noteId, imagesMeta, filesMeta, SEDIMENT_DIR)
+}
+
+function buildAttachmentFiles(entryIndex, noteId, attachmentsMeta = [], baseDir) {
+  return attachmentsMeta
+    .map((item) => {
+      const ext = mimeToExtension(item.mime || item.mimeType, item.name)
       const candidates = [
-        img.file,
-        joinZipPath(FRAGMENTS_DIR, ATTACHMENTS_DIR, noteId, `${img.id}.${ext}`),
+        item.file,
+        joinZipPath(baseDir, ATTACHMENTS_DIR, noteId, `${item.id}.${ext}`),
       ]
 
       let fileBytes = null
@@ -207,11 +156,49 @@ function buildImageFiles(entryIndex, noteId, imagesMeta = []) {
       const bytes = normalizeImageBytes(fileBytes)
       if (!bytes?.length) return null
 
-      return new File([bytes], String(img.id || 'image'), {
-        type: img.mime || img.mimeType || 'application/octet-stream',
+      const fallbackName = `${item.id || 'attachment'}.${ext}`
+      const fileName = String(item.name || item.fileName || fallbackName).trim() || fallbackName
+      return new File([bytes], fileName, {
+        type: item.mime || item.mimeType || 'application/octet-stream',
       })
     })
     .filter(Boolean)
+}
+
+async function restoreNoteAttachments(entryIndex, noteId, imagesMeta = [], filesMeta = [], baseDir) {
+  const attachmentsMeta = discoverAttachmentEntries(
+    entryIndex,
+    noteId,
+    imagesMeta,
+    filesMeta,
+    baseDir,
+  )
+  for (const item of attachmentsMeta) {
+    if (!item?.id) continue
+    const ext = mimeToExtension(item.mime || item.mimeType, item.name)
+    const candidates = [
+      item.file,
+      joinZipPath(baseDir, ATTACHMENTS_DIR, noteId, `${item.id}.${ext}`),
+    ]
+    let fileBytes = null
+    for (const candidate of candidates) {
+      if (!candidate) continue
+      fileBytes = lookupZipEntry(entryIndex, candidate)
+      if (fileBytes) break
+    }
+    const bytes = normalizeImageBytes(fileBytes)
+    if (!bytes?.length) continue
+    const attachmentId = buildAttachmentId(noteId, item.id)
+    dbPostAttachment(attachmentId, bytes, item.mime || 'application/octet-stream')
+  }
+}
+
+function normalizeImageBytes(bytes) {
+  if (!bytes) return null
+  if (bytes instanceof Uint8Array) return bytes
+  if (bytes instanceof ArrayBuffer) return new Uint8Array(bytes)
+  if (typeof bytes.length === 'number') return new Uint8Array(bytes)
+  return null
 }
 
 function normalizeParentId(parentId) {
@@ -324,25 +311,30 @@ async function importFragment(item, summary, maps) {
   }
 
   const now = meta.lb_created || formatDateTime()
-  const imagesMeta = discoverFragmentImages(
+  const attachmentsMeta = discoverFragmentAttachments(
     maps.entryIndex,
     noteId,
     Array.isArray(meta.lb_images) ? meta.lb_images : [],
+    Array.isArray(meta.lb_files) ? meta.lb_files : [],
   )
-  imagesMeta.sort((a, b) => (a.sort ?? 0) - (b.sort ?? 0))
-
-  const files = buildImageFiles(maps.entryIndex, noteId, imagesMeta)
+  const attachmentFiles = buildAttachmentFiles(
+    maps.entryIndex,
+    noteId,
+    attachmentsMeta,
+    FRAGMENTS_DIR,
+  )
 
   let images = []
-  if (files.length) {
+  if (attachmentFiles.length) {
     if (existingFragment?.images?.length) {
       await removeAttachments(existingFragment.images)
     }
-    images = await saveImageFiles(noteId, files)
+    images = await saveImageFiles(noteId, attachmentFiles)
     images = images.map((img, index) => ({
       ...img,
-      mimeType: imagesMeta[index]?.mime || img.mimeType,
-      sortOrder: imagesMeta[index]?.sort ?? img.sortOrder ?? index,
+      mimeType: attachmentsMeta[index]?.mime || img.mimeType,
+      fileName: attachmentsMeta[index]?.name || img.fileName || attachmentFiles[index]?.name || '',
+      sortOrder: attachmentsMeta[index]?.sort ?? img.sortOrder ?? index,
     }))
   }
 
@@ -392,13 +384,21 @@ async function importSedimentNote(item, summary, maps) {
     .map((id) => maps.fragmentIdMap.get(String(id)) || String(id))
     .filter(Boolean)
 
+  const introducedFragmentIds = (
+    Array.isArray(meta.lb_introduced_fragments) ? meta.lb_introduced_fragments : []
+  )
+    .map((id) => maps.fragmentIdMap.get(String(id)) || String(id))
+    .filter(Boolean)
+
   const now = meta.lb_created || formatDateTime()
   const title = String(meta.title || '无标题').trim() || '无标题'
 
-  await restoreSedimentAttachments(
+  await restoreNoteAttachments(
     maps.entryIndex,
     noteId,
     Array.isArray(meta.lb_images) ? meta.lb_images : [],
+    Array.isArray(meta.lb_files) ? meta.lb_files : [],
+    SEDIMENT_DIR,
   )
 
   await dbPut({
@@ -408,6 +408,7 @@ async function importSedimentNote(item, summary, maps) {
     content: body,
     tagId,
     sourceFragmentIds,
+    introducedFragmentIds,
     createTime: now,
     updateTime: meta.lb_updated || now,
   })

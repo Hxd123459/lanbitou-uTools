@@ -1,5 +1,6 @@
 import { zipSync } from 'fflate'
 import { buildAttachmentId } from '../storage/utools/attachment'
+import { isImageMimeType } from '../constants/uploadLimits'
 import { extractLbAttRefsFromMarkdown } from '../utils/attachmentMarkdown'
 import {
   ATTACHMENT_PREFIX,
@@ -98,7 +99,7 @@ function normalizeAttachmentBytes(bytes) {
   return null
 }
 
-function resolveImageEntry(noteId, img, mimeType = '') {
+function resolveAttachmentEntry(noteId, img, mimeType = '') {
   let imageId = img?.id != null && img.id !== '' ? String(img.id) : ''
   let attachmentId =
     img?.attachmentId != null && img.attachmentId !== '' ? String(img.attachmentId) : ''
@@ -122,17 +123,30 @@ function resolveImageEntry(noteId, img, mimeType = '') {
   }
 }
 
-async function resolveNoteImages(note) {
+async function resolveNoteAttachments(note) {
   const noteId = String(note.id)
-  const images = Array.isArray(note.images) ? [...note.images] : []
-  const knownAttachmentIds = new Set()
+  const metaById = new Map(
+    (Array.isArray(note.images) ? note.images : []).map((item) => [String(item?.id ?? ''), item]),
+  )
+  const entries = []
 
-  images.forEach((img) => {
-    const entry = resolveImageEntry(noteId, img)
-    if (entry?.attachmentId) knownAttachmentIds.add(entry.attachmentId)
-  })
+  for (const img of Array.isArray(note.images) ? note.images : []) {
+    const entry = resolveAttachmentEntry(noteId, img)
+    if (!entry) continue
+    if (!entry.mimeType || entry.mimeType === 'application/octet-stream') {
+      entry.mimeType =
+        (await dbGetAttachmentTypeAsync(entry.attachmentId)) ||
+        entry.mimeType ||
+        'application/octet-stream'
+    }
+    const meta = metaById.get(entry.imageId)
+    entry.fileName = meta?.fileName || meta?.name || ''
+    entry.sortOrder = meta?.sortOrder ?? entry.sortOrder ?? 0
+    entries.push(entry)
+  }
 
   const prefix = `${ATTACHMENT_PREFIX}${noteId}/`
+  const knownAttachmentIds = new Set(entries.map((entry) => entry.attachmentId))
   const attachmentDocs = await dbAllDocs(prefix)
   for (const doc of attachmentDocs || []) {
     const attachmentId = String(doc?._id || doc?.id || '')
@@ -140,23 +154,30 @@ async function resolveNoteImages(note) {
     const imageId = attachmentId.startsWith(prefix) ? attachmentId.slice(prefix.length) : ''
     if (!imageId) continue
     const mimeType = (await dbGetAttachmentTypeAsync(attachmentId)) || 'application/octet-stream'
-    images.push({
-      id: imageId,
+    const meta = metaById.get(imageId)
+    entries.push({
+      imageId,
       attachmentId,
       mimeType,
-      sortOrder: images.length,
+      fileName: meta?.fileName || meta?.name || '',
+      sortOrder: meta?.sortOrder ?? entries.length,
     })
     knownAttachmentIds.add(attachmentId)
   }
 
-  return images
+  const images = []
+  const files = []
+  for (const entry of entries.sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0))) {
+    if (isImageMimeType(entry.mimeType)) images.push(entry)
+    else files.push(entry)
+  }
+  return { images, files }
 }
 
-function buildFragmentMarkdown(note, tagName, attachmentWrites, imageEntries) {
-  const noteId = String(note.id)
-  const images = imageEntries.map((entry) => {
-    const ext = mimeToExtension(entry.mimeType)
-    const file = joinZipPath(FRAGMENTS_DIR, ATTACHMENTS_DIR, noteId, `${entry.imageId}.${ext}`)
+function buildAttachmentMetaEntries(noteId, entries, attachmentWrites, baseDir) {
+  return entries.map((entry, index) => {
+    const ext = mimeToExtension(entry.mimeType, entry.fileName)
+    const file = joinZipPath(baseDir, ATTACHMENTS_DIR, noteId, `${entry.imageId}.${ext}`)
     attachmentWrites.push({
       attachmentId: entry.attachmentId,
       file,
@@ -165,9 +186,26 @@ function buildFragmentMarkdown(note, tagName, attachmentWrites, imageEntries) {
       id: entry.imageId,
       file,
       mime: entry.mimeType,
-      sort: entry.sortOrder,
+      sort: entry.sortOrder ?? index,
+      name: entry.fileName || '',
     }
   })
+}
+
+function buildFragmentMarkdown(note, tagName, attachmentWrites, imageEntries, fileEntries) {
+  const noteId = String(note.id)
+  const images = buildAttachmentMetaEntries(
+    noteId,
+    imageEntries,
+    attachmentWrites,
+    FRAGMENTS_DIR,
+  )
+  const files = buildAttachmentMetaEntries(
+    noteId,
+    fileEntries,
+    attachmentWrites,
+    FRAGMENTS_DIR,
+  )
 
   const body = note.markdownContent || note.rawContent || ''
   const meta = {
@@ -180,38 +218,47 @@ function buildFragmentMarkdown(note, tagName, attachmentWrites, imageEntries) {
     lb_archived: Boolean(note.archivedAt),
     lb_archived_by: note.archivedByStructNoteId || null,
     lb_pin: pinWeightToType(note.pinWeight),
-    lb_images: images,
   }
+  if (images.length) meta.lb_images = images
+  if (files.length) meta.lb_files = files
 
   return serializeFrontmatter(meta, body)
 }
 
-async function buildSedimentImageEntries(noteId, content, attachmentWrites) {
+async function buildSedimentAttachmentEntries(noteId, content, attachmentWrites) {
   const attachmentIds = extractLbAttRefsFromMarkdown(content)
-  if (!attachmentIds.length) return []
+  if (!attachmentIds.length) return { images: [], files: [] }
 
   const prefix = `${ATTACHMENT_PREFIX}${noteId}/`
   const images = []
+  const files = []
 
   for (const attachmentId of attachmentIds) {
     if (!attachmentId.startsWith(prefix)) continue
-    const imageId = attachmentId.slice(prefix.length)
-    if (!imageId) continue
+    const assetId = attachmentId.slice(prefix.length)
+    if (!assetId) continue
 
     const mimeType =
       (await dbGetAttachmentTypeAsync(attachmentId)) || 'application/octet-stream'
     const ext = mimeToExtension(mimeType)
-    const file = joinZipPath(SEDIMENT_DIR, ATTACHMENTS_DIR, noteId, `${imageId}.${ext}`)
+    const file = joinZipPath(SEDIMENT_DIR, ATTACHMENTS_DIR, noteId, `${assetId}.${ext}`)
     attachmentWrites.push({ attachmentId, file })
-    images.push({
-      id: imageId,
+    const entry = {
+      id: assetId,
       file,
       mime: mimeType,
-      sort: images.length,
-    })
+      name: '',
+    }
+    if (isImageMimeType(mimeType)) {
+      entry.sort = images.length
+      images.push(entry)
+    } else {
+      entry.sort = files.length
+      files.push(entry)
+    }
   }
 
-  return images
+  return { images, files }
 }
 
 export async function exportLanbitouBackup({ includeDeleted = false } = {}) {
@@ -231,26 +278,14 @@ export async function exportLanbitouBackup({ includeDeleted = false } = {}) {
 
   for (const note of notes) {
     const noteId = String(note.id)
-    const noteImages = await resolveNoteImages(note)
-    const imageEntries = []
-
-    for (const img of noteImages) {
-      const entry = resolveImageEntry(noteId, img)
-      if (!entry) continue
-      if (!entry.mimeType || entry.mimeType === 'application/octet-stream') {
-        entry.mimeType =
-          (await dbGetAttachmentTypeAsync(entry.attachmentId)) ||
-          entry.mimeType ||
-          'application/octet-stream'
-      }
-      imageEntries.push(entry)
-    }
+    const { images: imageEntries, files: fileEntries } = await resolveNoteAttachments(note)
 
     const md = buildFragmentMarkdown(
       note,
       tagNameById.get(String(note.tagId || '')) || '',
       attachmentWrites,
       imageEntries,
+      fileEntries,
     )
     files[joinZipPath(FRAGMENTS_DIR, `${noteId}.md`)] = new TextEncoder().encode(md)
   }
@@ -261,7 +296,11 @@ export async function exportLanbitouBackup({ includeDeleted = false } = {}) {
     if (!note) continue
     const noteId = String(note.id)
     const folderPath = buildFolderPath(folderItem.id, folderById)
-    const imageEntries = await buildSedimentImageEntries(noteId, note.content || '', attachmentWrites)
+    const { images: sedimentImages, files: sedimentFiles } = await buildSedimentAttachmentEntries(
+      noteId,
+      note.content || '',
+      attachmentWrites,
+    )
     const meta = {
       lb_version: LB_VERSION,
       lb_type: LB_TYPE_SEDIMENT,
@@ -270,12 +309,12 @@ export async function exportLanbitouBackup({ includeDeleted = false } = {}) {
       title: note.title || folderItem.name || '无标题',
       lb_tag: tagNameById.get(String(note.tagId || '')) || '',
       lb_source_fragments: [...(note.sourceFragmentIds || [])],
+      lb_introduced_fragments: [...(note.introducedFragmentIds || [])],
       lb_created: note.createTime || '',
       lb_updated: note.updateTime || '',
     }
-    if (imageEntries.length) {
-      meta.lb_images = imageEntries
-    }
+    if (sedimentImages.length) meta.lb_images = sedimentImages
+    if (sedimentFiles.length) meta.lb_files = sedimentFiles
     const content = serializeFrontmatter(meta, note.content || '')
     const path = folderPath
       ? joinZipPath(SEDIMENT_DIR, folderPath, `${note.id}.md`)

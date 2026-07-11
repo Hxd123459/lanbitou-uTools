@@ -31,8 +31,15 @@ export function parseFrontmatter(text) {
   return { meta, body: match[2] }
 }
 
+const JSON_ARRAY_META_KEYS = new Set([
+  'lb_images',
+  'lb_files',
+  'lb_source_fragments',
+  'lb_introduced_fragments',
+])
+
 function parseMetaValue(key, value) {
-  if (key === 'lb_images' || key === 'lb_source_fragments') {
+  if (JSON_ARRAY_META_KEYS.has(key)) {
     const parsed = tryParseJsonArray(value)
     if (parsed) return parsed
   }
@@ -100,7 +107,7 @@ export function serializeFrontmatter(meta, body = '') {
   const lines = Object.entries(meta || {})
     .filter(([, value]) => value !== undefined)
     .map(([key, value]) => {
-      if ((key === 'lb_images' || key === 'lb_source_fragments') && Array.isArray(value)) {
+      if (JSON_ARRAY_META_KEYS.has(key) && Array.isArray(value)) {
         return `${key}: ${JSON.stringify(value)}`
       }
       if (Array.isArray(value)) {
@@ -138,13 +145,50 @@ export function isPlatformMarkdown(meta = {}) {
   return meta.lb_type === LB_TYPE_FRAGMENT || meta.lb_type === LB_TYPE_SEDIMENT
 }
 
-export function mimeToExtension(mime = '') {
-  const map = {
-    'image/png': 'png',
-    'image/jpeg': 'jpg',
-    'image/jpg': 'jpg',
-    'image/webp': 'webp',
-    'image/gif': 'gif',
-  }
-  return map[String(mime).toLowerCase()] || 'bin'
+const MIME_EXTENSION_MAP = {
+  'image/png': 'png',
+  'image/jpeg': 'jpg',
+  'image/jpg': 'jpg',
+  'image/webp': 'webp',
+  'image/gif': 'gif',
+  'application/pdf': 'pdf',
+  'text/plain': 'txt',
+  'text/markdown': 'md',
+  'application/msword': 'doc',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'docx',
+  'application/vnd.ms-excel': 'xls',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': 'xlsx',
+  'application/vnd.ms-powerpoint': 'ppt',
+  'application/vnd.openxmlformats-officedocument.presentationml.presentation': 'pptx',
+  'application/zip': 'zip',
+  'application/x-zip-compressed': 'zip',
+}
+
+const EXTENSION_MIME_MAP = Object.fromEntries(
+  Object.entries(MIME_EXTENSION_MAP).map(([mime, ext]) => [ext, mime]),
+)
+
+export function mimeToExtension(mime = '', fileName = '') {
+  const normalized = String(mime || '').toLowerCase()
+  if (MIME_EXTENSION_MAP[normalized]) return MIME_EXTENSION_MAP[normalized]
+  const fromName = String(fileName || '').match(/\.([a-z0-9]+)$/i)?.[1]?.toLowerCase()
+  if (fromName && EXTENSION_MIME_MAP[fromName]) return fromName
+  return 'bin'
+}
+
+export function extensionToMime(ext = '') {
+  return EXTENSION_MIME_MAP[String(ext).toLowerCase()] || 'application/octet-stream'
+}
+
+export function normalizeBackupAttachmentMeta(items = []) {
+  return (Array.isArray(items) ? items : [])
+    .filter((item) => item && typeof item === 'object' && !Array.isArray(item))
+    .map((item) => ({
+      id: item.id != null ? String(item.id) : '',
+      file: item.file ? String(item.file) : '',
+      mime: item.mime || item.mimeType || 'application/octet-stream',
+      sort: item.sort ?? item.sortOrder ?? 0,
+      name: item.name || item.fileName || '',
+    }))
+    .filter((item) => item.id && item.file)
 }
