@@ -475,6 +475,7 @@ import {
 } from '../api/note'
 import { useAssistantStore } from '../stores/assistantStore'
 import { formatDisplayDate, toDateKey } from '../composables/useWritingStats'
+import { notifyLanbitouFragmentSaved } from '../mascot'
 
 const { presets } = useMotionPresets()
 
@@ -1757,6 +1758,11 @@ const handleSubmit = async ({ text, images, tagId, tagName }) => {
     appendNoteToDateFilter(note)
     inputValue.value = ''
     inputBarRef.value?.reset()
+    notifyLanbitouFragmentSaved({
+      text: text || '',
+      tagName: note?.title || tagName || '',
+      hasImages: Array.isArray(images) && images.length > 0,
+    })
   } catch (error) {
     notifyError(error)
   } finally {
