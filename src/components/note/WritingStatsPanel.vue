@@ -251,10 +251,11 @@
     <Teleport to="body">
       <motion.div
         v-if="tooltip.visible"
+        ref="tooltipRef"
         class="writing-stats-tooltip"
-        :style="{ left: `${tooltip.x}px`, top: `${tooltip.y}px` }"
-        :initial="reduced ? false : { opacity: 0, y: 4 }"
-        :animate="{ opacity: 1, y: 0 }"
+        :style="tooltipStyle"
+        :initial="reduced ? false : { opacity: 0 }"
+        :animate="{ opacity: 1 }"
         :transition="tooltipTransition"
       >
         {{ tooltip.text }}
@@ -264,7 +265,7 @@
 </template>
 
 <script setup>
-import { computed, ref, watch } from 'vue'
+import { computed, nextTick, ref, watch } from 'vue'
 import { motion } from 'motion-v'
 import { useMotionPresets } from '../../composables/useMotionPresets'
 import { useWritingStats } from '../../composables/useWritingStats'
@@ -274,6 +275,7 @@ const STREAK_SILVER_DAYS = 14
 const STREAK_GOLD_DAYS = 30
 const STREAK_LEGEND_DAYS = 100
 const TOOLTIP_OFFSET_Y = 46
+const TOOLTIP_EDGE_PADDING = 8
 
 const props = defineProps({
   active: {
@@ -305,8 +307,15 @@ const {
 const goalInputText = ref(String(dailyGoal.value))
 const weekdayLabels = ['一', '', '三', '', '五', '', '日']
 const chartWrapRef = ref(null)
+const tooltipRef = ref(null)
 const hoveredChartKey = ref('')
-const tooltip = ref({ visible: false, text: '', x: 0, y: 0 })
+const tooltip = ref({
+  visible: false,
+  text: '',
+  anchorX: 0,
+  anchorY: 0,
+})
+const tooltipSize = ref({ width: 0, height: 0 })
 const enterSeed = ref(0)
 const enterAnimationEnabled = ref(true)
 const hasPlayedEnterAnimation = ref(false)
@@ -419,9 +428,45 @@ const commitGoal = () => {
   goalInputText.value = String(saved)
 }
 
+const tooltipStyle = computed(() => {
+  const { anchorX, anchorY } = tooltip.value
+  const { width } = tooltipSize.value
+  const pad = TOOLTIP_EDGE_PADDING
+  const half = width / 2
+
+  let left = anchorX
+  let transform = 'translateX(-50%)'
+
+  if (width > 0) {
+    if (anchorX + half > window.innerWidth - pad) {
+      left = Math.min(anchorX, window.innerWidth - pad)
+      transform = 'translateX(-100%)'
+    } else if (anchorX - half < pad) {
+      left = Math.max(anchorX, pad)
+      transform = 'translateX(0)'
+    }
+  }
+
+  return {
+    left: `${left}px`,
+    top: `${anchorY}px`,
+    transform,
+  }
+})
+
+const measureTooltip = () => {
+  const el = tooltipRef.value
+  if (!el) return
+  tooltipSize.value = {
+    width: el.offsetWidth,
+    height: el.offsetHeight,
+  }
+}
+
 const positionTooltip = (event) => {
-  tooltip.value.x = event.clientX
-  tooltip.value.y = event.clientY - TOOLTIP_OFFSET_Y
+  tooltip.value.anchorX = event.clientX
+  tooltip.value.anchorY = event.clientY - TOOLTIP_OFFSET_Y
+  measureTooltip()
 }
 
 const showTooltipAt = (text, event) => {
@@ -429,9 +474,10 @@ const showTooltipAt = (text, event) => {
   tooltip.value = {
     visible: true,
     text,
-    x: event.clientX,
-    y: event.clientY - TOOLTIP_OFFSET_Y,
+    anchorX: event.clientX,
+    anchorY: event.clientY - TOOLTIP_OFFSET_Y,
   }
+  void nextTick(measureTooltip)
 }
 
 const hideTooltip = () => {
@@ -467,9 +513,9 @@ const onChartMouseMove = (event) => {
     }
   }
   hoveredChartKey.value = nearest.key
-  positionTooltip(event)
   tooltip.value.visible = true
   tooltip.value.text = nearest.tooltip
+  positionTooltip(event)
 }
 
 const onHeatmapDayClick = (day) => {
@@ -477,6 +523,14 @@ const onHeatmapDayClick = (day) => {
   hideTooltip()
   emit('open-day', day.key)
 }
+
+watch(
+  () => tooltip.value.text,
+  () => {
+    if (!tooltip.value.visible) return
+    void nextTick(measureTooltip)
+  },
+)
 
 watch(dailyGoal, (value) => {
   goalInputText.value = String(value)
@@ -1037,7 +1091,6 @@ watch(dailyGoal, (value) => {
 .writing-stats-tooltip {
   position: fixed;
   z-index: 220;
-  transform: translateX(-50%);
   padding: 6px 10px;
   border-radius: 6px;
   background: rgba(24, 24, 27, 0.92);

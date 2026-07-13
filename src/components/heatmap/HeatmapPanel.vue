@@ -62,7 +62,10 @@
 
 <script setup>
 import { computed } from 'vue'
-import { useDailyWritingStats } from '../../composables/useWritingStats'
+import {
+  computeCurrentWritingStreak,
+  useDailyWritingStats,
+} from '../../composables/useWritingStats'
 
 const props = defineProps({
   active: {
@@ -73,7 +76,7 @@ const props = defineProps({
 
 const emit = defineEmits(['open-day'])
 
-const { fragmentsByDate } = useDailyWritingStats({ active: () => props.active })
+const { wordsByDate, fragmentsByDate } = useDailyWritingStats({ active: () => props.active })
 
 const WEEK_COUNT = 20
 const weekdayLabels = ['一', '', '三', '', '五', '', '日']
@@ -206,22 +209,9 @@ const maxDailyCount = computed(() => {
   return max
 })
 
-const currentStreak = computed(() => {
-  let streak = 0
-  let cursor = new Date(rangeEnd.value)
-
-  while (cursor >= rangeStart.value) {
-    const key = toDateKey(cursor)
-    if ((countByDate.value.get(key) || 0) > 0) {
-      streak += 1
-      cursor = addDays(cursor, -1)
-    } else {
-      break
-    }
-  }
-
-  return streak
-})
+const currentStreak = computed(() =>
+  computeCurrentWritingStreak(wordsByDate.value, rangeStart.value, rangeEnd.value),
+)
 
 const statItems = computed(() => [
   { label: '总笔记', value: totalNotes.value },

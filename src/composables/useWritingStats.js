@@ -153,6 +153,29 @@ function mapsFromDailyStats({ wordsByDate = {}, fragmentsByDate = {} } = {}) {
   }
 }
 
+/** 与折线图一致：按当日字数判定是否写作；今日尚未写作时不立即断档 */
+export function computeCurrentWritingStreak(wordsByDate, rangeStart, rangeEnd) {
+  let streak = 0
+  let cursor = new Date(rangeEnd)
+  const todayKey = toDateKey(cursor)
+
+  if ((wordsByDate.get(todayKey) || 0) <= 0) {
+    cursor = addDays(cursor, -1)
+  }
+
+  while (cursor >= rangeStart) {
+    const key = toDateKey(cursor)
+    if ((wordsByDate.get(key) || 0) > 0) {
+      streak += 1
+      cursor = addDays(cursor, -1)
+    } else {
+      break
+    }
+  }
+
+  return streak
+}
+
 export function useDailyWritingStats(options = {}) {
   const assistantStore = useAssistantStore()
   const statsWordsByDate = ref(new Map())
@@ -352,22 +375,13 @@ export function useWritingStats(options = {}) {
     }
   })
 
-  const currentStreak = computed(() => {
-    let streak = 0
-    let cursor = new Date(rangeEnd.value)
-
-    while (cursor >= heatmapRangeStart.value) {
-      const key = toDateKey(cursor)
-      if ((fragmentsByDate.value.get(key) || 0) > 0) {
-        streak += 1
-        cursor = addDays(cursor, -1)
-      } else {
-        break
-      }
-    }
-
-    return streak
-  })
+  const currentStreak = computed(() =>
+    computeCurrentWritingStreak(
+      wordsByDate.value,
+      heatmapRangeStart.value,
+      rangeEnd.value,
+    ),
+  )
 
   const lineChartActiveDays = computed(() => {
     let total = 0
