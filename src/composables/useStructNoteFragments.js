@@ -1,4 +1,4 @@
-import { buildFragmentAttachmentMarkdown } from '../utils/attachmentMarkdown'
+import { buildFragmentImageMarkdown } from '../utils/attachmentMarkdown'
 import { wrapFragmentIntroBlock } from '../utils/fragmentIntroMarkers'
 
 export const FRAGMENT_INTRO_RAW = 'raw'
@@ -42,11 +42,11 @@ export function getFragmentChipLabel(note) {
 
 export function buildFragmentBlock(note) {
   const text = getFragmentContent(note).trim()
-  const attachmentsMd = buildFragmentAttachmentMarkdown(note)
-  if (!text && !attachmentsMd) return ''
-  if (!text) return attachmentsMd
-  if (!attachmentsMd) return text
-  return `${text}\n\n${attachmentsMd}`
+  const imagesMd = buildFragmentImageMarkdown(note)
+  if (!text && !imagesMd) return ''
+  if (!text) return imagesMd
+  if (!imagesMd) return text
+  return `${text}\n\n${imagesMd}`
 }
 
 export function appendFragmentToContent(content, note) {
@@ -59,7 +59,7 @@ export function appendFragmentToContent(content, note) {
 export function buildFragmentImagesMarkdown(notes) {
   const list = Array.isArray(notes) ? notes : [notes]
   return list
-    .map((note) => buildFragmentAttachmentMarkdown(note))
+    .map((note) => buildFragmentImageMarkdown(note))
     .filter(Boolean)
     .join('\n\n')
 }

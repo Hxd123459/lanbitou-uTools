@@ -26,7 +26,7 @@ export function mapFragmentAttachmentsToItems(note) {
     .map((attachment, idx) => {
       const attachmentId = String(attachment?.id ?? idx)
       const kind = getAttachmentKind(attachment)
-      const name = getAttachmentName(attachment, kind === 'image' ? '图片' : '附件')
+      const name = getAttachmentName(attachment, '附件')
       const url = resolveFragmentAttachmentUrl(fragmentId, attachment)
       return {
         key: createIntroducedAttachmentKey(fragmentId, attachmentId),
@@ -37,7 +37,7 @@ export function mapFragmentAttachmentsToItems(note) {
         url,
       }
     })
-    .filter((item) => item.url || item.kind === 'file')
+    .filter((item) => item.kind === 'file' && (item.url || item.name))
 }
 
 export function useIntroducedFragmentAttachments() {
@@ -81,6 +81,24 @@ export function useIntroducedFragmentAttachments() {
     items.value = Array.isArray(list) ? list.map((item) => ({ ...item })) : []
   }
 
+  const syncFromIntroducedFragments = (fragmentNotes = [], introducedIds = new Set()) => {
+    const idSet = introducedIds instanceof Set ? introducedIds : new Set(introducedIds ?? [])
+    const notes = (Array.isArray(fragmentNotes) ? fragmentNotes : []).filter((note) =>
+      idSet.has(String(note?.id ?? '')),
+    )
+    const next = []
+    const seen = new Set()
+    for (const note of notes) {
+      for (const item of mapFragmentAttachmentsToItems(note)) {
+        if (!seen.has(item.key)) {
+          seen.add(item.key)
+          next.push(item)
+        }
+      }
+    }
+    items.value = next
+  }
+
   return {
     items,
     addFromFragment,
@@ -89,5 +107,6 @@ export function useIntroducedFragmentAttachments() {
     removeByFragmentIds,
     reset,
     setItems,
+    syncFromIntroducedFragments,
   }
 }

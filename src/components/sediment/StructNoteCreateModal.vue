@@ -83,10 +83,12 @@
           :ai-processing="aiProcessing"
           :processing-fragment-id="processingFragmentId"
           :all-fragments-inserted="allFragmentsInserted"
+          :introduced-attachments="introducedAttachments"
           :min-height="240"
           @insert="insertFragment"
           @insert-all="insertAllFragments"
           @cancel-fragment-intro="handleCancelFragmentIntro"
+          @remove-introduced-attachment="removeIntroducedAttachmentByKey"
           @update:selected-insert-preset="selectedInsertPreset = $event"
           @image-too-large="emit('error', new Error('单张图片不能超过 10MB'))"
         >
@@ -117,6 +119,7 @@ import { generateNoteTitle } from '../../ai/aiService'
 import { parseDraftTitleAndContent } from '../../ai/sedimentDraftService'
 import { useMotionPresets } from '../../composables/useMotionPresets'
 import { useStructNoteFragmentInsert } from '../../composables/useStructNoteFragmentInsert'
+import { useIntroducedFragmentAttachments } from '../../composables/useIntroducedFragmentAttachments'
 import {
   getFragmentContent,
   unmarkIntroducedFragments,
@@ -162,6 +165,14 @@ const localFragmentNotes = ref([])
 const fragmentsOpen = ref(false)
 
 const {
+  items: introducedAttachments,
+  addFromFragment,
+  removeByKey: removeIntroducedAttachmentByKey,
+  removeByFragmentIds: removeIntroducedAttachmentsByFragmentIds,
+  reset: resetIntroducedAttachments,
+} = useIntroducedFragmentAttachments()
+
+const {
   selectedInsertPreset,
   aiProcessing,
   processingFragmentId,
@@ -174,6 +185,7 @@ const {
   localFragmentNotes,
   insertedFragmentIds,
   introducedFragmentMethods,
+  introducedAttachments: { addFromFragment },
   contentEditorRef,
   onAiUnavailable: () => emit('ai-unavailable'),
   onError: (error) => emit('error', error),
@@ -202,6 +214,7 @@ const resetDraft = () => {
   aiDraftTitle.value = ''
   insertedFragmentIds.value = new Set()
   introducedFragmentMethods.value = {}
+  resetIntroducedAttachments()
   localFragmentNotes.value = props.fragmentNotes.map((note) => ({ ...note }))
   fragmentsOpen.value = false
 }
@@ -258,6 +271,7 @@ const handleCancelFragmentIntro = (fragmentIds) => {
   )
   insertedFragmentIds.value = next.insertedIds
   introducedFragmentMethods.value = next.introducedMethods
+  removeIntroducedAttachmentsByFragmentIds(fragmentIds)
 }
 
 const handleSave = async () => {
@@ -411,7 +425,7 @@ defineExpose({ resetDraft })
   flex: 0 0 auto;
   width: 100%;
   height: 1px;
-  margin: 12px 0 14px;
+  margin: 12px 0 6px;
   background: rgba(24, 24, 27, 0.1);
 }
 

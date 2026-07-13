@@ -25,6 +25,12 @@
     @update:selected-insert-preset="emit('update:selectedInsertPreset', $event)"
   >
     <slot name="prefix" />
+    <IntroducedFragmentAttachmentStrip
+      v-if="introducedAttachments.length"
+      :items="introducedAttachments"
+      :disabled="disabled"
+      @remove="emit('remove-introduced-attachment', $event)"
+    />
     <div
       class="struct-note-md-editor"
       :class="{ 'is-disabled': disabled }"
@@ -101,6 +107,7 @@ import '../../assets/styles/tiptap-slash-menu.css'
 import '../../assets/styles/struct-note-drag-handle.css'
 import '../../assets/styles/fragment-intro-block.css'
 import StructNoteEditorLayout from './StructNoteEditorLayout.vue'
+import IntroducedFragmentAttachmentStrip from './IntroducedFragmentAttachmentStrip.vue'
 
 const props = defineProps({
   modelValue: {
@@ -183,6 +190,10 @@ const props = defineProps({
     type: String,
     default: '',
   },
+  introducedAttachments: {
+    type: Array,
+    default: () => [],
+  },
 })
 
 const emit = defineEmits([
@@ -196,6 +207,7 @@ const emit = defineEmits([
   'file-too-large',
   'update:selectedInsertPreset',
   'cancel-fragment-intro',
+  'remove-introduced-attachment',
 ])
 
 const fragmentNotesModel = computed({

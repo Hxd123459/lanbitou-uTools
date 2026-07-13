@@ -330,12 +330,12 @@ const openSearch = () => {
 const onSearchBlur = (event) => {
   const root = event.currentTarget?.closest('.note-view-switcher')
   if (root?.contains(event.relatedTarget)) return
-  if (hasDraft.value) return
+  if (draftQuery.value.trim()) return
   searchExpanded.value = false
 }
 
 const onSearchEscape = () => {
-  if (!hasDraft.value) {
+  if (!draftQuery.value.trim()) {
     searchExpanded.value = false
     searchInputRef.value?.blur()
   }
@@ -349,8 +349,6 @@ watch(
     }
     if (keyword) {
       searchExpanded.value = true
-    } else if (!draftQuery.value.trim()) {
-      searchExpanded.value = false
     }
   },
 )

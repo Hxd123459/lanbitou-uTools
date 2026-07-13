@@ -115,8 +115,16 @@ export function extractLbAttRefsFromMarkdown(markdown) {
   return refs
 }
 
+function getNoteImages(note) {
+  const attachments = Array.isArray(note?.attachments) ? note.attachments : []
+  if (attachments.length) {
+    return attachments.filter((item) => !item?.kind || item.kind === 'image')
+  }
+  return Array.isArray(note?.images) ? note.images : []
+}
+
 export function buildFragmentImageMarkdown(note) {
-  const images = Array.isArray(note?.images) ? note.images : []
+  const images = getNoteImages(note)
   const noteId = note?.id
   if (!images.length) return ''
 
