@@ -1,3 +1,5 @@
+export const LANBITOU_MASCOT_MOUNTED = false
+
 export {
   isLanbitouMascotEnabled,
   setLanbitouMascotEnabled,
