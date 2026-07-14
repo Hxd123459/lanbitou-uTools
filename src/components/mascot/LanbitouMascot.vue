@@ -8,38 +8,52 @@
     :style="rootStyle"
     aria-live="polite"
   >
-    <div
-      class="lanbitou-mascot-body"
-      :class="{ 'is-peek': !isActive && !dragging }"
-      aria-hidden="true"
-      @pointerdown="onPointerDown"
-    >
-      <img
-        class="lanbitou-mascot-img"
-        src="/mascot.png"
-        alt=""
-        draggable="false"
-      />
+    <div class="lanbitou-mascot-stack">
+      <div
+        ref="anchorRef"
+        class="lanbitou-mascot-body"
+        :class="{ 'is-peek': !dragging }"
+        aria-hidden="true"
+        @pointerdown="onPointerDown"
+      >
+        <img
+          class="lanbitou-mascot-img"
+          src="/mascot.png"
+          alt=""
+          draggable="false"
+        />
+      </div>
     </div>
   </div>
 
   <Teleport to="body">
-    <div
-      v-if="isActive && message"
-      class="lanbitou-mascot-bubble-host"
-      :class="[bubbleClass, { 'is-visible': isActive }]"
-      :style="bubbleStyle"
-    >
-      <p class="lanbitou-mascot-bubble-text">{{ message }}</p>
+    <Transition name="lanbitou-bubble">
+      <div
+        v-if="isActive && message && layoutReady"
+        class="lanbitou-mascot-bubble-host"
+        :style="bubbleHostStyle"
+      >
+        <MascotSpeechBubble ref="bubbleRef" :tail="bubbleTail">
+          {{ message }}
+        </MascotSpeechBubble>
+      </div>
+    </Transition>
+
+    <!-- 离屏测量，用于计算定位 -->
+    <div v-if="isActive && message && !layoutReady" class="lanbitou-mascot-bubble-measure" aria-hidden="true">
+      <MascotSpeechBubble ref="bubbleRef" :tail="bubbleTail">
+        {{ message }}
+      </MascotSpeechBubble>
     </div>
   </Teleport>
 </template>
 
 <script setup>
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { useLanbitouMascotBubble } from '../../composables/useLanbitouMascotBubble'
 import { useLanbitouMascotDrag } from '../../composables/useLanbitouMascotDrag'
 import { MascotPhase } from '../../mascot/lanbitouMascotApi'
+import MascotSpeechBubble from './MascotSpeechBubble.vue'
 
 const props = defineProps({
   phase: {
@@ -51,6 +65,9 @@ const props = defineProps({
     default: '',
   },
 })
+
+const anchorRef = ref(null)
+const bubbleRef = ref(null)
 
 const {
   position,
@@ -64,12 +81,17 @@ const isActive = computed(
   () => props.phase === MascotPhase.SPEAKING && Boolean(props.message),
 )
 
-const { bubbleStyle, bubbleClass } = useLanbitouMascotBubble({
+const {
+  tail: bubbleTail,
+  hostStyle: bubbleHostStyle,
+  layoutReady,
+} = useLanbitouMascotBubble({
   visible: () => isActive.value,
   message: () => props.message,
   position: () => position.value,
   dragging: () => dragging.value,
-  peek: () => !isActive.value && !dragging.value,
+  anchorRef,
+  bubbleRef,
 })
 </script>
 
@@ -79,10 +101,16 @@ const { bubbleStyle, bubbleClass } = useLanbitouMascotBubble({
   right: 18px;
   bottom: 0;
   z-index: 240;
-  width: 52px;
-  height: 96px;
   pointer-events: none;
   touch-action: none;
+  overflow: visible;
+}
+
+.lanbitou-mascot-stack {
+  position: relative;
+  width: 52px;
+  height: 96px;
+  overflow: visible;
 }
 
 .lanbitou-mascot-body {
@@ -120,45 +148,38 @@ const { bubbleStyle, bubbleClass } = useLanbitouMascotBubble({
   .lanbitou-mascot:not(.is-custom-position) {
     right: 10px;
   }
+
+  .lanbitou-mascot-stack {
+    width: 44px;
+    height: 82px;
+  }
 }
 </style>
 
 <style>
 .lanbitou-mascot-bubble-host {
-  position: fixed;
   z-index: 241;
-  padding: 10px 14px;
-  border-radius: 16px;
-  background: rgba(24, 24, 27, 0.92);
-  color: #fff;
-  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.18);
   pointer-events: none;
-  opacity: 0;
-  transform: translateY(8px) scale(0.96);
+}
+
+.lanbitou-mascot-bubble-measure {
+  position: fixed;
+  left: -9999px;
+  top: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.lanbitou-bubble-enter-active,
+.lanbitou-bubble-leave-active {
   transition:
-    opacity 0.32s cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 0.28s ease,
     transform 0.32s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
-.lanbitou-mascot-bubble-host.is-visible {
-  opacity: 1;
-  transform: translateY(0) scale(1);
-}
-
-.lanbitou-mascot-bubble-text {
-  margin: 0;
-  font-size: 13px;
-  line-height: 1.55;
-  word-break: break-word;
-}
-
-.lanbitou-mascot-bubble-host.is-placement-above-right,
-.lanbitou-mascot-bubble-host.is-placement-above-left {
-  border-bottom-right-radius: 4px;
-}
-
-.lanbitou-mascot-bubble-host.is-placement-below-right,
-.lanbitou-mascot-bubble-host.is-placement-below-left {
-  border-top-right-radius: 4px;
+.lanbitou-bubble-enter-from,
+.lanbitou-bubble-leave-to {
+  opacity: 0;
+  transform: translateY(6px) scale(0.96);
 }
 </style>

@@ -1,101 +1,70 @@
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { getMascotBodyRect } from './useLanbitouMascotDrag'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 
-const EDGE_PADDING = 12
-const BUBBLE_GAP = 10
-const BUBBLE_MAX_WIDTH = 280
-
-function estimateBubbleSize(message) {
-  const text = String(message ?? '')
-  const charsPerLine = 18
-  const lines = Math.max(1, Math.ceil(text.length / charsPerLine))
-  const width = Math.min(
-    BUBBLE_MAX_WIDTH,
-    Math.max(120, Math.min(text.length * 14 + 28, BUBBLE_MAX_WIDTH)),
-  )
-  const height = lines * 22 + 20
-  return { width, height }
-}
-
-function resolveBubblePlacement(bodyRect, bubbleSize) {
-  const vw = window.innerWidth
-  const vh = window.innerHeight
-  const pad = EDGE_PADDING
-
-  const placements = [
-    {
-      key: 'above-right',
-      left: bodyRect.right - bubbleSize.width,
-      top: bodyRect.top - bubbleSize.height - BUBBLE_GAP,
-    },
-    {
-      key: 'above-left',
-      left: bodyRect.left,
-      top: bodyRect.top - bubbleSize.height - BUBBLE_GAP,
-    },
-    {
-      key: 'below-right',
-      left: bodyRect.right - bubbleSize.width,
-      top: bodyRect.bottom + BUBBLE_GAP,
-    },
-    {
-      key: 'below-left',
-      left: bodyRect.left,
-      top: bodyRect.bottom + BUBBLE_GAP,
-    },
-    {
-      key: 'left',
-      left: bodyRect.left - bubbleSize.width - BUBBLE_GAP,
-      top: bodyRect.top + bodyRect.height / 2 - bubbleSize.height / 2,
-    },
-    {
-      key: 'right',
-      left: bodyRect.right + BUBBLE_GAP,
-      top: bodyRect.top + bodyRect.height / 2 - bubbleSize.height / 2,
-    },
-  ]
-
-  const fits = (item) =>
-    item.left >= pad
-    && item.top >= pad
-    && item.left + bubbleSize.width <= vw - pad
-    && item.top + bubbleSize.height <= vh - pad
-
-  const best = placements.find(fits) || placements[0]
-  const clampedLeft = Math.max(pad, Math.min(best.left, vw - pad - bubbleSize.width))
-  const clampedTop = Math.max(pad, Math.min(best.top, vh - pad - bubbleSize.height))
-
-  return {
-    placement: best.key,
-    style: {
-      left: `${clampedLeft}px`,
-      top: `${clampedTop}px`,
-      maxWidth: `${Math.min(BUBBLE_MAX_WIDTH, vw - pad * 2)}px`,
-    },
-  }
-}
+const EDGE_PADDING = 10
+const TAIL_INSET = 16
+const GAP = 6
 
 export function useLanbitouMascotBubble(options) {
-  const placementKey = ref('above-right')
-  const bubbleStyle = ref({})
-  const tick = ref(0)
+  const tail = ref('br')
+  const bubbleLeft = ref(0)
+  const bubbleTop = ref(0)
+  const layoutReady = ref(false)
 
-  const bump = () => {
-    tick.value += 1
-  }
-
-  const recompute = () => {
+  const recompute = async () => {
+    layoutReady.value = false
     if (!options.visible?.()) return
-    const message = options.message?.() || ''
-    if (!message) return
 
-    const bodyRect = getMascotBodyRect(options.position?.(), {
-      peek: options.peek?.() === true,
-    })
-    const bubbleSize = estimateBubbleSize(message)
-    const result = resolveBubblePlacement(bodyRect, bubbleSize)
-    placementKey.value = result.placement
-    bubbleStyle.value = result.style
+    await nextTick()
+    await nextTick()
+
+    const bubbleEl = options.bubbleRef?.value?.$el || options.bubbleRef?.value
+    const anchorEl = options.anchorRef?.value
+    if (!anchorEl) return
+
+    const anchor = anchorEl.getBoundingClientRect()
+
+    if (!bubbleEl) {
+      bubbleLeft.value = Math.round(anchor.left - 180)
+      bubbleTop.value = Math.round(anchor.top - 72)
+      tail.value = 'br'
+      layoutReady.value = true
+      return
+    }
+    const bubble = bubbleEl.getBoundingClientRect()
+    const vw = window.innerWidth
+    const vh = window.innerHeight
+    const pad = EDGE_PADDING
+
+    const headX = anchor.left + anchor.width * 0.58
+    const headY = anchor.top + anchor.height * 0.12
+
+    let nextTail = 'br'
+    let left = headX - bubble.width + TAIL_INSET + 7
+    let top = headY - bubble.height - GAP
+
+    if (top < pad) {
+      nextTail = 'tr'
+      top = anchor.top + anchor.height * 0.28 + GAP
+      left = headX - bubble.width + TAIL_INSET + 7
+    }
+
+    if (left < pad) {
+      nextTail = nextTail === 'br' ? 'bl' : 'tl'
+      left = headX - TAIL_INSET - 7
+    }
+
+    if (left + bubble.width > vw - pad) {
+      left = vw - pad - bubble.width
+    }
+    if (top + bubble.height > vh - pad) {
+      top = vh - pad - bubble.height
+    }
+    if (top < pad) top = pad
+
+    tail.value = nextTail
+    bubbleLeft.value = Math.round(left)
+    bubbleTop.value = Math.round(top)
+    layoutReady.value = true
   }
 
   watch(
@@ -105,25 +74,41 @@ export function useLanbitouMascotBubble(options) {
       options.position?.()?.left,
       options.position?.()?.top,
       options.dragging?.(),
-      tick.value,
     ],
-    () => recompute(),
+    () => {
+      void recompute()
+    },
     { immediate: true },
   )
 
   onMounted(() => {
-    window.addEventListener('resize', bump)
+    window.addEventListener('resize', recompute)
   })
 
   onBeforeUnmount(() => {
-    window.removeEventListener('resize', bump)
+    window.removeEventListener('resize', recompute)
   })
 
-  const bubbleClass = computed(() => `is-placement-${placementKey.value}`)
+  const hostStyle = computed(() => {
+    if (!layoutReady.value) {
+      return {
+        position: 'fixed',
+        left: '-9999px',
+        top: '-9999px',
+        visibility: 'hidden',
+      }
+    }
+    return {
+      position: 'fixed',
+      left: `${bubbleLeft.value}px`,
+      top: `${bubbleTop.value}px`,
+      visibility: 'visible',
+    }
+  })
 
   return {
-    bubbleStyle,
-    bubbleClass,
-    recompute,
+    tail,
+    hostStyle,
+    layoutReady,
   }
 }
