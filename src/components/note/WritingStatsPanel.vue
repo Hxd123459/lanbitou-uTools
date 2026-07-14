@@ -4,7 +4,7 @@
       <article class="writing-stats-kpi writing-stats-kpi--today">
         <span class="writing-stats-kpi-label">今日字数</span>
         <span class="writing-stats-kpi-value">{{ todayWords }}</span>
-        <span class="writing-stats-kpi-hint">字</span>
+        <span class="writing-stats-kpi-hint" title="按内容净值计入今日；删整条碎片不扣历史">字</span>
       </article>
 
       <article class="writing-stats-kpi writing-stats-kpi--goal">
@@ -89,7 +89,7 @@
 
     <section class="writing-stats-card">
       <div class="writing-stats-card-head">
-        <h3 class="writing-stats-card-title">近 30 日字数趋势</h3>
+        <h3 class="writing-stats-card-title">近 30 日写入字数</h3>
         <span class="writing-stats-card-meta">
           活跃 {{ lineChartActiveDays }} 天 · 累计 {{ lineChartTotalWords }} 字
         </span>

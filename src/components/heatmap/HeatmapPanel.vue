@@ -2,7 +2,7 @@
   <section class="heatmap-panel">
     <header class="heatmap-header">
       <h2 class="heatmap-title">写作热力图</h2>
-      <p class="heatmap-desc">按天统计碎片笔记记录频率</p>
+      <p class="heatmap-desc">热力按现存碎片创建日；连续按每日写入字数（删旧不回溯）</p>
     </header>
 
     <div class="heatmap-stats">

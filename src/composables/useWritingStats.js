@@ -1,6 +1,11 @@
 import { computed, ref, unref, watch } from 'vue'
 import { fetchWritingDailyStats } from '../api/note'
 import { useAssistantStore } from '../stores/assistantStore'
+import {
+  countWritingChars,
+  getActivityWordsByDate,
+  writingActivityRevision,
+} from '../storage/writingActivity'
 
 export const WRITING_DAILY_GOAL_KEY = 'lanbitou/writing-daily-goal'
 export const DEFAULT_DAILY_GOAL = 500
@@ -8,8 +13,9 @@ const LINE_CHART_DAYS = 30
 const HEATMAP_WEEK_COUNT = 53
 
 export function getNoteCharCount(note) {
-  const text = note?.markdownContent || note?.text || note?.rawContent || note?.summary || ''
-  return text.replace(/\s/g, '').length
+  return countWritingChars(
+    note?.markdownContent || note?.text || note?.rawContent || note?.summary || '',
+  )
 }
 
 export function toDateKey(dateValue) {
@@ -124,23 +130,20 @@ function buildMonthLabelForWeek(week, previousMonth) {
   return { label: '', month: previousMonth ?? month }
 }
 
-function mapsFromRecords(records) {
-  const words = new Map()
+function fragmentsFromRecords(records) {
   const fragments = new Map()
   records.forEach((note) => {
     const key = toDateKey(note.createdAt)
     if (!key) return
     fragments.set(key, (fragments.get(key) || 0) + 1)
-    words.set(key, (words.get(key) || 0) + getNoteCharCount(note))
   })
-  return { words, fragments }
+  return fragments
 }
 
-function mergeDailyStatsMap(fetchedMap, notes, field = 'words') {
+/** 热力条数：接口结果与本地现存碎片取较大值，保证即时；字数不回写库存 */
+function mergeFragmentsMap(fetchedMap, notes) {
   const map = new Map(fetchedMap)
-  const live = mapsFromRecords(notes)
-  const liveMap = field === 'fragments' ? live.fragments : live.words
-  liveMap.forEach((count, key) => {
+  fragmentsFromRecords(notes).forEach((count, key) => {
     map.set(key, Math.max(map.get(key) || 0, count))
   })
   return map
@@ -153,7 +156,7 @@ function mapsFromDailyStats({ wordsByDate = {}, fragmentsByDate = {} } = {}) {
   }
 }
 
-/** 与折线图一致：按当日字数判定是否写作；今日尚未写作时不立即断档 */
+/** 按当日写入字数判定；今日尚未写作时不立即断档；历史字数不因删笔记归零 */
 export function computeCurrentWritingStreak(wordsByDate, rangeStart, rangeEnd) {
   let streak = 0
   let cursor = new Date(rangeEnd)
@@ -178,7 +181,6 @@ export function computeCurrentWritingStreak(wordsByDate, rangeStart, rangeEnd) {
 
 export function useDailyWritingStats(options = {}) {
   const assistantStore = useAssistantStore()
-  const statsWordsByDate = ref(new Map())
   const statsFragmentsByDate = ref(new Map())
   let loadToken = 0
 
@@ -187,8 +189,7 @@ export function useDailyWritingStats(options = {}) {
     try {
       const result = await fetchWritingDailyStats()
       if (token !== loadToken) return
-      const { words, fragments } = mapsFromDailyStats(result)
-      statsWordsByDate.value = words
+      const { fragments } = mapsFromDailyStats(result)
       statsFragmentsByDate.value = fragments
     } catch {
       if (token !== loadToken) return
@@ -216,12 +217,15 @@ export function useDailyWritingStats(options = {}) {
     },
   )
 
-  const wordsByDate = computed(() =>
-    mergeDailyStatsMap(statsWordsByDate.value, liveNotes.value, 'words'),
-  )
+  // 字数 / 连续：写入账本（新建记创建日，增字记编辑日，删除不减）
+  const wordsByDate = computed(() => {
+    void writingActivityRevision.value
+    return new Map(Object.entries(getActivityWordsByDate()))
+  })
 
+  // 热力：现存碎片条数（按创建日，删除会减少）
   const fragmentsByDate = computed(() =>
-    mergeDailyStatsMap(statsFragmentsByDate.value, liveNotes.value, 'fragments'),
+    mergeFragmentsMap(statsFragmentsByDate.value, liveNotes.value),
   )
 
   return {

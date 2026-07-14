@@ -10,6 +10,8 @@ import {
   setPinBlock,
   updateBlock,
 } from '../api/note'
+import { isUtoolsMode } from '../storage/env'
+import { countWritingChars, recordWritingDelta } from '../storage/writingActivity'
 
 const PIN_WEIGHT = { TOP: 0, DEFAULT: 1, BOTTOM: 2 }
 
@@ -226,6 +228,12 @@ export const useAssistantStore = defineStore('assistant', () => {
       target.attachments = mapBlockResources(data.blocks)
       target.isPending = false
       noteIdSet.value.add(finalId)
+
+      // uTools 已在 noteRepository 记账；API 模式只记增量，完整历史由拉列表 bootstrap
+      if (!isUtoolsMode()) {
+        recordWritingDelta(countWritingChars(target.markdownContent || target.text || ''))
+      }
+
       return target
     } catch (error) {
       notes.value = notes.value.filter((item) => item.id !== pendingId)
@@ -236,6 +244,9 @@ export const useAssistantStore = defineStore('assistant', () => {
   const updateNote = async (id, title, content, imageOptions = {}) => {
     const sid = String(id)
     const target = notes.value.find((item) => String(item.id) === sid)
+    const prevChars = countWritingChars(
+      target?.markdownContent || target?.text || target?.rawContent || '',
+    )
     const { retainedImageIds, newImages, onProgress, tagId, tagName } =
       imageOptions
     const result = await updateBlock(id, title, content, {
@@ -266,6 +277,13 @@ export const useAssistantStore = defineStore('assistant', () => {
       target.images = mapBlockImages(data.blocks)
       target.attachments = mapBlockResources(data.blocks)
     }
+
+    if (!isUtoolsMode()) {
+      const nextChars = countWritingChars(target.markdownContent || target.text || '')
+      const delta = nextChars - prevChars
+      if (delta !== 0) recordWritingDelta(delta)
+    }
+
     return target
   }
 

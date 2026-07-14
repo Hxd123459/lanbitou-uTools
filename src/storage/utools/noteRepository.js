@@ -22,6 +22,13 @@ import {
   TAG_NAME_MAX_UNITS,
 } from '../../utils/tagName'
 import { UNTAGGED_TAG_ID } from '../../constants/noteTag'
+import {
+  bootstrapWritingActivityFromNotes,
+  countWritingChars,
+  getActivityWordsByDate,
+  isWritingActivityBootstrapped,
+  recordWritingDelta,
+} from '../writingActivity'
 
 const NOTE_LIST_PAGE_SIZE = 20
 
@@ -190,27 +197,41 @@ export async function listByDay({ date, tagId = null, pageNo = 1, pageSize = NOT
 }
 
 function noteCharCount(doc) {
-  const text = doc?.markdownContent || doc?.rawContent || doc?.summary || ''
-  return text.replace(/\s/g, '').length
+  return countWritingChars(doc?.markdownContent || doc?.rawContent || doc?.summary || '')
+}
+
+async function ensureWritingActivityBootstrapped() {
+  if (isWritingActivityBootstrapped()) return false
+  const all = await loadAllNoteDocs()
+  bootstrapWritingActivityFromNotes(all)
+  return true
 }
 
 export async function buildWritingDailyStats() {
+  await ensureWritingActivityBootstrapped()
   const all = await loadAllNoteDocs()
-  const wordsByDate = {}
   const fragmentsByDate = {}
 
   all.forEach((doc) => {
     const key = datePartFromDateTime(doc.createTime)
     if (!key) return
     fragmentsByDate[key] = (fragmentsByDate[key] || 0) + 1
-    wordsByDate[key] = (wordsByDate[key] || 0) + noteCharCount(doc)
   })
 
-  return { wordsByDate, fragmentsByDate }
+  return {
+    // 今日字数 / 连续：按写入行为账本（删除不回溯）
+    wordsByDate: getActivityWordsByDate(),
+    // 热力：按现存碎片创建日条数
+    fragmentsByDate,
+  }
 }
 
 export async function insertNote(rawContent, images = [], onProgress, options = {}) {
   const doc = await createNoteDoc(rawContent, images, { onProgress, ...options })
+  const justBootstrapped = await ensureWritingActivityBootstrapped()
+  if (!justBootstrapped) {
+    recordWritingDelta(noteCharCount(doc))
+  }
   return buildInsertResponse(doc)
 }
 
@@ -231,6 +252,7 @@ export async function updateNote(
     throw new Error('笔记不存在')
   }
 
+  const prevChars = noteCharCount(doc)
   const nextContent = content ?? doc.markdownContent ?? doc.rawContent ?? ''
   let images = Array.isArray(doc.images) ? [...doc.images] : []
 
@@ -277,6 +299,15 @@ export async function updateNote(
   doc.images = images
 
   await saveNoteDoc(doc)
+
+  const nextChars = countWritingChars(nextContent)
+  const delta = nextChars - prevChars
+  const justBootstrapped = await ensureWritingActivityBootstrapped()
+  // 首次升级只做快照；之后按净值记到「编辑发生日」（今天）
+  if (!justBootstrapped && delta !== 0) {
+    recordWritingDelta(delta)
+  }
+
   return buildInsertResponse(doc)
 }
 

@@ -1,6 +1,11 @@
 import { isUtoolsMode } from '../storage/env'
 import * as utoolsNote from '../storage/utools/noteRepository'
 import * as utoolsStruct from '../storage/utools/structRepository'
+import {
+  bootstrapWritingActivityFromNotes,
+  getActivityWordsByDate,
+  isWritingActivityBootstrapped,
+} from '../storage/writingActivity'
 import { UNTAGGED_TAG_ID } from '../constants/noteTag'
 import { ApiError, post, get, postForm, resolveResourceUrl } from './http'
 
@@ -158,8 +163,8 @@ export async function fetchWritingDailyStats() {
     return utoolsNote.buildWritingDailyStats()
   }
 
-  const wordsByDate = {}
   const fragmentsByDate = {}
+  const seedNotes = []
   let pageNo = 1
   let hasMore = true
 
@@ -170,14 +175,20 @@ export async function fetchWritingDailyStats() {
       if (Number.isNaN(date.getTime())) return
       const key = formatDateParam(date)
       fragmentsByDate[key] = (fragmentsByDate[key] || 0) + 1
-      const text = note?.markdownContent || note?.text || note?.rawContent || note?.summary || ''
-      wordsByDate[key] = (wordsByDate[key] || 0) + text.replace(/\s/g, '').length
+      seedNotes.push(note)
     })
     hasMore = result.hasMore
     pageNo += 1
   }
 
-  return { wordsByDate, fragmentsByDate }
+  if (!isWritingActivityBootstrapped()) {
+    bootstrapWritingActivityFromNotes(seedNotes)
+  }
+
+  return {
+    wordsByDate: getActivityWordsByDate(),
+    fragmentsByDate,
+  }
 }
 
 export async function fetchBlockListByDate(
