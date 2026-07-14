@@ -48,6 +48,25 @@ export function extractClipboardImageFiles(clipboardData) {
   return extractImagesFromHtml(html)
 }
 
+/**
+ * 粘贴附件：对 clipboard items 只 getAsFile 一次。
+ * 不可分两次 extract 再 includes 去重——每次 getAsFile 都是新 File，引用不相等会重复添加。
+ */
+export function extractClipboardPasteFiles(clipboardData) {
+  const allFiles = Array.from(clipboardData?.items || [])
+    .filter((item) => item.kind === 'file')
+    .map((item) => item.getAsFile())
+    .filter(Boolean)
+
+  const imageFromFiles = allFiles.filter((file) => file.type.startsWith('image/'))
+  const otherFiles = allFiles.filter((file) => !file.type.startsWith('image/'))
+  const imageFiles = imageFromFiles.length
+    ? imageFromFiles
+    : extractImagesFromHtml(clipboardData?.getData('text/html'))
+
+  return [...imageFiles, ...otherFiles]
+}
+
 export function insertTextAtTextareaCursor(textarea, currentText, text, onUpdate) {
   if (!textarea || !text) return
   const start = textarea.selectionStart ?? currentText.length

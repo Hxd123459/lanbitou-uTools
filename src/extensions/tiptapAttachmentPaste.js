@@ -1,11 +1,8 @@
 import { Extension } from '@tiptap/core'
 import { Plugin } from '@tiptap/pm/state'
 import { markClipboardImageHandledByPaste } from '../composables/useUtoolsClipboardEnter'
-import {
-  extractClipboardAttachmentFiles,
-  prepareAttachmentForInsert,
-} from '../utils/tiptapAttachmentInsert'
-import { extractClipboardImageFiles } from '../utils/tiptapImageInsert'
+import { prepareAttachmentForInsert } from '../utils/tiptapAttachmentInsert'
+import { extractClipboardPasteFiles } from '../utils/tiptapImageInsert'
 
 export function createAttachmentPasteExtension(getContext) {
   return Extension.create({
@@ -18,12 +15,7 @@ export function createAttachmentPasteExtension(getContext) {
         new Plugin({
           props: {
             handlePaste(_view, event) {
-              const imageFiles = extractClipboardImageFiles(event.clipboardData)
-              const allFiles = extractClipboardAttachmentFiles(event.clipboardData)
-              const fileOnly = allFiles.filter(
-                (file) => !imageFiles.some((img) => img === file),
-              )
-              const files = [...imageFiles, ...fileOnly]
+              const files = extractClipboardPasteFiles(event.clipboardData)
               if (!files.length) return false
 
               event.preventDefault()

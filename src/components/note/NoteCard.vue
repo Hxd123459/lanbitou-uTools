@@ -590,10 +590,9 @@ import { useMotionPresets } from '../../composables/useMotionPresets'
 import { useTagHashPicker } from '../../composables/useTagHashPicker'
 import { markClipboardImageHandledByPaste } from '../../composables/useUtoolsClipboardEnter'
 import {
-  extractClipboardImageFiles,
+  extractClipboardPasteFiles,
   insertTextAtTextareaCursor,
 } from '../../utils/tiptapImageInsert'
-import { extractClipboardAttachmentFiles } from '../../utils/tiptapAttachmentInsert'
 import { getAttachmentKind } from '../../utils/attachmentDisplay'
 import { useAssistantStore } from '../../stores/assistantStore'
 import AppButton from '../motion/AppButton.vue'
@@ -1033,11 +1032,7 @@ const onEditorPaste = (event) => {
   const clipboardData = event.clipboardData
   if (!clipboardData) return
 
-  const imageFiles = extractClipboardImageFiles(clipboardData)
-  const otherFiles = extractClipboardAttachmentFiles(clipboardData).filter(
-    (file) => !imageFiles.includes(file),
-  )
-  const files = [...imageFiles, ...otherFiles]
+  const files = extractClipboardPasteFiles(clipboardData)
   if (!files.length) return
 
   event.preventDefault()
