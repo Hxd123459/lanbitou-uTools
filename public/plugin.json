@@ -1,6 +1,7 @@
 {
   "main": "index.html",
   "logo": "logo.png",
+  "preload": "preload/mainPush.js",
   "development": {
     "main": "http://localhost:5173"
   },
@@ -19,6 +20,19 @@
         {
           "type": "img",
           "label": "记录图片到烂笔头"
+        }
+      ]
+    },
+    {
+      "code": "search_notes",
+      "explain": "在烂笔头中搜索笔记",
+      "mainPush": true,
+      "cmds": [
+        {
+          "type": "over",
+          "label": "搜索笔记",
+          "minLength": 1,
+          "maxLength": 80
         }
       ]
     }
@@ -40,7 +54,11 @@
           },
           "type": {
             "type": "string",
-            "enum": ["fragment", "sediment", "all"],
+            "enum": [
+              "fragment",
+              "sediment",
+              "all"
+            ],
             "description": "笔记类型：fragment 碎片、sediment 沉淀长文、all 全部"
           },
           "limit": {
@@ -50,7 +68,9 @@
             "description": "返回条数，默认 10，最大 20"
           }
         },
-        "required": ["keywords"]
+        "required": [
+          "keywords"
+        ]
       }
     },
     "get_fragment": {
@@ -65,11 +85,16 @@
           },
           "type": {
             "type": "string",
-            "enum": ["fragment", "sediment"],
+            "enum": [
+              "fragment",
+              "sediment"
+            ],
             "description": "笔记类型，不确定时可省略"
           }
         },
-        "required": ["id"]
+        "required": [
+          "id"
+        ]
       }
     },
     "list_tags": {

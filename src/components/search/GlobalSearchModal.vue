@@ -152,7 +152,7 @@
 </template>
 
 <script setup>
-import { computed, onBeforeUnmount, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { AnimatePresence, motion } from 'motion-v'
 import { useMotionPresets } from '../../composables/useMotionPresets'
 import { highlightPlainText } from '../../utils/searchHighlight'
@@ -261,6 +261,16 @@ watch(
 
 onBeforeUnmount(() => {
   window.removeEventListener('keydown', onKeydown)
+})
+
+const applySearchText = async (text) => {
+  await nextTick()
+  queryBarRef.value?.applySearchText?.(text)
+}
+
+defineExpose({
+  applySearchText,
+  focus: () => queryBarRef.value?.focus?.(),
 })
 </script>
 

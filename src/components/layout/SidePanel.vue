@@ -33,6 +33,7 @@
     </div>
 
     <GlobalSearchModal
+      ref="globalSearchModalRef"
       :visible="globalSearchVisible"
       @close="globalSearchVisible = false"
       @select="onGlobalSearchSelect"
@@ -185,7 +186,7 @@
 </template>
 
 <script setup>
-import { computed, ref } from 'vue'
+import { computed, nextTick, ref } from 'vue'
 import { motion } from 'motion-v'
 import { useMotionPresets } from '../../composables/useMotionPresets'
 import { isUtoolsMode } from '../../storage/env'
@@ -203,15 +204,29 @@ defineProps({
 const emit = defineEmits(['tab-change', 'global-search-select'])
 
 const globalSearchVisible = ref(false)
+const globalSearchModalRef = ref(null)
 
-const openGlobalSearch = () => {
+const openGlobalSearch = async (options = {}) => {
+  const keyword =
+    typeof options === 'string'
+      ? options
+      : options && typeof options.keyword === 'string'
+        ? options.keyword
+        : ''
   globalSearchVisible.value = true
+  const text = String(keyword ?? '').trim()
+  if (!text) return
+  await nextTick()
+  await nextTick()
+  await globalSearchModalRef.value?.applySearchText?.(text)
 }
 
 const onGlobalSearchSelect = (item) => {
   globalSearchVisible.value = false
   emit('global-search-select', item)
 }
+
+defineExpose({ openGlobalSearch })
 
 const showSettingsNav = isUtoolsMode()
 const isCompactSidebar = useUtoolsCompactSidebar()

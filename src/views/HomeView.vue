@@ -2,6 +2,7 @@
   <MainFrame :show-input-area="activeTab === 'home'">
     <template #sidebar>
       <SidePanel
+        ref="sidePanelRef"
         :active-tab="activeTab"
         @tab-change="onTabChange"
         @global-search-select="handleGlobalSearchSelect"
@@ -462,6 +463,11 @@ import {
   isLocalImagePasteTargetActive,
   takePendingClipboardAction,
 } from '../composables/useUtoolsClipboardEnter'
+import {
+  onMainPushSearch,
+  takePendingSearch,
+} from '../composables/useUtoolsMainPushEnter'
+import { onSubInputSearch } from '../composables/useUtoolsSubInputSearch'
 import { generateNoteTitle, isUtoolsAiAvailable, shouldAutoTagContent } from '../ai/aiService'
 import { isUtoolsMode } from '../storage/env'
 import { loadAiSettings } from '../storage/utools/aiSettings'
@@ -483,6 +489,7 @@ const inputValue = ref('')
 const noteSubmitting = ref(false)
 const uploadProgress = ref(0)
 const inputBarRef = ref(null)
+const sidePanelRef = ref(null)
 const settingsPanelRef = ref(null)
 const pendingAutoTagSetup = ref(false)
 const assistantStore = useAssistantStore()
@@ -1634,6 +1641,8 @@ const applyClipboardEnter = async (action) => {
 }
 
 let stopClipboardEnterListener = null
+let stopMainPushSearchListener = null
+let stopSubInputSearchListener = null
 let stopSettingsNavigator = null
 
 const scrollSettingsToTarget = async (target) => {
@@ -1675,6 +1684,25 @@ const handleGlobalSearchSelect = async (item) => {
   noteViewMode.value = 'list'
   await nextTick()
   await scrollToNote(item.id)
+}
+
+const applyMainPushSearch = async (item) => {
+  const keyword = String(item?.keyword || '').trim()
+  if (!keyword) return
+  await sidePanelRef.value?.openGlobalSearch?.({ keyword })
+  if (typeof window.utools?.setSubInputValue === 'function') {
+    try {
+      window.utools.setSubInputValue(keyword)
+    } catch {
+      /* ignore */
+    }
+  }
+}
+
+const applySubInputSearch = async (text) => {
+  const keyword = String(text ?? '').trim()
+  if (!keyword) return
+  await sidePanelRef.value?.openGlobalSearch?.({ keyword })
 }
 
 watch(activeTab, (tab) => {
@@ -1907,6 +1935,13 @@ onMounted(async () => {
     takePendingClipboardAction()
     applyClipboardEnter(action)
   })
+  stopMainPushSearchListener = onMainPushSearch((item) => {
+    takePendingSearch()
+    applyMainPushSearch(item)
+  })
+  stopSubInputSearchListener = onSubInputSearch((text) => {
+    applySubInputSearch(text)
+  })
   stopSettingsNavigator = registerSettingsNavigator(async (target) => {
     sedimentPanelRef.value?.dismissOverlays?.()
     activeTab.value = 'settings'
@@ -1919,12 +1954,25 @@ onMounted(async () => {
     notifyError(error)
   }
   await nextTick()
+  // 冷启动：preload 写入的 pending 可能早于监听注册
+  if (window.__lanbitouPendingSearch?.keyword) {
+    const pending = takePendingSearch() || {
+      keyword: window.__lanbitouPendingSearch.keyword,
+    }
+    window.__lanbitouPendingSearch = null
+    window.__lanbitouOpenNote = null
+    await applyMainPushSearch(pending)
+  }
   inputBarRef.value?.focus()
 })
 
 onBeforeUnmount(() => {
   stopClipboardEnterListener?.()
   stopClipboardEnterListener = null
+  stopMainPushSearchListener?.()
+  stopMainPushSearchListener = null
+  stopSubInputSearchListener?.()
+  stopSubInputSearchListener = null
   stopSettingsNavigator?.()
   stopSettingsNavigator = null
   deleteTimers.forEach((timer) => clearTimeout(timer))

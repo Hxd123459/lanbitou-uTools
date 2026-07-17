@@ -125,6 +125,22 @@ export function useGlobalSearchQuery(options = {}) {
     scheduleSearch(true)
   }
 
+  /** 用一段文本覆盖关键词并搜索（空格分词，与 mainPush / 子输入框一致） */
+  const applySearchText = (text) => {
+    const parts = [
+      ...new Set(
+        String(text ?? '')
+          .trim()
+          .split(/\s+/)
+          .filter(Boolean),
+      ),
+    ]
+    draftKeyword.value = ''
+    keywords.value = parts
+    closeTagMenu()
+    scheduleSearch(true)
+  }
+
   const removeKeyword = (index) => {
     keywords.value = keywords.value.filter((_, i) => i !== index)
     scheduleSearch(true)
@@ -261,6 +277,7 @@ export function useGlobalSearchQuery(options = {}) {
     clearSelectedTag,
     clearDateRange,
     addKeyword,
+    applySearchText,
     removeKeyword,
     onKeywordInput,
     onKeywordFocus,

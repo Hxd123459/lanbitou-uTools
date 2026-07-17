@@ -176,6 +176,7 @@ const {
   clearSelectedTag,
   clearDateRange,
   removeKeyword,
+  applySearchText,
   onKeywordInput,
   onKeywordFocus,
   onCaretChange,
@@ -223,7 +224,11 @@ watch(
     }
     if (!props.panelMode) {
       await nextTick()
-      keywordInputRef.value?.focus()
+      // uTools 主窗口用顶部子输入框搜索，避免抢焦点
+      const skipFocus =
+        typeof window !== 'undefined' &&
+        window.utools?.getWindowType?.() === 'main'
+      if (!skipFocus) keywordInputRef.value?.focus()
     }
   },
 )
@@ -243,7 +248,11 @@ onBeforeUnmount(() => {
   tagsLoaded.value = false
 })
 
-defineExpose({ query, focus: () => keywordInputRef.value?.focus() })
+defineExpose({
+  query,
+  focus: () => keywordInputRef.value?.focus(),
+  applySearchText,
+})
 </script>
 
 <style scoped>
