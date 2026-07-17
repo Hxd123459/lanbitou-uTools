@@ -5,6 +5,7 @@
         v-if="visible"
         key="struct-note-view"
         class="note-view-modal"
+        :class="{ 'is-elevated': elevated }"
         role="dialog"
         aria-modal="true"
         :initial="{ opacity: 0, y: 28 }"
@@ -222,6 +223,8 @@ const props = defineProps({
     type: Array,
     default: () => [],
   },
+  /** 盖在全局搜索之上时提高层级 */
+  elevated: { type: Boolean, default: false },
 })
 
 const emit = defineEmits(['close', 'saved', 'fragment-restored', 'fragments-archived', 'error'])
@@ -699,6 +702,10 @@ onBeforeUnmount(() => {
   display: flex;
   flex-direction: column;
   background: #fbfaf9;
+}
+
+.note-view-modal.is-elevated {
+  z-index: 220;
 }
 
 .note-view-header {

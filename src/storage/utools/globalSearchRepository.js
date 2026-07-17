@@ -49,19 +49,29 @@ function buildSnippets(rawText, keywords = []) {
   return fallback.length ? fallback : []
 }
 
-function toFragmentResult(doc, tagNameById, keywords = []) {
+function toFragmentResult(doc, tagNameById) {
   const tagName =
     (doc.tagId && tagNameById.get(String(doc.tagId))) || doc.title || ''
-  const content = doc.markdownContent || doc.rawContent || doc.summary || ''
-  let snippets = buildSnippets(content, keywords)
-  if (!snippets.length && doc.title) {
-    snippets = buildSnippets(doc.title, keywords)
-  }
+  const raw = doc.markdownContent || doc.rawContent || doc.summary || ''
+  // 碎片直接返回全文（保留换行），不再截成 snippet
+  let content = String(raw ?? '')
+  content = content.replace(/```[\s\S]*?```/g, '\n')
+  content = content.replace(/!\[[^\]]*\]\([^)]*\)/g, '')
+  content = content.replace(/\[([^\]]*)\]\([^)]*\)/g, '$1')
+  content = content.replace(/^#{1,6}\s+/gm, '')
+  content = content.replace(/^>\s?/gm, '')
+  content = content.replace(/^\s*[-+*]\s+/gm, '')
+  content = content.replace(/\*\*([^*]+)\*\*/g, '$1')
+  content = content.replace(/__([^_]+)__/g, '$1')
+  content = content.replace(/[^\S\n]+/g, ' ').replace(/\n{3,}/g, '\n\n').trim()
+  if (!content && doc.title) content = String(doc.title)
+
   return {
     id: doc.id,
     type: 'fragment',
     title: doc.title || tagName || '无标签',
-    snippets,
+    content,
+    snippets: [],
     tagName,
     tagId: doc.tagId ?? null,
     createTime: doc.createTime || '',
@@ -139,7 +149,7 @@ export async function globalSearch({
           doc.markdownContent,
         ])
         if (!matchesKeywords(haystack, keywordList)) return
-        results.push(toFragmentResult(doc, tagNameById, keywordList))
+        results.push(toFragmentResult(doc, tagNameById))
       })
   }
 

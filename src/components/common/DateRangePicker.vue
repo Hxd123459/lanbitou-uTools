@@ -306,23 +306,30 @@ onBeforeUnmount(() => {
 
 .date-range-picker.is-compact .date-range-trigger {
   flex: 0 0 auto;
-  width: 34px;
-  height: 34px;
+  width: 28px;
+  height: 28px;
   padding: 0;
   justify-content: center;
   border: 0;
   border-radius: 8px;
   background: transparent;
+  color: var(--color-secondary-text);
 }
 
 .date-range-picker.is-compact .date-range-trigger.has-value,
 .date-range-picker.is-compact .date-range-trigger.is-open {
-  background: rgba(24, 24, 27, 0.06);
-  color: var(--color-primary);
+  background: transparent;
+  color: var(--color-secondary-text);
 }
 
 .date-range-picker.is-compact .date-range-trigger:hover {
-  background: rgba(24, 24, 27, 0.08);
+  background: transparent;
+  color: var(--color-text);
+}
+
+.date-range-picker.is-compact .date-range-trigger:focus-visible {
+  box-shadow: none;
+  color: var(--color-accent);
 }
 
 .date-range-picker {

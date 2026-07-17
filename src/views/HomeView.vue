@@ -5,7 +5,6 @@
         ref="sidePanelRef"
         :active-tab="activeTab"
         @tab-change="onTabChange"
-        @global-search-select="handleGlobalSearchSelect"
       />
     </template>
 
@@ -1652,38 +1651,6 @@ const scrollSettingsToTarget = async (target) => {
     if (settingsPanelRef.value?.scrollToTarget?.(target)) return
     await new Promise((resolve) => window.setTimeout(resolve, 60))
   }
-}
-
-const scrollToNote = async (id) => {
-  const tryScroll = () => {
-    const el = document.querySelector(`[data-note-id="${id}"]`)
-    if (!el) return false
-    el.scrollIntoView({ behavior: 'smooth', block: 'center' })
-    return true
-  }
-  if (tryScroll()) return
-  const exists = assistantStore.notes.some((note) => note.id === id)
-  if (!exists) {
-    await assistantStore.reloadNotes()
-    await nextTick()
-  }
-  tryScroll()
-}
-
-const handleGlobalSearchSelect = async (item) => {
-  if (!item?.id) return
-  if (item.type === 'sediment') {
-    activeTab.value = 'sediment'
-    await nextTick()
-    sedimentPanelRef.value?.openNoteViewByNoteId(item.noteId || item.id, item.title)
-    return
-  }
-  activeTab.value = 'home'
-  clearTagFilter()
-  clearSearch()
-  noteViewMode.value = 'list'
-  await nextTick()
-  await scrollToNote(item.id)
 }
 
 const applyMainPushSearch = async (item) => {

@@ -36,7 +36,6 @@
       ref="globalSearchModalRef"
       :visible="globalSearchVisible"
       @close="globalSearchVisible = false"
-      @select="onGlobalSearchSelect"
     />
 
     <nav class="sidebar-nav" aria-label="菜单">
@@ -201,7 +200,7 @@ defineProps({
   },
 })
 
-const emit = defineEmits(['tab-change', 'global-search-select'])
+const emit = defineEmits(['tab-change'])
 
 const globalSearchVisible = ref(false)
 const globalSearchModalRef = ref(null)
@@ -219,11 +218,6 @@ const openGlobalSearch = async (options = {}) => {
   await nextTick()
   await nextTick()
   await globalSearchModalRef.value?.applySearchText?.(text)
-}
-
-const onGlobalSearchSelect = (item) => {
-  globalSearchVisible.value = false
-  emit('global-search-select', item)
 }
 
 defineExpose({ openGlobalSearch })

@@ -13,30 +13,32 @@
         :exit="modalMotion.exit"
         :transition="modalMotion.transition"
       >
-        <header class="global-search-header">
-          <motion.button
-            type="button"
-            class="global-search-close"
-            aria-label="关闭"
-            :while-hover="presets.button.hover"
-            :while-tap="presets.button.tap"
-            :transition="presets.button.transition"
-            @click="emitClose"
-          >
-            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
-              <path d="M6 6l12 12M18 6L6 18" />
-            </svg>
-          </motion.button>
-          <h2 class="global-search-title">全局搜索</h2>
-        </header>
-
         <div class="global-search-body">
-          <GlobalSearchQueryBar
-            ref="queryBarRef"
-            :active="visible"
-            clear-on-inactive
-            :scopes="resolvedScopes"
-          />
+          <div class="global-search-toolbar">
+            <motion.button
+              type="button"
+              class="global-search-close"
+              aria-label="关闭搜索"
+              :while-hover="presets.button.hover"
+              :while-tap="presets.button.tap"
+              :transition="presets.button.transition"
+              @click="emitClose"
+            >
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+                <path d="M6 6l12 12M18 6L6 18" />
+              </svg>
+            </motion.button>
+
+            <div class="global-search-toolbar-main">
+              <GlobalSearchQueryBar
+                ref="queryBarRef"
+                :active="visible"
+                compact
+                clear-on-inactive
+                :scopes="resolvedScopes"
+              />
+            </div>
+          </div>
 
           <div class="global-search-filters">
             <div class="global-search-scope" role="tablist" aria-label="搜索范围">
@@ -53,12 +55,9 @@
                 {{ item.label }}
               </button>
             </div>
-          </div>
-
-          <div class="global-search-results-head">
             <span class="global-search-results-count">
               <template v-if="loading">搜索中…</template>
-              <template v-else-if="hasQueried">共 {{ total }} 条结果</template>
+              <template v-else-if="hasQueried">共 {{ total }} 条</template>
             </span>
           </div>
 
@@ -77,71 +76,71 @@
               未找到匹配内容，试试减少关键词或放宽筛选
             </p>
 
-            <button
-              v-for="item in results"
-              :key="`${item.type}-${item.id}`"
-              type="button"
-              class="global-search-result"
-              @click="emitSelect(item)"
-            >
-              <div class="global-search-result-meta">
-                <div class="global-search-result-meta-left">
-                  <span
-                    class="global-search-result-icon"
-                    :class="`is-${item.type}`"
-                    :title="item.type === 'fragment' ? '碎片' : '沉淀'"
-                    aria-hidden="true"
-                  >
-                    <svg
-                      v-if="item.type === 'fragment'"
-                      viewBox="0 0 24 24"
-                      width="16"
-                      height="16"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="1.8"
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                    >
-                      <path d="M4 5.5h7v7H4z" />
-                      <path d="M15 4h5v5.5L16.5 14H13V8.5L15 4z" />
-                      <path d="M8 15.5h7v5.5H8z" />
-                    </svg>
-                    <svg
-                      v-else
-                      viewBox="0 0 24 24"
-                      width="16"
-                      height="16"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="1.8"
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                    >
-                      <path d="M12 2 2 7l10 5 10-5-10-5z" />
-                      <path d="M2 17l10 5 10-5M2 12l10 5 10-5" />
-                    </svg>
-                  </span>
-                  <span v-if="resultTagLabel(item)" class="global-search-result-tag">
-                    {{ resultTagLabel(item) }}
+            <template v-for="item in results" :key="`${item.type}-${item.id}`">
+              <!-- 碎片：直接展示全文 + 高亮 -->
+              <article
+                v-if="item.type === 'fragment'"
+                class="global-search-result is-fragment"
+              >
+                <div class="global-search-result-meta">
+                  <div class="global-search-result-meta-left">
+                    <span class="global-search-result-icon is-fragment" title="碎片" aria-hidden="true">
+                      <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M4 5.5h7v7H4z" />
+                        <path d="M15 4h5v5.5L16.5 14H13V8.5L15 4z" />
+                        <path d="M8 15.5h7v5.5H8z" />
+                      </svg>
+                    </span>
+                    <span v-if="resultTagLabel(item)" class="global-search-result-tag">
+                      {{ resultTagLabel(item) }}
+                    </span>
+                  </div>
+                  <span v-if="item.createTime" class="global-search-result-time">
+                    {{ formatTime(item.createTime) }}
                   </span>
                 </div>
-                <span v-if="item.createTime" class="global-search-result-time">
-                  {{ formatTime(item.createTime) }}
-                </span>
-              </div>
-              <div
-                v-if="resultSnippets(item).length"
-                class="global-search-result-snippets"
-              >
-                <p
-                  v-for="(snippet, snippetIndex) in resultSnippets(item)"
-                  :key="`${item.type}-${item.id}-${snippetIndex}`"
-                  class="global-search-result-snippet"
-                  v-html="highlightSnippet(snippet)"
+                <div
+                  class="global-search-result-full"
+                  v-html="highlightText(item.content || '')"
                 />
-              </div>
-            </button>
+              </article>
+
+              <!-- 沉淀：摘要 + 点击打开详情 -->
+              <button
+                v-else
+                type="button"
+                class="global-search-result is-sediment"
+                @click="openSedimentDetail(item)"
+              >
+                <div class="global-search-result-meta">
+                  <div class="global-search-result-meta-left">
+                    <span class="global-search-result-icon is-sediment" title="沉淀" aria-hidden="true">
+                      <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M12 2 2 7l10 5 10-5-10-5z" />
+                        <path d="M2 17l10 5 10-5M2 12l10 5 10-5" />
+                      </svg>
+                    </span>
+                    <span v-if="item.title" class="global-search-result-tag">
+                      {{ item.title }}
+                    </span>
+                  </div>
+                  <span v-if="item.createTime" class="global-search-result-time">
+                    {{ formatTime(item.createTime) }}
+                  </span>
+                </div>
+                <div
+                  v-if="resultSnippets(item).length"
+                  class="global-search-result-snippets"
+                >
+                  <p
+                    v-for="(snippet, snippetIndex) in resultSnippets(item)"
+                    :key="`${item.id}-${snippetIndex}`"
+                    class="global-search-result-snippet"
+                    v-html="highlightText(snippet)"
+                  />
+                </div>
+              </button>
+            </template>
 
             <p v-if="loadingMore" class="global-search-state">加载更多…</p>
           </div>
@@ -149,6 +148,14 @@
       </motion.div>
     </AnimatePresence>
   </Teleport>
+
+  <StructNoteViewModal
+    :visible="sedimentVisible"
+    :note-item="sedimentNoteItem"
+    elevated
+    @close="closeSedimentDetail"
+    @error="onSedimentError"
+  />
 </template>
 
 <script setup>
@@ -156,13 +163,15 @@ import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { AnimatePresence, motion } from 'motion-v'
 import { useMotionPresets } from '../../composables/useMotionPresets'
 import { highlightPlainText } from '../../utils/searchHighlight'
+import { findStructFolderItemByNoteId } from '../../api/structNote'
+import StructNoteViewModal from '../sediment/StructNoteViewModal.vue'
 import GlobalSearchQueryBar from './GlobalSearchQueryBar.vue'
 
 const props = defineProps({
   visible: { type: Boolean, default: false },
 })
 
-const emit = defineEmits(['close', 'select'])
+const emit = defineEmits(['close'])
 
 const { presets, reduced } = useMotionPresets()
 
@@ -175,6 +184,10 @@ const scopeOptions = [
 const scope = ref('all')
 const queryBarRef = ref(null)
 const resultsRef = ref(null)
+const highlightKeywords = ref([])
+
+const sedimentVisible = ref(false)
+const sedimentNoteItem = ref(null)
 
 const query = computed(() => queryBarRef.value?.query ?? null)
 const results = computed(() => query.value?.results.value ?? [])
@@ -183,7 +196,6 @@ const loading = computed(() => query.value?.loading.value ?? false)
 const loadingMore = computed(() => query.value?.loadingMore.value ?? false)
 const searchError = computed(() => query.value?.searchError.value ?? '')
 const hasQueried = computed(() => query.value?.hasQueried.value ?? false)
-const keywords = computed(() => query.value?.keywords.value ?? [])
 
 const modalEase = [0.22, 1, 0.36, 1]
 
@@ -205,8 +217,6 @@ const resolvedScopes = computed(() => {
   return ['fragment', 'sediment']
 })
 
-const hasMore = computed(() => query.value?.hasMore.value ?? false)
-
 const formatTime = (value) => {
   const raw = String(value ?? '').trim()
   if (!raw) return ''
@@ -224,15 +234,49 @@ const resultSnippets = (item) => {
   return []
 }
 
-const highlightSnippet = (text) => highlightPlainText(text, keywords.value)
+const highlightText = (text) => highlightPlainText(text, highlightKeywords.value)
+
+const syncHighlightKeywords = () => {
+  const list = queryBarRef.value?.query?.keywords?.value
+  highlightKeywords.value = Array.isArray(list) ? [...list] : []
+}
+
+const closeSedimentDetail = () => {
+  sedimentVisible.value = false
+  sedimentNoteItem.value = null
+}
+
+const openSedimentDetail = async (item) => {
+  if (!item?.id) return
+  const noteId = item.noteId || item.id
+  const title = item.title || '无标题'
+  try {
+    const folderItem = await findStructFolderItemByNoteId(noteId)
+    sedimentNoteItem.value = folderItem || {
+      type: 'note',
+      id: noteId,
+      noteId,
+      name: title,
+    }
+  } catch {
+    sedimentNoteItem.value = {
+      type: 'note',
+      id: noteId,
+      noteId,
+      name: title,
+    }
+  }
+  sedimentVisible.value = true
+}
+
+const onSedimentError = (error) => {
+  console.error('[烂笔头] 全局搜索打开沉淀失败', error)
+}
 
 const emitClose = () => {
   if (loading.value || loadingMore.value) return
+  if (sedimentVisible.value) return
   emit('close')
-}
-
-const emitSelect = (item) => {
-  emit('select', item)
 }
 
 const onResultsScroll = () => {
@@ -241,11 +285,22 @@ const onResultsScroll = () => {
 
 const onKeydown = (event) => {
   if (!props.visible || loading.value) return
-  if (event.key === 'Escape') {
-    event.preventDefault()
-    emitClose()
-  }
+  if (sedimentVisible.value) return
+  if (event.key !== 'Escape') return
+  event.preventDefault()
+  emit('close')
 }
+
+watch(
+  () => queryBarRef.value?.query?.keywords?.value,
+  () => syncHighlightKeywords(),
+  { deep: true },
+)
+
+watch(
+  results,
+  () => syncHighlightKeywords(),
+)
 
 watch(
   () => props.visible,
@@ -255,6 +310,8 @@ watch(
       window.addEventListener('keydown', onKeydown)
     } else {
       window.removeEventListener('keydown', onKeydown)
+      closeSedimentDetail()
+      highlightKeywords.value = []
     }
   },
 )
@@ -266,6 +323,8 @@ onBeforeUnmount(() => {
 const applySearchText = async (text) => {
   await nextTick()
   queryBarRef.value?.applySearchText?.(text)
+  await nextTick()
+  syncHighlightKeywords()
 }
 
 defineExpose({
@@ -284,13 +343,23 @@ defineExpose({
   background: var(--color-bg);
 }
 
-.global-search-header {
+.global-search-body {
+  flex: 1;
+  min-height: 0;
   display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 16px 20px;
-  border-bottom: 1px solid var(--color-border);
-  background: var(--color-surface);
+  flex-direction: column;
+  width: min(960px, calc(100% - 32px));
+  margin: 0 auto;
+  padding: 12px 20px 16px;
+  gap: 10px;
+  box-sizing: border-box;
+}
+
+.global-search-toolbar {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  flex-shrink: 0;
 }
 
 .global-search-close {
@@ -302,139 +371,29 @@ defineExpose({
   border: 0;
   border-radius: 10px;
   background: rgba(24, 24, 27, 0.06);
-  color: var(--color-primary);
+  color: var(--color-secondary-text);
   cursor: pointer;
+  flex-shrink: 0;
+  box-sizing: border-box;
 }
 
 .global-search-close:hover {
   background: rgba(24, 24, 27, 0.1);
-}
-
-.global-search-title {
-  margin: 0;
-  font-size: 16px;
-  font-weight: 600;
-  color: var(--color-primary);
-}
-
-.global-search-body {
-  flex: 1;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-  width: min(960px, calc(100% - 32px));
-  margin: 0 auto;
-  padding: 20px 20px 24px;
-  box-sizing: border-box;
-}
-
-.global-search-query {
-  flex: 0 0 auto;
-  margin-bottom: 14px;
-}
-
-.global-search-input-row {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 0 14px;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-lg);
-  background: var(--color-surface);
-  box-shadow: var(--shadow-card);
-}
-
-.global-search-input-row:focus-within {
-  border-color: rgba(24, 24, 27, 0.28);
-  box-shadow: var(--focus-ring), var(--shadow-card);
-}
-
-.global-search-input-icon {
-  flex: 0 0 auto;
-  color: var(--color-secondary-text);
-}
-
-.global-search-input {
-  flex: 1;
-  min-width: 0;
-  height: 44px;
-  border: 0;
-  outline: 0;
-  background: transparent;
-  font-family: inherit;
-  font-size: 14px;
   color: var(--color-text);
 }
 
-.global-search-input::placeholder {
-  color: #a1a1aa;
-}
-
-.global-search-chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-top: 10px;
-}
-
-.global-search-chip,
-.global-search-tag-chip,
-.global-search-date-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 4px 8px 4px 10px;
-  border-radius: 999px;
-  font-size: 13px;
-  font-weight: 500;
-}
-
-.global-search-date-chip {
-  background: rgba(24, 24, 27, 0.06);
-  color: var(--color-primary);
-  font-variant-numeric: tabular-nums;
-}
-
-.global-search-chip {
-  background: rgba(24, 24, 27, 0.06);
-  color: var(--color-primary);
-}
-
-.global-search-tag-chip {
-  border: 1px solid var(--color-border);
-  background: var(--color-surface);
-  color: var(--color-accent);
-  font-weight: 600;
-}
-
-.global-search-chip-remove {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 18px;
-  height: 18px;
-  padding: 0;
-  border: 0;
-  border-radius: 999px;
-  background: transparent;
-  color: var(--color-secondary-text);
-  font-size: 14px;
-  line-height: 1;
-  cursor: pointer;
-}
-
-.global-search-chip-remove:hover {
-  color: var(--color-primary);
-  background: rgba(24, 24, 27, 0.08);
+.global-search-toolbar-main {
+  flex: 1;
+  min-width: 0;
 }
 
 .global-search-filters {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  justify-content: flex-end;
-  gap: 10px 14px;
-  margin-bottom: 14px;
+  justify-content: space-between;
+  gap: 8px 14px;
+  flex-shrink: 0;
 }
 
 .global-search-scope {
@@ -455,6 +414,7 @@ defineExpose({
   font-size: 12px;
   font-weight: 500;
   cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
 }
 
 .global-search-scope-btn.is-active {
@@ -463,12 +423,8 @@ defineExpose({
   box-shadow: 0 1px 2px rgba(24, 24, 27, 0.08);
 }
 
-.global-search-results-head {
-  flex: 0 0 auto;
-  margin-bottom: 8px;
-}
-
 .global-search-results-count {
+  flex-shrink: 0;
   font-size: 12px;
   color: var(--color-secondary-text);
 }
@@ -493,10 +449,20 @@ defineExpose({
   border-radius: var(--radius-md);
   background: var(--color-surface);
   text-align: left;
-  cursor: pointer;
+  color: inherit;
+  font: inherit;
+  box-sizing: border-box;
   transition:
     border-color 0.15s ease,
     box-shadow 0.15s ease;
+}
+
+.global-search-result.is-sediment {
+  cursor: pointer;
+}
+
+.global-search-result.is-fragment {
+  cursor: default;
 }
 
 .global-search-result:hover {
@@ -536,6 +502,7 @@ defineExpose({
 
 .global-search-result-tag {
   display: inline-block;
+  max-width: 220px;
   padding: 2px 8px;
   border-radius: 999px;
   background: rgba(24, 24, 27, 0.08);
@@ -545,6 +512,25 @@ defineExpose({
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.global-search-result-full {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.65;
+  color: var(--color-text);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.global-search-result-full :deep(mark.note-highlight),
+.global-search-result-snippet :deep(mark.note-highlight) {
+  background: rgba(37, 99, 235, 0.16);
+  color: var(--color-accent);
+  font-weight: 600;
+  border-radius: 3px;
+  padding: 0 2px;
+  margin: 0 -1px;
 }
 
 .global-search-result-snippets {
@@ -562,15 +548,10 @@ defineExpose({
   line-height: 1.65;
   color: var(--color-text);
   word-break: break-word;
-}
-
-.global-search-result-snippet :deep(mark.note-highlight) {
-  background: rgba(37, 99, 235, 0.16);
-  color: var(--color-accent);
-  font-weight: 600;
-  border-radius: 3px;
-  padding: 0 2px;
-  margin: 0 -1px;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 
 .global-search-result-time {
@@ -594,30 +575,17 @@ defineExpose({
   color: var(--color-error);
 }
 
-.tag-hash-menu-state {
-  margin: 0;
-  padding: 8px 10px;
-  font-size: 13px;
-  color: var(--color-secondary-text);
-}
-
-.tag-hash-menu-hash {
-  font-size: 14px;
-  font-weight: 600;
-  line-height: 1;
-}
-
 @media (max-width: 720px) {
   .global-search-body {
-    padding: 16px 14px 20px;
+    width: calc(100% - 24px);
+    padding: 10px 12px 14px;
   }
 
   .global-search-filters {
-    gap: 10px;
+    gap: 8px;
   }
 
   .global-search-scope {
-    margin-left: 0;
     width: 100%;
     justify-content: space-between;
   }
@@ -625,6 +593,11 @@ defineExpose({
   .global-search-scope-btn {
     flex: 1;
     padding: 0 8px;
+  }
+
+  .global-search-results-count {
+    width: 100%;
+    text-align: right;
   }
 }
 </style>

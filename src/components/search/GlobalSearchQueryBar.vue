@@ -1,76 +1,79 @@
 <template>
   <div class="global-search-query" :class="{ 'is-compact': compact, 'is-panel-mode': panelMode }">
-    <div class="global-search-input-row">
+    <div
+      class="global-search-input-row"
+      @mousedown="onInputRowMouseDown"
+    >
       <span class="global-search-input-icon" aria-hidden="true">
         <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
           <circle cx="11" cy="11" r="7" />
           <path d="m20 20-3.5-3.5" />
         </svg>
       </span>
-      <input
-        ref="keywordInputRef"
-        :value="draftKeyword"
-        type="text"
-        class="global-search-input"
-        :placeholder="placeholder"
-        spellcheck="false"
-        @input="onKeywordInput"
-        @focus="onKeywordFocus"
-        @blur="onTagTextareaBlur"
-        @keydown="onKeywordKeydown"
-        @click="onCaretChange"
-        @keyup="onCaretChange"
-      />
+
+      <div class="global-search-input-fields" aria-label="搜索条件">
+        <span v-if="selectedTag" class="global-search-tag-chip">
+          #{{ selectedTag.tagName }}
+          <button
+            type="button"
+            class="global-search-chip-remove"
+            aria-label="移除标签筛选"
+            @mousedown.prevent
+            @click="clearSelectedTag"
+          >
+            ×
+          </button>
+        </span>
+        <span v-if="hasDateRange" class="global-search-date-chip">
+          {{ dateRangeLabel }}
+          <button
+            type="button"
+            class="global-search-chip-remove"
+            aria-label="移除日期筛选"
+            @mousedown.prevent
+            @click="clearDateRange"
+          >
+            ×
+          </button>
+        </span>
+        <span
+          v-for="(item, index) in keywords"
+          :key="`${item}-${index}`"
+          class="global-search-chip"
+        >
+          {{ item }}
+          <button
+            type="button"
+            class="global-search-chip-remove"
+            :aria-label="`移除关键词 ${item}`"
+            @mousedown.prevent
+            @click="removeKeyword(index)"
+          >
+            ×
+          </button>
+        </span>
+        <input
+          ref="keywordInputRef"
+          :value="draftKeyword"
+          type="text"
+          class="global-search-input"
+          :placeholder="inputPlaceholder"
+          spellcheck="false"
+          @input="onKeywordInput"
+          @focus="onKeywordFocus"
+          @blur="onTagTextareaBlur"
+          @keydown="onKeywordKeydown"
+          @click="onCaretChange"
+          @keyup="onCaretChange"
+        />
+      </div>
+
       <DateRangePicker
         v-model:date-from="dateFrom"
         v-model:date-to="dateTo"
         compact
         :panel-compact="panelMode"
       />
-    </div>
-
-    <div
-      v-if="keywords.length || selectedTag || hasDateRange"
-      class="global-search-chips"
-      aria-label="搜索条件"
-    >
-      <span v-if="selectedTag" class="global-search-tag-chip">
-        #{{ selectedTag.tagName }}
-        <button
-          type="button"
-          class="global-search-chip-remove"
-          aria-label="移除标签筛选"
-          @click="clearSelectedTag"
-        >
-          ×
-        </button>
-      </span>
-      <span v-if="hasDateRange" class="global-search-date-chip">
-        {{ dateRangeLabel }}
-        <button
-          type="button"
-          class="global-search-chip-remove"
-          aria-label="移除日期筛选"
-          @click="clearDateRange"
-        >
-          ×
-        </button>
-      </span>
-      <span
-        v-for="(item, index) in keywords"
-        :key="`${item}-${index}`"
-        class="global-search-chip"
-      >
-        {{ item }}
-        <button
-          type="button"
-          class="global-search-chip-remove"
-          :aria-label="`移除关键词 ${item}`"
-          @click="removeKeyword(index)"
-        >
-          ×
-        </button>
-      </span>
     </div>
   </div>
 
@@ -191,6 +194,22 @@ const dateRangeLabel = computed(() => {
   return `${dateFrom.value} ~ ${dateTo.value}`
 })
 
+const hasInlineFilters = computed(
+  () => Boolean(keywords.value.length || selectedTag.value || hasDateRange.value),
+)
+
+const inputPlaceholder = computed(() =>
+  hasInlineFilters.value ? '' : props.placeholder,
+)
+
+const onInputRowMouseDown = (event) => {
+  const target = event.target
+  if (!(target instanceof Element)) return
+  if (target.closest('button, input, .date-range-picker')) return
+  event.preventDefault()
+  keywordInputRef.value?.focus()
+}
+
 watch(
   results,
   (records) => emit('results-change', records),
@@ -271,17 +290,20 @@ defineExpose({
 .global-search-input-row {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 0 10px;
+  gap: 6px;
+  min-height: 36px;
+  padding: 4px 8px 4px 10px;
   border: 1px solid var(--color-border);
   border-radius: 10px;
   background: #fff;
+  box-sizing: border-box;
+  cursor: text;
 }
 
 .is-compact .global-search-input-row {
-  gap: 6px;
-  padding: 0 8px;
-  border-radius: 9px;
+  min-height: 36px;
+  padding: 3px 6px 3px 8px;
+  border-radius: 10px;
 }
 
 .global-search-input-row:focus-within {
@@ -291,24 +313,38 @@ defineExpose({
 
 .global-search-input-icon {
   flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
   color: var(--color-secondary-text);
 }
 
-.global-search-input {
+.global-search-input-fields {
   flex: 1;
   min-width: 0;
-  height: 44px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 5px;
+}
+
+.global-search-input {
+  flex: 1 1 96px;
+  min-width: 72px;
+  height: 28px;
+  margin: 0;
   border: 0;
   outline: 0;
   background: transparent;
   font-family: inherit;
   font-size: 14px;
+  line-height: 28px;
   color: var(--color-text);
 }
 
 .is-compact .global-search-input {
-  height: 34px;
-  font-size: 12px;
+  height: 26px;
+  font-size: 13px;
+  line-height: 26px;
 }
 
 .global-search-input::placeholder {
@@ -316,19 +352,7 @@ defineExpose({
 }
 
 .is-compact .global-search-input::placeholder {
-  font-size: 11px;
-}
-
-.global-search-chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin-top: 8px;
-}
-
-.is-compact .global-search-chips {
-  gap: 5px;
-  margin-top: 6px;
+  font-size: 12px;
 }
 
 .global-search-chip,
@@ -336,18 +360,21 @@ defineExpose({
 .global-search-date-chip {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  padding: 3px 7px 3px 9px;
+  gap: 3px;
+  max-width: 100%;
+  padding: 2px 6px 2px 8px;
   border-radius: 999px;
   font-size: 12px;
   font-weight: 500;
+  line-height: 1.4;
+  box-sizing: border-box;
 }
 
 .is-compact .global-search-chip,
 .is-compact .global-search-tag-chip,
 .is-compact .global-search-date-chip {
   font-size: 11px;
-  padding: 2px 6px 2px 8px;
+  padding: 1px 5px 1px 7px;
 }
 
 .global-search-date-chip {
@@ -372,14 +399,14 @@ defineExpose({
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 16px;
-  height: 16px;
+  width: 14px;
+  height: 14px;
   padding: 0;
   border: 0;
   border-radius: 999px;
   background: transparent;
   color: var(--color-secondary-text);
-  font-size: 13px;
+  font-size: 12px;
   line-height: 1;
   cursor: pointer;
 }
