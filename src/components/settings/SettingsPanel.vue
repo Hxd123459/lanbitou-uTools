@@ -21,6 +21,7 @@
       embedded
       @auto-tag-enabled="emit('auto-tag-enabled')"
     />
+    <ProfilePanel :active="active" />
     <DataBackupPanel
       :active="active"
       @imported="emit('imported')"
@@ -39,6 +40,7 @@ import { motion } from 'motion-v'
 import { useMotionPresets } from '../../composables/useMotionPresets'
 import { SETTINGS_NAV_TARGETS } from '../../composables/useSettingsNavigation'
 import AiSettingsPanel from './AiSettingsPanel.vue'
+import ProfilePanel from './ProfilePanel.vue'
 import SedimentTemplatesPanel from './SedimentTemplatesPanel.vue'
 import DataBackupPanel from './DataBackupPanel.vue'
 

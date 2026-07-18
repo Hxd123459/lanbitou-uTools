@@ -22,6 +22,7 @@ const DEFAULT_SETTINGS = {
   model: '',
   autoTagEnabled: false,
   mimicWritingStyle: true,
+  humanizeDraft: true,
 }
 
 function getStorage() {
@@ -61,8 +62,12 @@ export function loadAiSettings() {
     saved?.mimicWritingStyle === undefined
       ? DEFAULT_SETTINGS.mimicWritingStyle
       : saved.mimicWritingStyle === true
+  const humanizeDraft =
+    saved?.humanizeDraft === undefined
+      ? DEFAULT_SETTINGS.humanizeDraft
+      : saved.humanizeDraft === true
 
-  return { provider, model, baseUrl, apiKey, autoTagEnabled, mimicWritingStyle }
+  return { provider, model, baseUrl, apiKey, autoTagEnabled, mimicWritingStyle, humanizeDraft }
 }
 
 export function saveAiSettings({
@@ -72,6 +77,7 @@ export function saveAiSettings({
   apiKey,
   autoTagEnabled,
   mimicWritingStyle,
+  humanizeDraft,
 }) {
   const storage = getStorage()
   const crypto = getCryptoStorage()
@@ -104,6 +110,10 @@ export function saveAiSettings({
       mimicWritingStyle === undefined
         ? prev.mimicWritingStyle !== false
         : mimicWritingStyle === true,
+    humanizeDraft:
+      humanizeDraft === undefined
+        ? prev.humanizeDraft !== false
+        : humanizeDraft === true,
   })
 
   if (crypto && apiKey !== undefined) {
@@ -119,6 +129,10 @@ export function saveAutoTagEnabled(enabled) {
 
 export function saveMimicWritingStyle(enabled) {
   saveAiSettings({ mimicWritingStyle: enabled === true })
+}
+
+export function saveHumanizeDraft(enabled) {
+  saveAiSettings({ humanizeDraft: enabled === true })
 }
 
 /** 开启自动打标时一并持久化服务来源，供记录笔记时 generateNoteTitle 读取 */

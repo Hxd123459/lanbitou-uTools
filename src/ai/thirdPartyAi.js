@@ -153,6 +153,8 @@ export async function callThirdPartyChat({
   model,
   system,
   user,
+  maxTokens = TITLE_REQUEST_MAX_TOKENS,
+  jsonMode = false,
 }) {
   const resolvedModel = model || AI_PROVIDERS[provider]?.defaultModel
   const resolvedBaseUrl = baseUrl || AI_PROVIDERS[provider]?.defaultBaseUrl
@@ -166,6 +168,8 @@ export async function callThirdPartyChat({
     model: resolvedModel,
     system,
     user,
+    maxTokens,
+    jsonMode,
   }
 
   if (provider === 'openai') {
