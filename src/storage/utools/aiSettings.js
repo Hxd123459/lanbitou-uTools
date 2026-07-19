@@ -23,6 +23,8 @@ const DEFAULT_SETTINGS = {
   autoTagEnabled: false,
   mimicWritingStyle: true,
   humanizeDraft: true,
+  /** 测试阶段默认关闭，避免启动/记笔记时悄悄烧 token */
+  autoProfileAnalysis: false,
 }
 
 function getStorage() {
@@ -66,8 +68,21 @@ export function loadAiSettings() {
     saved?.humanizeDraft === undefined
       ? DEFAULT_SETTINGS.humanizeDraft
       : saved.humanizeDraft === true
+  const autoProfileAnalysis =
+    saved?.autoProfileAnalysis === undefined
+      ? DEFAULT_SETTINGS.autoProfileAnalysis
+      : saved.autoProfileAnalysis === true
 
-  return { provider, model, baseUrl, apiKey, autoTagEnabled, mimicWritingStyle, humanizeDraft }
+  return {
+    provider,
+    model,
+    baseUrl,
+    apiKey,
+    autoTagEnabled,
+    mimicWritingStyle,
+    humanizeDraft,
+    autoProfileAnalysis,
+  }
 }
 
 export function saveAiSettings({
@@ -78,6 +93,7 @@ export function saveAiSettings({
   autoTagEnabled,
   mimicWritingStyle,
   humanizeDraft,
+  autoProfileAnalysis,
 }) {
   const storage = getStorage()
   const crypto = getCryptoStorage()
@@ -114,6 +130,10 @@ export function saveAiSettings({
       humanizeDraft === undefined
         ? prev.humanizeDraft !== false
         : humanizeDraft === true,
+    autoProfileAnalysis:
+      autoProfileAnalysis === undefined
+        ? prev.autoProfileAnalysis === true
+        : autoProfileAnalysis === true,
   })
 
   if (crypto && apiKey !== undefined) {
@@ -133,6 +153,14 @@ export function saveMimicWritingStyle(enabled) {
 
 export function saveHumanizeDraft(enabled) {
   saveAiSettings({ humanizeDraft: enabled === true })
+}
+
+export function saveAutoProfileAnalysis(enabled) {
+  saveAiSettings({ autoProfileAnalysis: enabled === true })
+}
+
+export function isAutoProfileAnalysisEnabled() {
+  return loadAiSettings().autoProfileAnalysis === true
 }
 
 /** 开启自动打标时一并持久化服务来源，供记录笔记时 generateNoteTitle 读取 */

@@ -1,6 +1,7 @@
 import { getResolvedBaseUrl, getResolvedModel } from '../storage/utools/aiSettings'
 import { PROFILE_TYPES, loadProfile } from '../storage/utools/profileRepository'
 import { isUtoolsAiAvailable } from './aiService'
+import { buildPersonaPromptText } from './profileExtractionService'
 import {
   executeNoteSearchTool,
   handleSearchFragments,
@@ -265,7 +266,15 @@ async function runUtoolsAgent({ messages, model }) {
 async function resolvePersonaPromptSection() {
   try {
     const persona = await loadProfile(PROFILE_TYPES.persona)
-    return String(persona?.promptText || '').trim()
+    const profileText =
+      buildPersonaPromptText(persona?.card) || String(persona?.promptText || '').trim()
+    if (!profileText) return ''
+    return `${profileText}
+
+使用边界：
+- 上述深层洞察只是概率性假设，不是事实或心理诊断。
+- 不要主动向用户复述画像或给用户贴标签。
+- 若用户当前表达与画像冲突，以用户当前表达为准。`
   } catch {
     return ''
   }

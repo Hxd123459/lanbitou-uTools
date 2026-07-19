@@ -5,6 +5,7 @@ import { extractLbAttRefsFromMarkdown } from '../utils/attachmentMarkdown'
 import {
   ATTACHMENT_PREFIX,
   NOTE_PREFIX,
+  PROFILE_PREFIX,
   STRUCT_FOLDER_PREFIX,
   STRUCT_NOTE_PREFIX,
 } from '../storage/utools/constants'
@@ -23,6 +24,7 @@ import {
   LB_TYPE_FRAGMENT,
   LB_TYPE_SEDIMENT,
   LB_VERSION,
+  PROFILE_BACKUP_FILE,
   SEDIMENT_DIR,
   joinZipPath,
   mimeToExtension,
@@ -88,6 +90,22 @@ async function loadStructNotes() {
 async function loadFolders() {
   const docs = await dbAllDocs(STRUCT_FOLDER_PREFIX)
   return (docs || []).map(stripDoc).filter((doc) => doc?.id)
+}
+
+async function loadProfiles() {
+  const docs = await dbAllDocs(PROFILE_PREFIX)
+  const profiles = []
+  for (const rawDoc of docs || []) {
+    const rawId = String(rawDoc?._id || '')
+    if (!rawId.startsWith(PROFILE_PREFIX) || rawId.endsWith('/checkpoint')) continue
+    const fullDoc = stripDoc(await dbGet(rawId))
+    if (!fullDoc) continue
+    profiles.push({
+      type: rawId.slice(PROFILE_PREFIX.length),
+      ...fullDoc,
+    })
+  }
+  return profiles
 }
 
 function normalizeAttachmentBytes(bytes) {
@@ -262,11 +280,12 @@ async function buildSedimentAttachmentEntries(noteId, content, attachmentWrites)
 }
 
 export async function exportLanbitouBackup({ includeDeleted = false } = {}) {
-  const [notes, structNotes, folders, tags] = await Promise.all([
+  const [notes, structNotes, folders, tags, profiles] = await Promise.all([
     loadNotes({ includeDeleted }),
     loadStructNotes(),
     loadFolders(),
     listTagDocs(),
+    loadProfiles(),
   ])
 
   const tagNameById = new Map(tags.map((tag) => [String(tag.id), tag.tagName || '']))
@@ -350,6 +369,7 @@ export async function exportLanbitouBackup({ includeDeleted = false } = {}) {
       folders: folders.length,
       attachments: attachmentsCount,
       tags: tags.length,
+      profiles: profiles.length,
     },
   }
 
@@ -360,6 +380,9 @@ export async function exportLanbitouBackup({ includeDeleted = false } = {}) {
       null,
       2,
     ),
+  )
+  files[PROFILE_BACKUP_FILE] = new TextEncoder().encode(
+    JSON.stringify(profiles, null, 2),
   )
 
   const zipped = zipSync(files, { level: 6 })

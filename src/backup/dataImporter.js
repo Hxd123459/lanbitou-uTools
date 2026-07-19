@@ -5,7 +5,12 @@ import {
   saveImageFiles,
   removeAttachments,
 } from '../storage/utools/attachment'
-import { NOTE_PREFIX, STRUCT_FOLDER_PREFIX, STRUCT_NOTE_PREFIX } from '../storage/utools/constants'
+import {
+  NOTE_PREFIX,
+  PROFILE_PREFIX,
+  STRUCT_FOLDER_PREFIX,
+  STRUCT_NOTE_PREFIX,
+} from '../storage/utools/constants'
 import { dbGet, dbPostAttachment, dbPut } from '../storage/utools/dbClient'
 import { pinTypeToWeight } from '../storage/utools/pin'
 import { ensureTag } from '../storage/utools/tagRepository'
@@ -16,6 +21,7 @@ import {
   FRAGMENTS_DIR,
   LB_TYPE_FRAGMENT,
   LB_TYPE_SEDIMENT,
+  PROFILE_BACKUP_FILE,
   SEDIMENT_DIR,
   extensionToMime,
   isLanbitouBackup,
@@ -257,6 +263,22 @@ async function importTags(tags = [], summary) {
   summary.tags = count
 }
 
+async function importProfiles(profiles = [], summary) {
+  const allowedTypes = new Set(['writing-style', 'persona'])
+  let count = 0
+  for (const raw of Array.isArray(profiles) ? profiles : []) {
+    const type = String(raw?.type || '')
+    if (!allowedTypes.has(type)) continue
+    const { type: _type, _id, _rev, ...profile } = raw
+    await dbPut({
+      ...profile,
+      _id: `${PROFILE_PREFIX}${type}`,
+    })
+    count += 1
+  }
+  summary.profiles = count
+}
+
 async function importFolderTree(folders = [], summary, maps) {
   const sorted = sortFoldersForCreate(folders.filter((item) => item.type === 'folder'))
   for (const folder of sorted) {
@@ -448,6 +470,9 @@ export async function importLanbitouBackup(file) {
   }
 
   const tags = entries['tags.json'] ? JSON.parse(decodeText(entries['tags.json'])) : []
+  const profiles = entries[PROFILE_BACKUP_FILE]
+    ? JSON.parse(decodeText(entries[PROFILE_BACKUP_FILE]))
+    : []
   const summary = {
     fragmentsAdded: 0,
     fragmentsUpdated: 0,
@@ -459,6 +484,7 @@ export async function importLanbitouBackup(file) {
     sedimentUpdated: 0,
     sedimentSkipped: 0,
     tags: 0,
+    profiles: 0,
     errors: [],
   }
 
@@ -471,6 +497,7 @@ export async function importLanbitouBackup(file) {
   }
 
   await importTags(tags, summary)
+  await importProfiles(profiles, summary)
   await importFolderTree(manifest.folders || [], summary, maps)
 
   const markdownEntries = collectMarkdownEntries(entries)

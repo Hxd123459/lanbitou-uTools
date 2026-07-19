@@ -7,6 +7,9 @@ export const PROFILE_TYPES = {
   persona: 'persona',
 }
 
+export const PROFILE_SCHEMA_VERSION = 2
+export const CHECKPOINT_SCHEMA_VERSION = 2
+
 const CHECKPOINT_ID = `${PROFILE_PREFIX}checkpoint`
 
 /** 触发再分析的阈值：新增碎片条数 / 距上次分析天数 / 首次分析所需最少碎片数 */
@@ -28,10 +31,45 @@ function stripDoc(doc) {
   return rest
 }
 
+function emptyDeepPersona() {
+  return {
+    thinkingPatterns: [],
+    decisionPreferences: [],
+    emotionalPatterns: [],
+    unfinishedLifeThemes: [],
+  }
+}
+
+/** 将 v1 表层画像读时迁移到 v2；写回发生在下次分析或用户操作时。 */
+export function normalizeProfile(type, profile) {
+  if (!profile || type !== PROFILE_TYPES.persona) return profile
+  if ((profile.schemaVersion || 1) >= PROFILE_SCHEMA_VERSION) return profile
+
+  const oldCard = profile.card || {}
+  return {
+    ...profile,
+    schemaVersion: PROFILE_SCHEMA_VERSION,
+    needsReanalysis: true,
+    manualLocked: false,
+    card: {
+      summary: oldCard.summary || '',
+      surface: {
+        interests: oldCard.interests || [],
+        domains: oldCard.domains || [],
+        stances: oldCard.stances || [],
+        scenes: oldCard.scenes || [],
+      },
+      deep: emptyDeepPersona(),
+      feedback: {},
+      manualOverride: profile.manualLocked ? profile.promptText || '' : '',
+    },
+  }
+}
+
 export async function loadProfile(type) {
   if (!isDbAvailable()) return null
   try {
-    return stripDoc(await dbGet(profileDocId(type)))
+    return normalizeProfile(type, stripDoc(await dbGet(profileDocId(type))))
   } catch {
     return null
   }
@@ -43,6 +81,10 @@ export async function saveProfile(type, patch = {}) {
   const doc = {
     ...existing,
     ...patch,
+    schemaVersion:
+      type === PROFILE_TYPES.persona
+        ? PROFILE_SCHEMA_VERSION
+        : patch.schemaVersion || existing.schemaVersion || 1,
     version: (existing.version || 0) + 1,
     updatedAt: formatDateTime(),
     _id: profileDocId(type),
@@ -55,14 +97,20 @@ export async function saveProfile(type, patch = {}) {
 export async function loadCheckpoint() {
   if (!isDbAvailable()) return null
   try {
-    return stripDoc(await dbGet(CHECKPOINT_ID))
+    const checkpoint = stripDoc(await dbGet(CHECKPOINT_ID))
+    if (checkpoint?.schemaVersion !== CHECKPOINT_SCHEMA_VERSION) return null
+    return checkpoint
   } catch {
     return null
   }
 }
 
 export async function saveCheckpoint(data) {
-  await dbPut({ ...data, _id: CHECKPOINT_ID })
+  await dbPut({
+    ...data,
+    schemaVersion: CHECKPOINT_SCHEMA_VERSION,
+    _id: CHECKPOINT_ID,
+  })
 }
 
 export async function clearCheckpoint() {
@@ -89,6 +137,7 @@ function ageInDays(dateTimeText) {
 
 function profileNeedsUpdate(profile, activeCount) {
   if (!profile) return true
+  if (profile.needsReanalysis) return true
   if (profile.manualLocked) return false
   const analyzedCount = profile.source?.analyzedCount || 0
   if (activeCount - analyzedCount >= REANALYZE_MIN_NEW_NOTES) return true

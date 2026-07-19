@@ -1,8 +1,11 @@
+import { isImageMimeType } from '../../constants/uploadLimits'
+import { LB_ATT_SCHEME } from '../../utils/attachmentMarkdown'
+import { extractMatchSnippets, plainTextForSnippet } from '../../utils/searchHighlight'
+import { imagesToBlocks, getAttachmentBlobUrl } from './attachment'
 import { NOTE_PREFIX, STRUCT_NOTE_PREFIX } from './constants'
-import { dbAllDocs } from './dbClient'
+import { dbAllDocs, dbGetAttachmentType } from './dbClient'
 import { listTagDocs } from './tagRepository'
 import { datePartFromDateTime } from './utils'
-import { extractMatchSnippets, plainTextForSnippet } from '../../utils/searchHighlight'
 
 const DEFAULT_PAGE_SIZE = 30
 
@@ -49,6 +52,169 @@ function buildSnippets(rawText, keywords = []) {
   return fallback.length ? fallback : []
 }
 
+function blocksToAttachments(blocks = []) {
+  return (Array.isArray(blocks) ? blocks : [])
+    .filter((block) => block && block.fileUrl)
+    .map((block) => ({
+      id: block.id,
+      url: block.fileUrl,
+      sortOrder: block.sortOrder ?? 0,
+      kind: block.type === 'file' ? 'file' : 'image',
+      name: block.fileName || '',
+      mimeType: block.mimeType || '',
+    }))
+}
+
+function attachmentNamesFromImages(images = []) {
+  return (Array.isArray(images) ? images : [])
+    .map((img) => img?.fileName || img?.name || '')
+    .filter(Boolean)
+}
+
+function decodeLbAttRef(ref) {
+  if (!ref?.startsWith(LB_ATT_SCHEME)) return ''
+  try {
+    return decodeURIComponent(ref.slice(LB_ATT_SCHEME.length))
+  } catch {
+    return ''
+  }
+}
+
+function attachmentFromLbAtt(ref, label, preferredKind, sortOrder = 0) {
+  const attachmentId = decodeLbAttRef(ref)
+  if (!attachmentId) return null
+  const url = getAttachmentBlobUrl(attachmentId)
+  if (!url) return null
+  const mimeType =
+    dbGetAttachmentType(attachmentId) ||
+    (preferredKind === 'image' ? 'image/png' : 'application/octet-stream')
+  const kind =
+    preferredKind === 'image' || isImageMimeType(mimeType) ? 'image' : 'file'
+  const parts = attachmentId.split('/')
+  const id = parts[parts.length - 1] || attachmentId
+  return {
+    id,
+    url,
+    sortOrder,
+    kind,
+    name: String(label || '').trim(),
+    mimeType,
+  }
+}
+
+function extractMarkdownAttachments(content = '') {
+  const text = String(content ?? '')
+  if (!text.includes(LB_ATT_SCHEME)) return []
+
+  const attachments = []
+  const seen = new Set()
+  let sortOrder = 0
+  const imageRe = /!\[([^\]]*)\]\((lb-att:\/\/[^)]+)\)/g
+  const fileRe = /(?<!!)\[([^\]]*)\]\((lb-att:\/\/[^)]+)\)/g
+
+  let match = imageRe.exec(text)
+  while (match) {
+    const item = attachmentFromLbAtt(match[2], match[1], 'image', sortOrder)
+    if (item && !seen.has(item.id)) {
+      seen.add(item.id)
+      attachments.push(item)
+      sortOrder += 1
+    }
+    match = imageRe.exec(text)
+  }
+
+  match = fileRe.exec(text)
+  while (match) {
+    const item = attachmentFromLbAtt(match[2], match[1], 'file', sortOrder)
+    if (item && !seen.has(item.id)) {
+      seen.add(item.id)
+      attachments.push(item)
+      sortOrder += 1
+    }
+    match = fileRe.exec(text)
+  }
+
+  return attachments
+}
+
+function extractMarkdownAttachmentLabels(content = '') {
+  const text = String(content ?? '')
+  if (!text.includes(LB_ATT_SCHEME)) return []
+  const labels = []
+  const imageRe = /!\[([^\]]*)\]\((lb-att:\/\/[^)]+)\)/g
+  const fileRe = /(?<!!)\[([^\]]*)\]\((lb-att:\/\/[^)]+)\)/g
+  let match = imageRe.exec(text)
+  while (match) {
+    if (match[1]) labels.push(match[1])
+    match = imageRe.exec(text)
+  }
+  match = fileRe.exec(text)
+  while (match) {
+    if (match[1]) labels.push(match[1])
+    match = fileRe.exec(text)
+  }
+  return labels
+}
+
+function fragmentDocAttachments(doc) {
+  if (!doc?.id) return []
+  return blocksToAttachments(imagesToBlocks(doc.id, doc.images))
+}
+
+function introducedFragmentFileAttachments(doc, noteById) {
+  const ids = Array.isArray(doc?.introducedFragmentIds)
+    ? doc.introducedFragmentIds
+    : []
+  if (!ids.length || !noteById) return []
+
+  const attachments = []
+  const seen = new Set()
+  ids.forEach((fragmentId) => {
+    const note = noteById.get(String(fragmentId))
+    if (!note) return
+    fragmentDocAttachments(note)
+      .filter((item) => item.kind === 'file')
+      .forEach((item) => {
+        const key = `${fragmentId}:${item.id}`
+        if (seen.has(key)) return
+        seen.add(key)
+        attachments.push({
+          ...item,
+          id: key,
+          sortOrder: attachments.length,
+        })
+      })
+  })
+  return attachments
+}
+
+function introducedFragmentAttachmentNames(doc, noteById) {
+  const ids = Array.isArray(doc?.introducedFragmentIds)
+    ? doc.introducedFragmentIds
+    : []
+  if (!ids.length || !noteById) return []
+  const names = []
+  ids.forEach((fragmentId) => {
+    const note = noteById.get(String(fragmentId))
+    if (!note) return
+    attachmentNamesFromImages(note.images).forEach((name) => names.push(name))
+  })
+  return names
+}
+
+function mergeAttachments(...lists) {
+  const merged = []
+  const seen = new Set()
+  lists.flat().forEach((item) => {
+    if (!item?.url) return
+    const key = String(item.id ?? item.url)
+    if (seen.has(key)) return
+    seen.add(key)
+    merged.push({ ...item, sortOrder: merged.length })
+  })
+  return merged
+}
+
 function toFragmentResult(doc, tagNameById) {
   const tagName =
     (doc.tagId && tagNameById.get(String(doc.tagId))) || doc.title || ''
@@ -72,9 +238,11 @@ function toFragmentResult(doc, tagNameById) {
     title: doc.title || tagName || '无标签',
     content,
     snippets: [],
+    attachments: [],
     tagName,
     tagId: doc.tagId ?? null,
     createTime: doc.createTime || '',
+    _sourceDoc: doc,
   }
 }
 
@@ -91,10 +259,31 @@ function toSedimentResult(doc, tagNameById, keywords = []) {
     noteId: doc.id,
     title: doc.title || '无标题',
     snippets,
+    attachments: [],
     tagName,
     tagId: doc.tagId ?? null,
     createTime: doc.createTime || '',
+    _sourceDoc: doc,
   }
+}
+
+function hydrateResultAttachments(item, noteById) {
+  const doc = item?._sourceDoc
+  if (!doc) {
+    const { _sourceDoc, ...rest } = item || {}
+    return { ...rest, attachments: Array.isArray(item?.attachments) ? item.attachments : [] }
+  }
+
+  const attachments =
+    item.type === 'fragment'
+      ? fragmentDocAttachments(doc)
+      : mergeAttachments(
+          extractMarkdownAttachments(doc.content),
+          introducedFragmentFileAttachments(doc, noteById),
+        )
+
+  const { _sourceDoc, ...rest } = item
+  return { ...rest, attachments }
 }
 
 function paginate(list, page, pageSize) {
@@ -133,11 +322,25 @@ export async function globalSearch({
   const tagNameById = new Map(tags.map((tag) => [String(tag.id), tag.tagName]))
 
   const results = []
+  let noteById = null
+
+  const loadNoteById = async () => {
+    if (noteById) return noteById
+    const noteDocs = await dbAllDocs(NOTE_PREFIX)
+    noteById = new Map()
+    ;(noteDocs || []).map(stripDoc).forEach((doc) => {
+      if (doc?.id) noteById.set(String(doc.id), doc)
+    })
+    return noteById
+  }
+
+  if (scopeSet.has('fragment') || scopeSet.has('sediment')) {
+    await loadNoteById()
+  }
 
   if (scopeSet.has('fragment')) {
-    const noteDocs = await dbAllDocs(NOTE_PREFIX)
-    ;(noteDocs || [])
-      .map(stripDoc)
+    const notes = noteById ? [...noteById.values()] : []
+    notes
       .filter((doc) => doc?.id && !doc.deletedAt && !doc.archivedAt)
       .forEach((doc) => {
         if (!matchesTag(doc, tagId)) return
@@ -147,6 +350,7 @@ export async function globalSearch({
           doc.summary,
           doc.rawContent,
           doc.markdownContent,
+          ...attachmentNamesFromImages(doc.images),
         ])
         if (!matchesKeywords(haystack, keywordList)) return
         results.push(toFragmentResult(doc, tagNameById))
@@ -154,6 +358,7 @@ export async function globalSearch({
   }
 
   if (scopeSet.has('sediment')) {
+    const notesMap = noteById || (await loadNoteById())
     const structDocs = await dbAllDocs(STRUCT_NOTE_PREFIX)
     ;(structDocs || [])
       .map(stripDoc)
@@ -161,7 +366,12 @@ export async function globalSearch({
       .forEach((doc) => {
         if (!matchesTag(doc, tagId)) return
         if (!matchesDateRange(doc.createTime, dateFrom, dateTo)) return
-        const haystack = buildHaystack([doc.title, doc.content])
+        const haystack = buildHaystack([
+          doc.title,
+          doc.content,
+          ...extractMarkdownAttachmentLabels(doc.content),
+          ...introducedFragmentAttachmentNames(doc, notesMap),
+        ])
         if (!matchesKeywords(haystack, keywordList)) return
         results.push(toSedimentResult(doc, tagNameById, keywordList))
       })
@@ -172,8 +382,9 @@ export async function globalSearch({
   )
 
   const pageData = paginate(results, page, pageSize)
+  const notesMap = noteById || new Map()
   return {
-    records: pageData.records,
+    records: pageData.records.map((item) => hydrateResultAttachments(item, notesMap)),
     total: pageData.total,
     pageNo: pageData.current,
     pageSize: pageData.size,

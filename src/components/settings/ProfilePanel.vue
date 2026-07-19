@@ -10,6 +10,25 @@
     <p v-if="!utoolsMode" class="profile-hint">仅 uTools 环境下可用。</p>
 
     <template v-else>
+      <label class="auto-analyze-row">
+        <span>
+          <span class="auto-analyze-label">自动分析画像与文风</span>
+          <span class="auto-analyze-hint">关闭后仅「立即重新分析」会调用模型，启动和记笔记不再后台烧 token</span>
+        </span>
+        <span class="profile-switch" :class="{ 'is-on': autoAnalyze }">
+          <input
+            v-model="autoAnalyze"
+            type="checkbox"
+            class="profile-switch-input"
+            aria-label="自动分析画像与文风"
+            @change="handleAutoAnalyzeToggle"
+          />
+          <span class="profile-switch-track" aria-hidden="true">
+            <span class="profile-switch-thumb" />
+          </span>
+        </span>
+      </label>
+
       <div class="profile-meta">
         <p class="profile-meta-text">
           <template v-if="lastAnalyzedAt">
@@ -17,7 +36,7 @@
               · 采样 {{ sampleCount }} 条</template>
           </template>
           <template v-else>
-            尚未生成。积累一些碎片后会自动分析，也可以立即手动分析。
+            尚未生成。可手动分析，或开启上方自动分析。
           </template>
         </p>
         <motion.button
@@ -33,7 +52,43 @@
         </motion.button>
       </div>
 
+      <div
+        v-if="progress.stage !== 'idle'"
+        class="analysis-progress"
+        :class="{
+          'is-complete': progress.stage === 'complete',
+          'is-error': progress.stage === 'error',
+        }"
+      >
+        <div class="analysis-progress-head">
+          <span>{{ progress.message }}</span>
+          <span>{{ progress.percent }}%</span>
+        </div>
+        <div
+          class="analysis-progress-track"
+          role="progressbar"
+          :aria-valuenow="progress.percent"
+          aria-valuemin="0"
+          aria-valuemax="100"
+        >
+          <span
+            class="analysis-progress-bar"
+            :style="{ width: `${progress.percent}%` }"
+          />
+        </div>
+        <p v-if="progress.totalSamples" class="analysis-progress-detail">
+          已处理 {{ progress.processedSamples }}/{{ progress.totalSamples }} 个采样片段
+          <template v-if="progress.totalBatches">
+            · 批次 {{ progress.processedBatches }}/{{ progress.totalBatches }}
+          </template>
+          · 来自 {{ progress.fragmentSamples }} 条碎片、{{ progress.structNotes }} 篇沉淀
+        </p>
+      </div>
+
       <p v-if="inlineError" class="profile-inline-error">{{ inlineError }}</p>
+      <p class="personality-disclaimer">
+        深层人格是根据记录形成的概率性观察，不是心理诊断。每条洞察均需多条原文证据，并允许你纠正。
+      </p>
 
       <div class="profile-list">
         <article
@@ -96,7 +151,12 @@
               >
                 {{ isExpanded(section.type) ? '收起' : '展开详情' }}
               </button>
-              <button type="button" class="profile-text-btn" @click="startEdit(section)">
+              <button
+                v-if="section.type === PROFILE_TYPES.writingStyle"
+                type="button"
+                class="profile-text-btn"
+                @click="startEdit(section)"
+              >
                 编辑
               </button>
               <button
@@ -113,6 +173,18 @@
           <p v-else class="profile-card-empty">暂无数据，点击上方「立即重新分析」生成。</p>
         </article>
       </div>
+
+      <div v-if="deepSections.length" class="deep-personality">
+        <h4 class="deep-personality-title">深层人格洞察</h4>
+        <PersonalityInsightCard
+          v-for="section in deepSections"
+          :key="section.key"
+          :title="section.title"
+          :items="section.items"
+          :feedback="personaProfile?.card?.feedback || {}"
+          @feedback="handleInsightFeedback"
+        />
+      </div>
     </template>
   </motion.div>
 </template>
@@ -128,10 +200,17 @@ import {
   saveProfile,
 } from '../../storage/utools/profileRepository'
 import {
+  loadAiSettings,
+  saveAutoProfileAnalysis,
+} from '../../storage/utools/aiSettings'
+import {
   profileAnalysisRunning,
+  profileAnalysisProgress,
   profileRevision,
+  buildPersonaPromptText,
   runProfileAnalysis,
 } from '../../ai/profileExtractionService'
+import PersonalityInsightCard from './PersonalityInsightCard.vue'
 import SettingsSectionHeading from './SettingsSectionHeading.vue'
 
 const props = defineProps({
@@ -146,7 +225,9 @@ const { presets } = useMotionPresets()
 const utoolsMode = isUtoolsMode()
 const styleProfile = ref(null)
 const personaProfile = ref(null)
+const autoAnalyze = ref(false)
 const running = profileAnalysisRunning
+const progress = profileAnalysisProgress
 const inlineError = ref('')
 const editingType = ref('')
 const editingText = ref('')
@@ -160,6 +241,15 @@ const toggleExpand = (type) => {
   if (next.has(type)) next.delete(type)
   else next.add(type)
   expandedTypes.value = next
+}
+
+const handleAutoAnalyzeToggle = () => {
+  try {
+    saveAutoProfileAnalysis(autoAnalyze.value)
+  } catch (error) {
+    autoAnalyze.value = !autoAnalyze.value
+    inlineError.value = error instanceof Error ? error.message : '开关保存失败'
+  }
 }
 
 const cardMotion = computed(() => {
@@ -186,11 +276,12 @@ function buildRows(type, profile) {
     ].filter((row) => row.value)
   }
 
+  const surface = card.surface || card
   return [
-    { label: '兴趣主题', value: joinList(card.interests) },
-    { label: '关注领域', value: joinList(card.domains) },
-    { label: '观点立场', value: joinList(card.stances, '；') },
-    { label: '记录场景', value: joinList(card.scenes) },
+    { label: '兴趣主题', value: joinList(surface.interests) },
+    { label: '关注领域', value: joinList(surface.domains) },
+    { label: '观点立场', value: joinList(surface.stances, '；') },
+    { label: '记录场景', value: joinList(surface.scenes) },
   ].filter((row) => row.value)
 }
 
@@ -212,12 +303,27 @@ const sections = computed(() => [
   },
   {
     type: PROFILE_TYPES.persona,
-    title: '用户画像',
+    title: '表层画像',
     profile: personaProfile.value,
     summary: getSummary(personaProfile.value),
     rows: buildRows(PROFILE_TYPES.persona, personaProfile.value),
   },
 ])
+
+const deepSections = computed(() => {
+  const deep = personaProfile.value?.card?.deep
+  if (!deep) return []
+  return [
+    { key: 'thinkingPatterns', title: '思维模式', items: deep.thinkingPatterns || [] },
+    { key: 'decisionPreferences', title: '决策偏好', items: deep.decisionPreferences || [] },
+    { key: 'emotionalPatterns', title: '情绪模式', items: deep.emotionalPatterns || [] },
+    {
+      key: 'unfinishedLifeThemes',
+      title: '未完成的人生主题',
+      items: deep.unfinishedLifeThemes || [],
+    },
+  ]
+})
 
 const lastAnalyzedAt = computed(
   () => styleProfile.value?.updatedAt || personaProfile.value?.updatedAt || '',
@@ -231,6 +337,7 @@ const sampleCount = computed(
 
 async function reload() {
   if (!utoolsMode) return
+  autoAnalyze.value = loadAiSettings().autoProfileAnalysis === true
   const [style, persona] = await Promise.all([
     loadProfile(PROFILE_TYPES.writingStyle),
     loadProfile(PROFILE_TYPES.persona),
@@ -248,6 +355,8 @@ const handleAnalyze = async () => {
     const result = await runProfileAnalysis({ force: true })
     if (result?.ok === false && result.reason === 'no-samples') {
       inlineError.value = '没有可分析的笔记，先记录一些碎片吧'
+    } else if (result?.ok && result.personaSaved === false) {
+      inlineError.value = '分析跑完了，但没有提取到可保存的画像。请确认模型能返回 JSON，或换更强的模型再试。'
     }
     await reload()
   } catch (error) {
@@ -293,6 +402,27 @@ const unlock = async (type) => {
     inlineError.value = error instanceof Error ? error.message : '操作失败'
   }
 }
+
+const handleInsightFeedback = async ({ item, status }) => {
+  if (!item?.id || !personaProfile.value?.card) return
+  inlineError.value = ''
+  try {
+    const card = {
+      ...personaProfile.value.card,
+      feedback: {
+        ...(personaProfile.value.card.feedback || {}),
+        [item.id]: { status, insight: item.insight, updatedAt: new Date().toISOString() },
+      },
+    }
+    await saveProfile(PROFILE_TYPES.persona, {
+      card,
+      promptText: buildPersonaPromptText(card),
+    })
+    await reload()
+  } catch (error) {
+    inlineError.value = error instanceof Error ? error.message : '反馈保存失败'
+  }
+}
 </script>
 
 <style scoped>
@@ -310,6 +440,79 @@ const unlock = async (type) => {
   margin: 0;
   font-size: 13px;
   color: var(--color-secondary-text);
+}
+
+.auto-analyze-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--color-border);
+  border-radius: 9px;
+  background: rgba(24, 24, 27, 0.02);
+  cursor: pointer;
+}
+
+.auto-analyze-label {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-primary);
+}
+
+.auto-analyze-hint {
+  display: block;
+  margin-top: 4px;
+  font-size: 11px;
+  line-height: 1.45;
+  color: var(--color-secondary-text);
+}
+
+.profile-switch {
+  position: relative;
+  display: inline-flex;
+  flex: 0 0 auto;
+}
+
+.profile-switch-input {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+}
+
+.profile-switch-track {
+  position: relative;
+  display: block;
+  width: 44px;
+  height: 26px;
+  border-radius: 999px;
+  background: #d4d4d8;
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+
+.profile-switch.is-on .profile-switch-track {
+  background: #18181b;
+}
+
+.profile-switch-thumb {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.18);
+  transition: transform 0.2s ease;
+}
+
+.profile-switch.is-on .profile-switch-thumb {
+  transform: translateX(18px);
 }
 
 .profile-meta {
@@ -352,6 +555,71 @@ const unlock = async (type) => {
   margin: 0 0 10px;
   font-size: 12px;
   color: #dc2626;
+}
+
+.analysis-progress {
+  margin: 0 0 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--color-border);
+  border-radius: 9px;
+  background: rgba(37, 99, 235, 0.035);
+}
+
+.analysis-progress.is-complete {
+  background: rgba(22, 163, 74, 0.04);
+}
+
+.analysis-progress.is-error {
+  background: rgba(220, 38, 38, 0.04);
+}
+
+.analysis-progress-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 7px;
+  font-size: 12px;
+  color: var(--color-primary);
+}
+
+.analysis-progress-track {
+  height: 5px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(24, 24, 27, 0.09);
+}
+
+.analysis-progress-bar {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--color-accent);
+  transition: width 0.25s ease;
+}
+
+.analysis-progress.is-complete .analysis-progress-bar {
+  background: #16a34a;
+}
+
+.analysis-progress.is-error .analysis-progress-bar {
+  background: #dc2626;
+}
+
+.analysis-progress-detail {
+  margin: 7px 0 0;
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--color-secondary-text);
+}
+
+.personality-disclaimer {
+  margin: 0 0 12px;
+  padding: 9px 11px;
+  border-radius: 8px;
+  background: rgba(24, 24, 27, 0.035);
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--color-secondary-text);
 }
 
 .profile-list {
@@ -486,6 +754,19 @@ const unlock = async (type) => {
 .profile-edit-textarea:focus {
   outline: none;
   border-color: rgba(37, 99, 235, 0.45);
+}
+
+.deep-personality {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.deep-personality-title {
+  margin: 0 0 1px;
+  font-size: 14px;
+  color: var(--color-primary);
 }
 
 </style>
