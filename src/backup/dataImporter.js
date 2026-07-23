@@ -5,7 +5,7 @@ import {
   saveImageFiles,
   removeAttachments,
 } from '../storage/utools/attachment'
-import { NOTE_PREFIX, STRUCT_FOLDER_PREFIX, STRUCT_NOTE_PREFIX } from '../storage/utools/constants'
+import { NOTE_PREFIX, PROJECT_PREFIX, STRUCT_FOLDER_PREFIX, STRUCT_NOTE_PREFIX, TODO_PREFIX } from '../storage/utools/constants'
 import { dbGet, dbPostAttachment, dbPut } from '../storage/utools/dbClient'
 import { pinTypeToWeight } from '../storage/utools/pin'
 import { ensureTag } from '../storage/utools/tagRepository'
@@ -257,6 +257,88 @@ async function importTags(tags = [], summary) {
   summary.tags = count
 }
 
+async function importProjects(projects = [], summary) {
+  let added = 0
+  let updated = 0
+  let skipped = 0
+  for (const project of projects) {
+    const id = String(project?.id ?? '').trim()
+    if (!id) continue
+    const existing = await getDoc(PROJECT_PREFIX, id)
+    const now = formatDateTime()
+    if (existing) {
+      if (!isIncomingNewer(project.updateTime, existing.updateTime)) {
+        skipped += 1
+        continue
+      }
+      updated += 1
+    } else {
+      added += 1
+    }
+    await dbPut({
+      ...(existing || {}),
+      _id: `${PROJECT_PREFIX}${id}`,
+      id,
+      name: String(project.name || '').trim() || '未命名事情',
+      tagIds: Array.isArray(project.tagIds) ? project.tagIds.map(String).filter(Boolean) : [],
+      status: project.status === 'archived' ? 'archived' : 'active',
+      startAt: project.startAt || null,
+      endAt: project.endAt || null,
+      lastSyncedAt: project.lastSyncedAt || null,
+      createTime: project.createTime || existing?.createTime || now,
+      updateTime: project.updateTime || now,
+      deletedAt: project.deletedAt || null,
+    })
+  }
+  summary.projectsAdded = added
+  summary.projectsUpdated = updated
+  summary.projectsSkipped = skipped
+}
+
+async function importTodos(todos = [], summary) {
+  let added = 0
+  let updated = 0
+  let skipped = 0
+  for (const todo of todos) {
+    const id = String(todo?.id ?? '').trim()
+    const projectId = String(todo?.projectId ?? '').trim()
+    if (!id || !projectId) continue
+    const existing = await getDoc(TODO_PREFIX, id)
+    const now = formatDateTime()
+    if (existing) {
+      if (!isIncomingNewer(todo.updateTime, existing.updateTime)) {
+        skipped += 1
+        continue
+      }
+      updated += 1
+    } else {
+      added += 1
+    }
+    await dbPut({
+      ...(existing || {}),
+      _id: `${TODO_PREFIX}${id}`,
+      id,
+      projectId,
+      title: String(todo.title || '').trim() || '未命名待办',
+      done: Boolean(todo.done),
+      priority: todo.priority === 'high' ? 'high' : 'normal',
+      createdBy: todo.createdBy === 'sync' ? 'sync' : 'manual',
+      sourceNoteId: todo.sourceNoteId || null,
+      sourceNoteTitle: todo.sourceNoteTitle || '',
+      sourceTagId: todo.sourceTagId || null,
+      sourceTagName: todo.sourceTagName || '',
+      sourceExcerpt: todo.sourceExcerpt || '',
+      sourceHash: todo.sourceHash || null,
+      createTime: todo.createTime || existing?.createTime || now,
+      updateTime: todo.updateTime || now,
+      deletedAt: todo.deletedAt || null,
+    })
+  }
+  summary.todosAdded = added
+  summary.todosUpdated = updated
+  summary.todosSkipped = skipped
+}
+
 async function importFolderTree(folders = [], summary, maps) {
   const sorted = sortFoldersForCreate(folders.filter((item) => item.type === 'folder'))
   for (const folder of sorted) {
@@ -448,6 +530,8 @@ export async function importLanbitouBackup(file) {
   }
 
   const tags = entries['tags.json'] ? JSON.parse(decodeText(entries['tags.json'])) : []
+  const projects = entries['projects.json'] ? JSON.parse(decodeText(entries['projects.json'])) : []
+  const todos = entries['todos.json'] ? JSON.parse(decodeText(entries['todos.json'])) : []
   const summary = {
     fragmentsAdded: 0,
     fragmentsUpdated: 0,
@@ -458,6 +542,12 @@ export async function importLanbitouBackup(file) {
     sedimentAdded: 0,
     sedimentUpdated: 0,
     sedimentSkipped: 0,
+    projectsAdded: 0,
+    projectsUpdated: 0,
+    projectsSkipped: 0,
+    todosAdded: 0,
+    todosUpdated: 0,
+    todosSkipped: 0,
     tags: 0,
     errors: [],
   }
@@ -491,6 +581,18 @@ export async function importLanbitouBackup(file) {
     } catch (error) {
       summary.errors.push({ path: item.path, message: error?.message || '沉淀导入失败' })
     }
+  }
+
+  try {
+    await importProjects(Array.isArray(projects) ? projects : [], summary)
+  } catch (error) {
+    summary.errors.push({ path: 'projects.json', message: error?.message || '事情导入失败' })
+  }
+
+  try {
+    await importTodos(Array.isArray(todos) ? todos : [], summary)
+  } catch (error) {
+    summary.errors.push({ path: 'todos.json', message: error?.message || '待办导入失败' })
   }
 
   return summary

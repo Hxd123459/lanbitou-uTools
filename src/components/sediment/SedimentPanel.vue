@@ -1,65 +1,85 @@
 <template>
   <section class="sediment-panel">
     <header class="sediment-header">
-      <nav class="sediment-breadcrumb" aria-label="面包屑">
-        <ol class="breadcrumb-list">
-          <li
-            v-for="(crumb, index) in breadcrumbs"
-            :key="`${crumb.label}-${index}`"
-            class="breadcrumb-item"
-          >
-            <motion.button
-              v-if="index < breadcrumbs.length - 1"
-              type="button"
-              class="breadcrumb-link"
-              :class="{ 'breadcrumb-link--drag-over': crumbDragOver === index }"
-              :while-hover="presets.button.hover"
-              :while-tap="presets.button.tap"
-              :transition="presets.button.transition"
-              @click="navigateToCrumb(index)"
-              @dragover.prevent="onCrumbDragOver(index)"
-              @dragleave="onCrumbDragLeave(index)"
-              @drop.prevent="onDropToCrumb(crumb)"
-            >
-              {{ crumb.label }}
-            </motion.button>
-            <span v-else class="breadcrumb-current" aria-current="page">
-              {{ crumb.label }}
-            </span>
-            <span
-              v-if="index < breadcrumbs.length - 1"
-              class="breadcrumb-sep"
-              aria-hidden="true"
-            >
-              /
-            </span>
-          </li>
-        </ol>
-      </nav>
-
-      <AppButton
-        class="btn btn-primary sediment-create-file"
-        @click="openCreateNoteModal"
-      >
-        <svg
-          viewBox="0 0 24 24"
-          width="16"
-          height="16"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="1.8"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-          aria-hidden="true"
+      <div class="sediment-header-text">
+        <h2 class="sediment-title">沉淀</h2>
+        <p class="sediment-desc">把碎片整理成结构化长文，按文件夹沉淀</p>
+      </div>
+      <div class="sediment-header-actions">
+        <AppButton
+          class="btn btn-primary sediment-create-file"
+          @click="openCreateNoteModal"
         >
-          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-          <polyline points="14 2 14 8 20 8" />
-          <line x1="12" y1="18" x2="12" y2="12" />
-          <line x1="9" y1="15" x2="15" y2="15" />
-        </svg>
-        <span>新建文件</span>
-      </AppButton>
+          <svg
+            viewBox="0 0 24 24"
+            width="16"
+            height="16"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.8"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+          >
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+            <polyline points="14 2 14 8 20 8" />
+            <line x1="12" y1="18" x2="12" y2="12" />
+            <line x1="9" y1="15" x2="15" y2="15" />
+          </svg>
+          <span>新建文件</span>
+        </AppButton>
+      </div>
     </header>
+
+    <nav class="sediment-breadcrumb" aria-label="当前位置">
+      <ol class="breadcrumb-list">
+        <li class="breadcrumb-root" aria-hidden="true">
+          <svg
+            viewBox="0 0 24 24"
+            width="13"
+            height="13"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.8"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.93a2 2 0 0 1-1.66-.9l-.82-1.2A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2z" />
+          </svg>
+        </li>
+        <li
+          v-for="(crumb, index) in breadcrumbs"
+          :key="`${crumb.label}-${index}`"
+          class="breadcrumb-item"
+        >
+          <motion.button
+            v-if="index < breadcrumbs.length - 1"
+            type="button"
+            class="breadcrumb-link"
+            :class="{ 'breadcrumb-link--drag-over': crumbDragOver === index }"
+            :while-hover="presets.button.hover"
+            :while-tap="presets.button.tap"
+            :transition="presets.button.transition"
+            @click="navigateToCrumb(index)"
+            @dragover.prevent="onCrumbDragOver(index)"
+            @dragleave="onCrumbDragLeave(index)"
+            @drop.prevent="onDropToCrumb(crumb)"
+          >
+            {{ crumb.label }}
+          </motion.button>
+          <span v-else class="breadcrumb-current" aria-current="page">
+            {{ crumb.label }}
+          </span>
+          <span
+            v-if="index < breadcrumbs.length - 1"
+            class="breadcrumb-sep"
+            aria-hidden="true"
+          >
+            /
+          </span>
+        </li>
+      </ol>
+    </nav>
 
     <p v-if="loading" class="sediment-state">加载中…</p>
 
@@ -531,7 +551,7 @@ const currentParentId = computed(() =>
 )
 
 const breadcrumbs = computed(() => [
-  { id: null, label: '沉淀' },
+  { id: null, label: '全部' },
   ...pathStack.value.map((item) => ({ id: item.id, label: item.name })),
 ])
 
@@ -1023,11 +1043,45 @@ defineExpose({
 
 .sediment-header {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
-  gap: 16px;
-  padding: 0 0 24px;
+  gap: 12px;
+  padding: 0 0 12px;
   flex: 0 0 auto;
+}
+
+.sediment-header-text {
+  min-width: 0;
+}
+
+.sediment-title {
+  margin: 0 0 4px;
+  font-size: 18px;
+  font-weight: 650;
+  color: var(--color-primary);
+}
+
+.sediment-desc {
+  margin: 0;
+  font-size: 13px;
+  color: var(--color-secondary-text);
+}
+
+.sediment-header-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.sediment-breadcrumb {
+  min-width: 0;
+  margin: 0 0 14px;
+  padding: 6px 10px;
+  flex: 0 0 auto;
+  border-radius: 10px;
+  background: rgba(24, 24, 27, 0.035);
+  border: 1px solid rgba(24, 24, 27, 0.045);
 }
 
 .sediment-state {
@@ -1037,18 +1091,21 @@ defineExpose({
   font-size: 14px;
 }
 
-.sediment-breadcrumb {
-  min-width: 0;
-}
-
 .breadcrumb-list {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 4px;
+  gap: 2px 4px;
   margin: 0;
   padding: 0;
   list-style: none;
+}
+
+.breadcrumb-root {
+  display: inline-flex;
+  align-items: center;
+  margin-right: 2px;
+  color: #a1a1aa;
 }
 
 .breadcrumb-item {
@@ -1061,11 +1118,12 @@ defineExpose({
 .breadcrumb-link {
   border: 0;
   background: transparent;
-  padding: 2px 4px;
-  border-radius: 6px;
-  color: var(--color-secondary-text);
-  font-size: 13px;
-  font-weight: 500;
+  padding: 1px 5px;
+  border-radius: 5px;
+  color: #71717a;
+  font-size: 12px;
+  font-weight: 450;
+  line-height: 1.4;
   cursor: pointer;
 }
 
@@ -1080,15 +1138,17 @@ defineExpose({
 }
 
 .breadcrumb-current {
-  color: var(--color-primary);
-  font-size: 14px;
-  font-weight: 600;
-  letter-spacing: 0.2px;
+  padding: 1px 5px;
+  color: #52525b;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.4;
+  letter-spacing: 0;
 }
 
 .breadcrumb-sep {
-  color: #a1a1aa;
-  font-size: 12px;
+  color: #d4d4d8;
+  font-size: 11px;
   user-select: none;
 }
 
@@ -1434,11 +1494,12 @@ defineExpose({
     flex-direction: column;
     align-items: flex-start;
     gap: 12px;
-    padding-bottom: 18px;
+    padding-bottom: 12px;
   }
 
-  .sediment-create-file {
-    align-self: flex-end;
+  .sediment-header-actions {
+    align-self: stretch;
+    justify-content: flex-end;
   }
 
   .folder-grid {

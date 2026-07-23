@@ -5,8 +5,10 @@ import { extractLbAttRefsFromMarkdown } from '../utils/attachmentMarkdown'
 import {
   ATTACHMENT_PREFIX,
   NOTE_PREFIX,
+  PROJECT_PREFIX,
   STRUCT_FOLDER_PREFIX,
   STRUCT_NOTE_PREFIX,
+  TODO_PREFIX,
 } from '../storage/utools/constants'
 import {
   dbAllDocs,
@@ -88,6 +90,20 @@ async function loadStructNotes() {
 async function loadFolders() {
   const docs = await dbAllDocs(STRUCT_FOLDER_PREFIX)
   return (docs || []).map(stripDoc).filter((doc) => doc?.id)
+}
+
+async function loadProjects({ includeDeleted = false } = {}) {
+  const docs = await dbAllDocs(PROJECT_PREFIX)
+  return (docs || [])
+    .map(stripDoc)
+    .filter((doc) => doc?.id && (includeDeleted || !doc.deletedAt))
+}
+
+async function loadTodos({ includeDeleted = false } = {}) {
+  const docs = await dbAllDocs(TODO_PREFIX)
+  return (docs || [])
+    .map(stripDoc)
+    .filter((doc) => doc?.id && (includeDeleted || !doc.deletedAt))
 }
 
 function normalizeAttachmentBytes(bytes) {
@@ -262,11 +278,13 @@ async function buildSedimentAttachmentEntries(noteId, content, attachmentWrites)
 }
 
 export async function exportLanbitouBackup({ includeDeleted = false } = {}) {
-  const [notes, structNotes, folders, tags] = await Promise.all([
+  const [notes, structNotes, folders, tags, projects, todos] = await Promise.all([
     loadNotes({ includeDeleted }),
     loadStructNotes(),
     loadFolders(),
     listTagDocs(),
+    loadProjects({ includeDeleted }),
+    loadTodos({ includeDeleted }),
   ])
 
   const tagNameById = new Map(tags.map((tag) => [String(tag.id), tag.tagName || '']))
@@ -350,6 +368,8 @@ export async function exportLanbitouBackup({ includeDeleted = false } = {}) {
       folders: folders.length,
       attachments: attachmentsCount,
       tags: tags.length,
+      projects: projects.length,
+      todos: todos.length,
     },
   }
 
@@ -357,6 +377,47 @@ export async function exportLanbitouBackup({ includeDeleted = false } = {}) {
   files['tags.json'] = new TextEncoder().encode(
     JSON.stringify(
       tags.map((tag) => ({ id: tag.id, tagName: tag.tagName || '' })),
+      null,
+      2,
+    ),
+  )
+  files['projects.json'] = new TextEncoder().encode(
+    JSON.stringify(
+      projects.map((project) => ({
+        id: project.id,
+        name: project.name || '',
+        tagIds: Array.isArray(project.tagIds) ? project.tagIds : [],
+        status: project.status === 'archived' ? 'archived' : 'active',
+        startAt: project.startAt || null,
+        endAt: project.endAt || null,
+        lastSyncedAt: project.lastSyncedAt || null,
+        createTime: project.createTime || '',
+        updateTime: project.updateTime || '',
+        deletedAt: project.deletedAt || null,
+      })),
+      null,
+      2,
+    ),
+  )
+  files['todos.json'] = new TextEncoder().encode(
+    JSON.stringify(
+      todos.map((todo) => ({
+        id: todo.id,
+        projectId: todo.projectId || '',
+        title: todo.title || '',
+        done: Boolean(todo.done),
+        priority: todo.priority === 'high' ? 'high' : 'normal',
+        createdBy: todo.createdBy === 'sync' ? 'sync' : 'manual',
+        sourceNoteId: todo.sourceNoteId || null,
+        sourceNoteTitle: todo.sourceNoteTitle || '',
+        sourceTagId: todo.sourceTagId || null,
+        sourceTagName: todo.sourceTagName || '',
+        sourceExcerpt: todo.sourceExcerpt || '',
+        sourceHash: todo.sourceHash || null,
+        createTime: todo.createTime || '',
+        updateTime: todo.updateTime || '',
+        deletedAt: todo.deletedAt || null,
+      })),
       null,
       2,
     ),

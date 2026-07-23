@@ -390,6 +390,17 @@
         @moved-to-recycle="handleMovedToRecycle"
       />
 
+      <!-- 待办 -->
+      <TodoPanel
+        ref="todoPanelRef"
+        v-show="activeTab === 'todo'"
+        :active="activeTab === 'todo'"
+        @error="notifyError"
+        @toast="(text) => openToast(text, 'success', { duration: 2000 })"
+        @open-source-note="handleTodoOpenSourceNote"
+        @open-tag="handleTodoOpenTag"
+      />
+
       <!-- 热力图 -->
         <HeatmapPanel
           v-show="activeTab === 'echo'"
@@ -438,6 +449,7 @@ import { useMotionPresets } from '../composables/useMotionPresets'
 import FloatingInputBar from '../components/input/FloatingInputBar.vue'
 import MainFrame from '../components/layout/MainFrame.vue'
 import SedimentPanel from '../components/sediment/SedimentPanel.vue'
+import TodoPanel from '../components/todo/TodoPanel.vue'
 import HeatmapPanel from '../components/heatmap/HeatmapPanel.vue'
 import TrashPanel from '../components/trash/TrashPanel.vue'
 import AiChatPanel from '../components/ai/AiChatPanel.vue'
@@ -498,6 +510,7 @@ const noteViewMode = ref('list')
 const searchKeyword = ref('')
 const noteListRef = ref(null)
 const sedimentPanelRef = ref(null)
+const todoPanelRef = ref(null)
 const trashPanelRef = ref(null)
 const aiChatPanelRef = ref(null)
 const refreshNotesOnHomeEnter = ref(false)
@@ -800,6 +813,30 @@ const handleFragmentRestored = (note) => {
   appendNoteToTagFilter(note)
   appendNoteToDateFilter(note)
   openToast('已放回碎片列表', 'success', { duration: 1600 })
+}
+
+const handleTodoOpenSourceNote = async (note) => {
+  if (!note?.id) {
+    openToast('来源碎片不存在', 'error', { duration: 1600 })
+    return
+  }
+  resetHomeListView()
+  activeTab.value = 'home'
+  await nextTick()
+  assistantStore.insertRestoredNote(note)
+  assistantStore.setEditingNoteId(note.id)
+  await nextTick()
+  scrollNoteListToTop()
+  openToast('已定位到来源碎片', 'success', { duration: 1600 })
+}
+
+const handleTodoOpenTag = async (tag) => {
+  const tagId = tag?.tagId
+  const tagName = tag?.tagName
+  if (!tagId) return
+  activeTab.value = 'home'
+  await nextTick()
+  await handleTagSelect({ tagId, tagName })
 }
 
 const clearNoteSelection = () => {
@@ -1603,6 +1640,7 @@ const handleBackupImported = async (payload) => {
   refreshNotesOnHomeEnter.value = true
   noteTagCloudRef.value?.reload?.()
   sedimentPanelRef.value?.reload?.()
+  todoPanelRef.value?.reload?.()
   if (activeTab.value === 'home') {
     await flushHomeNotesRefresh()
   }

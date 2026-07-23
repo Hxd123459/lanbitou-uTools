@@ -85,7 +85,7 @@
           </div>
         </div>
 
-        <p class="date-range-hint">点击选择起始日，再点击选择结束日</p>
+        <p class="date-range-hint">{{ hintText }}</p>
       </div>
     </Teleport>
   </div>
@@ -126,12 +126,56 @@ const panelStyle = ref({ top: '0px', left: '0px' })
 
 const hasValue = computed(() => Boolean(props.dateFrom || props.dateTo))
 
+function rangeDayCount(fromStr, toStr) {
+  const start = parseDate(fromStr)
+  const end = parseDate(toStr)
+  if (!start || !end) return null
+  const a = start <= end ? start : end
+  const b = start <= end ? end : start
+  return Math.round((b - a) / 86400000) + 1
+}
+
+function normalizeRangePair(fromStr, toStr) {
+  const from = String(fromStr || '').trim()
+  const to = String(toStr || '').trim()
+  if (!from || !to) return null
+  return from <= to ? { from, to } : { from: to, to: from }
+}
+
+/** 已选完整区间，或「已选起始 + 悬浮日」的预览区间 */
+const activeRange = computed(() => {
+  const from = String(props.dateFrom || '').trim()
+  const to = String(props.dateTo || '').trim()
+  if (from && to) {
+    const pair = normalizeRangePair(from, to)
+    return pair ? { ...pair, days: rangeDayCount(pair.from, pair.to), preview: false } : null
+  }
+  const hover = String(hoverDate.value || '').trim()
+  if (from && hover) {
+    const pair = normalizeRangePair(from, hover)
+    return pair ? { ...pair, days: rangeDayCount(pair.from, pair.to), preview: true } : null
+  }
+  if (from) return { from, to: '', days: null, preview: true }
+  return null
+})
+
 const triggerLabel = computed(() => {
   if (props.dateFrom && props.dateTo) {
-    return `${props.dateFrom} ~ ${props.dateTo}`
+    const days = rangeDayCount(props.dateFrom, props.dateTo)
+    const base = `${props.dateFrom} – ${props.dateTo}`
+    return days != null ? `${base} · ${days} 天` : base
   }
-  if (props.dateFrom) return `${props.dateFrom} ~ …`
+  if (props.dateFrom) return `${props.dateFrom} – …`
   return '选择日期范围'
+})
+
+const hintText = computed(() => {
+  const range = activeRange.value
+  if (range?.from && range?.to && range.days != null) {
+    return `${range.from} – ${range.to} · 共 ${range.days} 天`
+  }
+  if (range?.from) return `${range.from} – … · 请选择结束日`
+  return '开始时间 – 结束时间'
 })
 
 function monthIndex(date) {
