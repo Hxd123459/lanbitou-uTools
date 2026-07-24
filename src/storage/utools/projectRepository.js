@@ -1,6 +1,7 @@
 import { PROJECT_PREFIX } from './constants'
 import { dbAllDocs, dbGet, dbPut } from './dbClient'
 import { createId, formatDateTime } from './utils'
+import { MAX_PROJECTS, MAX_TAGS_PER_PROJECT } from '../../constants/todoLimits'
 
 function projectDocId(id) {
   return `${PROJECT_PREFIX}${id}`
@@ -21,6 +22,7 @@ function normalizeTagIds(tagIds) {
     if (!id || seen.has(id)) continue
     seen.add(id)
     result.push(id)
+    if (result.length >= MAX_TAGS_PER_PROJECT) break
   }
   return result
 }
@@ -90,6 +92,16 @@ export async function createProject({ name, tagIds = [], startAt = null, endAt =
   const trimmed = String(name ?? '').trim()
   if (!trimmed) throw new Error('事情名称不能为空')
 
+  const existing = await loadAllProjectDocs()
+  if (existing.length >= MAX_PROJECTS) {
+    throw new Error(`最多只能创建 ${MAX_PROJECTS} 件事情`)
+  }
+
+  const normalizedTags = normalizeTagIds(tagIds)
+  if (Array.isArray(tagIds) && tagIds.filter(Boolean).length > MAX_TAGS_PER_PROJECT) {
+    throw new Error(`一件事情最多绑定 ${MAX_TAGS_PER_PROJECT} 个标签`)
+  }
+
   const now = formatDateTime()
   const start = normalizeProjectDate(startAt) || todayDatePart()
   const end = normalizeProjectDate(endAt)
@@ -100,7 +112,7 @@ export async function createProject({ name, tagIds = [], startAt = null, endAt =
   const doc = {
     id: createId(),
     name: trimmed,
-    tagIds: normalizeTagIds(tagIds),
+    tagIds: normalizedTags,
     status: 'active',
     startAt: start,
     endAt: end,
@@ -123,6 +135,9 @@ export async function updateProject(id, patch = {}) {
     doc.name = trimmed
   }
   if (patch.tagIds != null) {
+    if (Array.isArray(patch.tagIds) && patch.tagIds.filter(Boolean).length > MAX_TAGS_PER_PROJECT) {
+      throw new Error(`一件事情最多绑定 ${MAX_TAGS_PER_PROJECT} 个标签`)
+    }
     doc.tagIds = normalizeTagIds(patch.tagIds)
   }
   if (patch.status != null) {

@@ -6,6 +6,7 @@
       :tag-name-by-id="tagNameById"
       :todo-counts="todoCounts"
       :loading="loadingProjects"
+      :busy="actionBusy"
       @create="openCreateModal"
       @open="openProject"
       @edit="openEditModal"
@@ -74,6 +75,7 @@ import {
 import { fetchAllTags, fetchNotesByIds } from '../../api/note'
 import { extractTodosFromNotes, isTodoExtractAiAvailable } from '../../ai/todoExtractService'
 import { formatDateTime } from '../../storage/utools/utils'
+import { MAX_PROJECTS } from '../../constants/todoLimits'
 import ProjectListView from './ProjectListView.vue'
 import ProjectDetailView from './ProjectDetailView.vue'
 import ProjectFormModal from './ProjectFormModal.vue'
@@ -205,6 +207,10 @@ const openProject = async (project) => {
 }
 
 const openCreateModal = () => {
+  if (projects.value.length >= MAX_PROJECTS) {
+    notifyToast(`最多只能创建 ${MAX_PROJECTS} 件事情`)
+    return
+  }
   editingProject.value = null
   formVisible.value = true
 }
@@ -260,7 +266,6 @@ const handleToggleArchive = async (project) => {
 }
 
 const handleDeleteProject = async (project) => {
-  if (!window.confirm(`确定删除事情「${project.name}」？其下待办也会移入删除状态。`)) return
   actionBusy.value = true
   try {
     await softDeleteTodosByProject(project.id)
@@ -311,20 +316,23 @@ const handleUpdateTodoTitle = async ({ todo, title }) => {
 }
 
 const handleToggleTodo = async (todo) => {
-  actionBusy.value = true
+  if (!todo?.id) return
+  const index = todos.value.findIndex((item) => item.id === todo.id)
+  if (index < 0) return
+
+  const prev = todos.value[index]
+  const optimistic = { ...prev, done: !prev.done }
+  todos.value[index] = optimistic
+
   try {
     const updated = await toggleTodoDone(todo.id)
-    const index = todos.value.findIndex((item) => item.id === updated.id)
-    if (index >= 0) todos.value[index] = updated
-    todos.value = [...todos.value].sort((a, b) => {
-      if (a.done !== b.done) return a.done ? 1 : -1
-      return String(b.createTime || '').localeCompare(String(a.createTime || ''))
-    })
+    const i = todos.value.findIndex((item) => item.id === updated.id)
+    if (i >= 0) todos.value[i] = { ...todos.value[i], ...updated }
     await loadTodoCounts()
   } catch (error) {
+    const i = todos.value.findIndex((item) => item.id === prev.id)
+    if (i >= 0) todos.value[i] = prev
     notifyError(error)
-  } finally {
-    actionBusy.value = false
   }
 }
 

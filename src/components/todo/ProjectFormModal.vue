@@ -56,7 +56,7 @@
           </div>
 
           <div class="project-form-modal-field">
-            <span class="project-form-modal-label">同步标签（可多选）</span>
+            <span class="project-form-modal-label">同步标签（最多 {{ MAX_TAGS_PER_PROJECT }} 个）</span>
             <p class="project-form-modal-hint">绑定标签后，可从对应碎片自动提取待办</p>
             <p v-if="loadingTags" class="project-form-modal-hint">加载标签中…</p>
             <div v-else-if="!tags.length" class="project-form-modal-hint">暂无标签，可先去碎片里打标</div>
@@ -67,7 +67,7 @@
                 type="button"
                 class="project-form-tag"
                 :class="{ 'is-selected': selectedTagIds.includes(String(tag.tagId)) }"
-                :disabled="saving"
+                :disabled="saving || isTagDisabled(tag.tagId)"
                 @click="toggleTag(tag.tagId)"
               >
                 #{{ tag.tagName }}
@@ -98,6 +98,7 @@ import AppButton from '../motion/AppButton.vue'
 import DateRangePicker from '../common/DateRangePicker.vue'
 import { fetchAllTags } from '../../api/note'
 import { formatDateTime } from '../../storage/utools/utils'
+import { MAX_TAGS_PER_PROJECT } from '../../constants/todoLimits'
 
 const props = defineProps({
   visible: { type: Boolean, default: false },
@@ -121,12 +122,26 @@ const canSubmit = computed(() => String(name.value || '').trim().length > 0)
 
 const today = () => formatDateTime().slice(0, 10)
 
+const isTagDisabled = (tagId) => {
+  const id = String(tagId)
+  if (selectedTagIds.value.includes(id)) return false
+  return selectedTagIds.value.length >= MAX_TAGS_PER_PROJECT
+}
+
 const toggleTag = (tagId) => {
   const id = String(tagId)
   const set = new Set(selectedTagIds.value)
-  if (set.has(id)) set.delete(id)
-  else set.add(id)
+  if (set.has(id)) {
+    set.delete(id)
+  } else {
+    if (set.size >= MAX_TAGS_PER_PROJECT) {
+      errorText.value = `一件事情最多绑定 ${MAX_TAGS_PER_PROJECT} 个标签`
+      return
+    }
+    set.add(id)
+  }
   selectedTagIds.value = [...set]
+  errorText.value = ''
 }
 
 const loadTags = async () => {
@@ -159,6 +174,10 @@ const handleSubmit = () => {
   }
   if (startAt.value && endAt.value && endAt.value < startAt.value) {
     errorText.value = '结束时间不能早于开始时间'
+    return
+  }
+  if (selectedTagIds.value.length > MAX_TAGS_PER_PROJECT) {
+    errorText.value = `一件事情最多绑定 ${MAX_TAGS_PER_PROJECT} 个标签`
     return
   }
   emit('submit', {

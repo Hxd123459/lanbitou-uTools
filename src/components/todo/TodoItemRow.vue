@@ -1,36 +1,30 @@
 <template>
   <li class="todo-item-row" :class="{ 'is-done': todo.done, 'is-editing': editing }">
-    <motion.button
+    <button
       type="button"
       class="todo-item-check"
+      :class="{ 'is-checked': todo.done }"
       :aria-pressed="todo.done"
       :aria-label="todo.done ? '标记为未完成' : '标记为已完成'"
-      :disabled="busy || editing"
-      :animate="checkMotion"
-      :transition="checkTransition"
+      :disabled="editing"
       @click="emit('toggle', todo)"
     >
-      <AnimatePresence mode="wait" :initial="false">
-        <motion.svg
-          v-if="todo.done"
-          key="check"
-          viewBox="0 0 24 24"
-          width="12"
-          height="12"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="2.6"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-          :initial="{ opacity: 0, scale: 0.5 }"
-          :animate="{ opacity: 1, scale: 1 }"
-          :exit="{ opacity: 0, scale: 0.5 }"
-          :transition="presets.fast"
-        >
-          <path d="m5 12 4 4L19 6" />
-        </motion.svg>
-      </AnimatePresence>
-    </motion.button>
+      <svg
+        v-if="todo.done"
+        class="todo-item-check-icon"
+        viewBox="0 0 24 24"
+        width="12"
+        height="12"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2.6"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+        aria-hidden="true"
+      >
+        <path d="m5 12 4 4L19 6" />
+      </svg>
+    </button>
 
     <div class="todo-item-main">
       <input
@@ -131,8 +125,8 @@
 </template>
 
 <script setup>
-import { computed, nextTick, ref } from 'vue'
-import { AnimatePresence, motion } from 'motion-v'
+import { nextTick, ref } from 'vue'
+import { motion } from 'motion-v'
 import { useMotionPresets } from '../../composables/useMotionPresets'
 
 const props = defineProps({
@@ -153,19 +147,6 @@ const editing = ref(false)
 const editTitle = ref('')
 const editInputRef = ref(null)
 let committing = false
-
-const checkMotion = computed(() => ({
-  backgroundColor: props.todo.done ? 'rgba(24, 24, 27, 0.92)' : 'transparent',
-  borderColor: props.todo.done ? 'rgba(24, 24, 27, 0.92)' : 'rgba(24, 24, 27, 0.28)',
-  color: props.todo.done ? '#ffffff' : 'rgba(24, 24, 27, 0.45)',
-  scale: props.todo.done ? 1 : 1,
-}))
-
-const checkTransition = computed(() => ({
-  ...presets.value.fast,
-  backgroundColor: { duration: 0.2 },
-  borderColor: { duration: 0.2 },
-}))
 
 const startEdit = async () => {
   if (props.busy) return
@@ -223,8 +204,24 @@ const commitEdit = () => {
   border: 1.5px solid rgba(24, 24, 27, 0.28);
   border-radius: 6px;
   background: transparent;
+  color: transparent;
   cursor: pointer;
   padding: 0;
+}
+
+.todo-item-check.is-checked {
+  background: rgba(24, 24, 27, 0.92);
+  border-color: rgba(24, 24, 27, 0.92);
+  color: #ffffff;
+}
+
+.todo-item-check-icon {
+  display: block;
+}
+
+.todo-item-check:disabled {
+  opacity: var(--btn-disabled-opacity);
+  cursor: not-allowed;
 }
 
 .todo-item-main {

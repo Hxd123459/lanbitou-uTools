@@ -1,43 +1,41 @@
 <template>
   <section class="project-detail-view">
     <header class="project-detail-header">
-      <div class="project-detail-header-main">
-        <motion.button
-          type="button"
-          class="icon-btn project-detail-back"
-          title="返回"
-          :while-hover="presets.button.hover"
-          :while-tap="presets.button.tap"
-          :transition="presets.button.transition"
-          @click="emit('back')"
-        >
-          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <path d="M15 18l-6-6 6-6" />
-          </svg>
-        </motion.button>
-        <div class="project-detail-heading">
-          <h2 class="project-detail-title">{{ project?.name || '事情' }}</h2>
-          <p class="project-detail-meta">
-            <span class="project-detail-meta-item">
-              <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                <rect x="3" y="5" width="18" height="16" rx="2" />
-                <path d="M8 3v4M16 3v4M3 10h18" />
-              </svg>
-              {{ dateRangeText }}
-            </span>
-            <button
-              v-for="tag in projectTags"
-              :key="tag.id"
-              type="button"
-              class="note-tag"
-              :title="`查看标签「${tag.name}」下的碎片`"
-              @click="emit('open-tag', tag)"
-            >
-              #{{ tag.name }}
-            </button>
-            <span v-if="!projectTags.length">未绑定同步标签</span>
-          </p>
-        </div>
+      <div class="project-detail-heading">
+        <h2 class="project-detail-title">
+          <button
+            type="button"
+            class="project-detail-crumb"
+            title="返回事情列表"
+            @click="emit('back')"
+          >事情</button><span class="project-detail-crumb-sep">/</span><span class="project-detail-title-text">{{ project?.name || '详情' }}</span>
+        </h2>
+        <p class="project-detail-meta">
+          <span class="project-detail-meta-item">
+            <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <rect x="3" y="5" width="18" height="16" rx="2" />
+              <path d="M8 3v4M16 3v4M3 10h18" />
+            </svg>
+            {{ dateRangeText }}
+          </span>
+          <button
+            v-for="tag in projectTags"
+            :key="tag.id"
+            type="button"
+            class="note-tag"
+            :title="`查看标签「${tag.name}」下的碎片`"
+            @click="emit('open-tag', tag)"
+          >
+            #{{ tag.name }}
+          </button>
+        </p>
+        <p class="project-detail-summary" aria-label="任务统计">
+          <strong>{{ stats.total }}</strong> 项
+          <span class="project-detail-summary-sep">·</span>
+          完成 <strong class="is-done">{{ stats.done }}</strong>
+          <span class="project-detail-summary-sep">·</span>
+          未完成 <strong class="is-pending">{{ stats.pending }}</strong>
+        </p>
       </div>
       <div class="project-detail-header-actions">
         <AppButton type="button" class="btn btn-icon-text" :disabled="busy" @click="emit('edit', project)">
@@ -53,21 +51,6 @@
         </AppButton>
       </div>
     </header>
-
-    <div class="project-detail-stats" aria-label="任务统计">
-      <div class="project-detail-stat">
-        <span class="project-detail-stat-label">总数</span>
-        <strong>{{ stats.total }}</strong>
-      </div>
-      <div class="project-detail-stat is-done">
-        <span class="project-detail-stat-label">已完成</span>
-        <strong>{{ stats.done }}</strong>
-      </div>
-      <div class="project-detail-stat is-pending">
-        <span class="project-detail-stat-label">未完成</span>
-        <strong>{{ stats.pending }}</strong>
-      </div>
-    </div>
 
     <form class="project-detail-composer" @submit.prevent="handleAdd">
       <input
@@ -105,10 +88,8 @@
 
 <script setup>
 import { computed, nextTick, ref } from 'vue'
-import { motion } from 'motion-v'
 import AppButton from '../motion/AppButton.vue'
 import TodoItemRow from './TodoItemRow.vue'
-import { useMotionPresets } from '../../composables/useMotionPresets'
 
 const props = defineProps({
   project: { type: Object, default: null },
@@ -131,7 +112,6 @@ const emit = defineEmits([
   'update-todo-title',
 ])
 
-const { presets } = useMotionPresets()
 const draftTitle = ref('')
 const inputRef = ref(null)
 const canAdd = computed(() => String(draftTitle.value || '').trim().length > 0)
@@ -198,27 +178,55 @@ defineExpose({ focusInput })
   gap: 12px;
 }
 
-.project-detail-header-main {
-  display: flex;
-  align-items: flex-start;
-  gap: 8px;
+.project-detail-heading {
   min-width: 0;
-}
-
-.project-detail-back {
-  flex: 0 0 auto;
-  margin-top: 2px;
+  flex: 1 1 auto;
 }
 
 .project-detail-title {
-  margin: 0 0 4px;
+  margin: 0 0 8px;
+  display: flex;
+  align-items: baseline;
+  min-width: 0;
   font-size: 18px;
   font-weight: 650;
   color: var(--color-primary);
+  line-height: 1.3;
+}
+
+.project-detail-crumb {
+  flex: 0 0 auto;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #a1a1aa;
+  font-family: inherit;
+  font-size: inherit;
+  font-weight: 500;
+  line-height: inherit;
+  cursor: pointer;
+}
+
+.project-detail-crumb:hover {
+  color: var(--color-secondary-text);
+}
+
+.project-detail-crumb-sep {
+  flex: 0 0 auto;
+  margin: 0 0.35em;
+  color: #a1a1aa;
+  font-weight: 500;
+}
+
+.project-detail-title-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .project-detail-meta {
-  margin: 0;
+  margin: 0 0 6px;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -231,6 +239,31 @@ defineExpose({ focusInput })
   display: inline-flex;
   align-items: center;
   gap: 4px;
+}
+
+.project-detail-summary {
+  margin: 0;
+  font-size: 12px;
+  color: var(--color-secondary-text);
+  font-variant-numeric: tabular-nums;
+}
+
+.project-detail-summary strong {
+  font-weight: 650;
+  color: var(--color-primary);
+}
+
+.project-detail-summary strong.is-done {
+  color: var(--color-success);
+}
+
+.project-detail-summary strong.is-pending {
+  color: var(--color-accent);
+}
+
+.project-detail-summary-sep {
+  margin: 0 4px;
+  color: rgba(24, 24, 27, 0.28);
 }
 
 .note-tag {
@@ -257,42 +290,6 @@ button.note-tag:hover {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
-}
-
-.project-detail-stats {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 8px;
-}
-
-.project-detail-stat {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  padding: 10px 12px;
-  border-radius: 10px;
-  background: rgba(24, 24, 27, 0.03);
-  border: 1px solid rgba(24, 24, 27, 0.04);
-}
-
-.project-detail-stat strong {
-  font-size: 18px;
-  font-weight: 650;
-  color: var(--color-primary);
-  line-height: 1.2;
-}
-
-.project-detail-stat-label {
-  font-size: 11px;
-  color: var(--color-secondary-text);
-}
-
-.project-detail-stat.is-done strong {
-  color: var(--color-success);
-}
-
-.project-detail-stat.is-pending strong {
-  color: var(--color-accent);
 }
 
 .project-detail-composer {

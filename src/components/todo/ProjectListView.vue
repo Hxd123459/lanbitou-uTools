@@ -14,7 +14,13 @@
         >
           {{ showArchived ? '隐藏已归档' : '显示已归档' }}
         </AppButton>
-        <AppButton type="button" class="btn btn-primary" @click="emit('create')">
+        <AppButton
+          type="button"
+          class="btn btn-primary"
+          :disabled="!canCreate"
+          :title="canCreate ? undefined : `最多 ${MAX_PROJECTS} 件事情`"
+          @click="emit('create')"
+        >
           新建事情
         </AppButton>
       </div>
@@ -30,7 +36,11 @@
         v-for="project in visibleProjects"
         :key="project.id"
         class="project-card"
-        :class="{ 'is-archived': project.status === 'archived' }"
+        :class="{
+          'is-archived': project.status === 'archived',
+          'is-overdue': isOverdue(project),
+          'is-deleting': deletingId === project.id,
+        }"
         layout
         :initial="presets.reveal.initial"
         :animate="presets.reveal.animate"
@@ -40,7 +50,8 @@
             <button type="button" class="project-card-name" @click="emit('open', project)">
               {{ project.name }}
             </button>
-            <span v-if="project.status === 'archived'" class="project-card-badge">已归档</span>
+            <span v-if="project.status === 'archived'" class="project-card-badge is-archived">已归档</span>
+            <span v-else-if="isOverdue(project)" class="project-card-badge is-overdue">已延期</span>
             <button
               v-for="tag in tagsOf(project)"
               :key="`${project.id}-${tag.id}`"
@@ -51,7 +62,6 @@
             >
               #{{ tag.name }}
             </button>
-            <span v-if="!tagsOf(project).length" class="project-card-tag-empty">未绑定标签</span>
           </div>
           <div class="project-card-actions">
             <motion.button
@@ -109,14 +119,46 @@
                 <path d="M10 12h4" />
               </svg>
             </motion.button>
+            <div
+              v-if="deletingId === project.id"
+              class="project-delete-confirm"
+              @click.stop
+            >
+              <span class="project-delete-text">删除？</span>
+              <div class="project-delete-actions">
+                <motion.button
+                  type="button"
+                  class="project-delete-btn project-delete-btn--yes"
+                  :disabled="deleteSaving"
+                  :while-hover="presets.button.hover"
+                  :while-tap="presets.button.tap"
+                  :transition="presets.button.transition"
+                  @click="confirmDelete(project)"
+                >
+                  {{ deleteSaving ? '…' : '确认' }}
+                </motion.button>
+                <motion.button
+                  type="button"
+                  class="project-delete-btn project-delete-btn--no"
+                  :disabled="deleteSaving"
+                  :while-hover="presets.button.hover"
+                  :while-tap="presets.button.tap"
+                  :transition="presets.button.transition"
+                  @click="cancelDelete"
+                >
+                  取消
+                </motion.button>
+              </div>
+            </div>
             <motion.button
+              v-else
               type="button"
               class="icon-btn icon-btn-danger"
               title="删除"
               :while-hover="presets.button.hover"
               :while-tap="presets.button.tap"
               :transition="presets.button.transition"
-              @click="emit('delete', project)"
+              @click="startDelete(project)"
             >
               <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                 <polyline points="3 6 5 6 21 6" />
@@ -129,18 +171,19 @@
         </div>
 
         <button type="button" class="project-card-body" @click="emit('open', project)">
-          <div class="project-card-stats" aria-label="任务统计">
-            <span class="project-stat">
-              <span class="project-stat-label">总数</span>
-              <strong>{{ statsOf(project).total }}</strong>
+          <div class="project-card-summary" aria-label="任务统计">
+            <span class="project-summary-text">
+              <strong>{{ statsOf(project).total }}</strong> 项
+              <span class="project-summary-sep">·</span>
+              完成 <strong class="is-done">{{ statsOf(project).done }}</strong>
+              <span class="project-summary-sep">·</span>
+              未完成 <strong class="is-pending">{{ statsOf(project).pending }}</strong>
             </span>
-            <span class="project-stat is-done">
-              <span class="project-stat-label">已完成</span>
-              <strong>{{ statsOf(project).done }}</strong>
-            </span>
-            <span class="project-stat is-pending">
-              <span class="project-stat-label">未完成</span>
-              <strong>{{ statsOf(project).pending }}</strong>
+            <span class="project-progress" aria-hidden="true">
+              <span
+                class="project-progress-fill"
+                :style="{ width: progressWidth(project) }"
+              />
             </span>
           </div>
 
@@ -160,22 +203,29 @@
 </template>
 
 <script setup>
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { motion } from 'motion-v'
 import AppButton from '../motion/AppButton.vue'
 import { useMotionPresets } from '../../composables/useMotionPresets'
+import { MAX_PROJECTS } from '../../constants/todoLimits'
+import { formatDateTime } from '../../storage/utools/utils'
 
 const props = defineProps({
   projects: { type: Array, default: () => [] },
   tagNameById: { type: Object, default: () => ({}) },
   todoCounts: { type: Object, default: () => ({}) },
   loading: { type: Boolean, default: false },
+  busy: { type: Boolean, default: false },
 })
 
 const emit = defineEmits(['create', 'open', 'edit', 'delete', 'toggle-archive', 'open-tag'])
 
 const { presets } = useMotionPresets()
 const showArchived = ref(false)
+const deletingId = ref(null)
+const deleteSaving = ref(false)
+
+const canCreate = computed(() => (props.projects || []).length < MAX_PROJECTS)
 
 const visibleProjects = computed(() => {
   const list = Array.isArray(props.projects) ? props.projects : []
@@ -195,9 +245,25 @@ const statsOf = (project) => {
   }
 }
 
+const progressWidth = (project) => {
+  const { total, done } = statsOf(project)
+  if (!total) return '0%'
+  return `${Math.round((done / total) * 100)}%`
+}
+
 const formatDate = (value) => {
   const text = String(value || '').trim()
   return text ? text.slice(0, 10) : ''
+}
+
+const today = () => formatDateTime().slice(0, 10)
+
+const isOverdue = (project) => {
+  if (!project || project.status === 'archived') return false
+  const end = formatDate(project.endAt)
+  if (!end) return false
+  if (end >= today()) return false
+  return statsOf(project).pending > 0
 }
 
 const dateRangeOf = (project) => {
@@ -219,6 +285,43 @@ const tagsOf = (project) => {
     })
     .filter(Boolean)
 }
+
+const startDelete = (project) => {
+  deletingId.value = project.id
+}
+
+const cancelDelete = () => {
+  if (deleteSaving.value) return
+  deletingId.value = null
+}
+
+const confirmDelete = (project) => {
+  if (deleteSaving.value) return
+  deleteSaving.value = true
+  emit('delete', project)
+}
+
+watch(
+  () => props.projects,
+  () => {
+    if (!deletingId.value) return
+    const stillThere = (props.projects || []).some((item) => item.id === deletingId.value)
+    if (!stillThere) {
+      deletingId.value = null
+      deleteSaving.value = false
+    }
+  },
+  { deep: true },
+)
+
+watch(
+  () => props.busy,
+  (busy, wasBusy) => {
+    if (wasBusy && !busy && deletingId.value) {
+      deleteSaving.value = false
+    }
+  },
+)
 </script>
 
 <style scoped>
@@ -293,6 +396,65 @@ const tagsOf = (project) => {
   opacity: 0.72;
 }
 
+.project-card.is-overdue {
+  border-color: rgba(217, 119, 6, 0.28);
+}
+
+.project-delete-confirm {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 6px 0 10px;
+  border: 1px solid rgba(239, 68, 68, 0.28);
+  border-radius: 8px;
+  background: #fef2f2;
+  flex: 0 0 auto;
+}
+
+.project-delete-text {
+  font-size: 12px;
+  font-weight: 500;
+  color: #b91c1c;
+  white-space: nowrap;
+}
+
+.project-delete-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.project-delete-btn {
+  height: 24px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 7px;
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.project-delete-btn--yes {
+  background: #ef4444;
+  color: #fff;
+}
+
+.project-delete-btn--yes:hover:not(:disabled) {
+  background: #dc2626;
+}
+
+.project-delete-btn--no {
+  background: rgba(24, 24, 27, 0.06);
+  color: var(--color-secondary-text);
+}
+
+.project-delete-btn:disabled {
+  opacity: var(--btn-disabled-opacity);
+  cursor: not-allowed;
+}
+
 .project-card-meta {
   display: flex;
   align-items: center;
@@ -330,9 +492,26 @@ const tagsOf = (project) => {
 
 .project-card-badge {
   flex: 0 0 auto;
+  height: 20px;
+  padding: 0 7px;
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
   font-size: 11px;
   font-weight: 500;
-  color: var(--color-warning);
+  line-height: 1;
+}
+
+.project-card-badge.is-archived {
+  color: #71717a;
+  background: rgba(24, 24, 27, 0.06);
+  border: 1px solid rgba(24, 24, 27, 0.08);
+}
+
+.project-card-badge.is-overdue {
+  color: #b45309;
+  background: rgba(245, 158, 11, 0.12);
+  border: 1px solid rgba(245, 158, 11, 0.22);
 }
 
 .note-tag {
@@ -355,11 +534,6 @@ button.note-tag:hover {
   color: var(--color-accent);
 }
 
-.project-card-tag-empty {
-  font-size: 12px;
-  color: var(--color-secondary-text);
-}
-
 .project-card-actions {
   display: flex;
   align-items: center;
@@ -370,7 +544,7 @@ button.note-tag:hover {
 .project-card-body {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 8px;
   padding: 0;
   border: 0;
   background: transparent;
@@ -379,40 +553,50 @@ button.note-tag:hover {
   font-family: inherit;
 }
 
-.project-card-stats {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 8px;
-}
-
-.project-stat {
+.project-card-summary {
   display: flex;
   flex-direction: column;
-  gap: 2px;
-  padding: 8px 10px;
-  border-radius: 10px;
-  background: rgba(24, 24, 27, 0.03);
-  border: 1px solid rgba(24, 24, 27, 0.04);
+  gap: 6px;
 }
 
-.project-stat strong {
-  font-size: 16px;
+.project-summary-text {
+  font-size: 12px;
+  color: var(--color-secondary-text);
+  font-variant-numeric: tabular-nums;
+}
+
+.project-summary-text strong {
   font-weight: 650;
   color: var(--color-primary);
-  line-height: 1.2;
 }
 
-.project-stat-label {
-  font-size: 11px;
-  color: var(--color-secondary-text);
-}
-
-.project-stat.is-done strong {
+.project-summary-text strong.is-done {
   color: var(--color-success);
 }
 
-.project-stat.is-pending strong {
+.project-summary-text strong.is-pending {
   color: var(--color-accent);
+}
+
+.project-summary-sep {
+  margin: 0 4px;
+  color: rgba(24, 24, 27, 0.28);
+}
+
+.project-progress {
+  display: block;
+  width: 100%;
+  height: 3px;
+  border-radius: 999px;
+  background: rgba(24, 24, 27, 0.08);
+  overflow: hidden;
+}
+
+.project-progress-fill {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: rgba(24, 24, 27, 0.72);
 }
 
 .project-card-dates {

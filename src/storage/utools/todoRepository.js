@@ -80,10 +80,7 @@ export async function listTodosByProject(projectId, { includeDeleted = false } =
     .filter((doc) => String(doc.projectId) === pid)
     .map(toTodo)
     .filter(Boolean)
-    .sort((a, b) => {
-      if (a.done !== b.done) return a.done ? 1 : -1
-      return String(b.createTime || '').localeCompare(String(a.createTime || ''))
-    })
+    .sort((a, b) => String(b.createTime || '').localeCompare(String(a.createTime || '')))
 }
 
 /** @returns {Record<string, { total: number, done: number, pending: number }>} */
