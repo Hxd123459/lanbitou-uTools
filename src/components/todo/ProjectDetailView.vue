@@ -67,7 +67,7 @@
       </AppButton>
     </form>
 
-    <p v-if="loading" class="project-detail-state">加载中…</p>
+    <p v-if="loading && !todos.length" class="project-detail-state">加载中…</p>
     <p v-else-if="!todos.length" class="project-detail-state">暂无待办，可手动添加或同步提取</p>
 
     <ul v-else class="project-detail-list" role="list">

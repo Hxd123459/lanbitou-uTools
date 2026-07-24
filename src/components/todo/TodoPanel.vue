@@ -161,7 +161,8 @@ const loadTodos = async () => {
     todos.value = []
     return
   }
-  loadingTodos.value = true
+  const keepListVisible = todos.value.length > 0
+  if (!keepListVisible) loadingTodos.value = true
   try {
     const list = await fetchTodosByProject(currentProjectId.value)
     todos.value = list.map((todo) => {
@@ -358,7 +359,11 @@ const handleOpenSource = async (todo) => {
       notifyToast('来源碎片不存在或已删除')
       return
     }
-    emit('open-source-note', note)
+    emit('open-source-note', {
+      note,
+      projectName: currentProject.value?.name || '未命名',
+      projectId: currentProject.value?.id || '',
+    })
   } catch (error) {
     notifyError(error)
   }

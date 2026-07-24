@@ -44,7 +44,37 @@
           :class="{ 'note-list--selecting': selectedNoteIds.size > 0 }"
           @scroll="onNoteListScroll"
         >
-          <header v-if="showDateFilterChrome" class="tag-filter-summary">
+          <header v-if="showTodoSourceFilterChrome" class="tag-filter-summary">
+            <span class="tag-filter-summary-label">
+              待办
+              <span class="tag-filter-summary-name">「{{ todoSourceFilterState.projectName }}」</span>
+            </span>
+            <span class="tag-filter-summary-count" />
+            <div class="tag-filter-summary-actions">
+              <motion.button
+                type="button"
+                class="tag-filter-summary-clear"
+                :while-hover="presets.button.hover"
+                :while-tap="presets.button.tap"
+                :transition="presets.button.transition"
+                @click="returnFromTodoSource"
+              >
+                返回
+              </motion.button>
+              <motion.button
+                type="button"
+                class="tag-filter-summary-clear"
+                :while-hover="presets.button.hover"
+                :while-tap="presets.button.tap"
+                :transition="presets.button.transition"
+                @click="clearTodoSourceFilter"
+              >
+                清空
+              </motion.button>
+            </div>
+          </header>
+
+          <header v-else-if="showDateFilterChrome" class="tag-filter-summary">
             <span class="tag-filter-summary-label">
               日期
               <span class="tag-filter-summary-name">「{{ dateFilterState.label }}」</span>
@@ -112,6 +142,7 @@
               !noteSelectingActive &&
               noteViewMode !== 'selected' &&
               !isSearchActive &&
+              !todoSourceFilterState.active &&
               !tagFilterState.active &&
               !dateFilterState.active &&
               assistantStore.loadingNotes &&
@@ -126,6 +157,7 @@
               !noteSelectingActive &&
               noteViewMode !== 'selected' &&
               !isSearchActive &&
+              !todoSourceFilterState.active &&
               !tagFilterState.active &&
               !dateFilterState.active &&
               !assistantStore.visibleNotes.length &&
@@ -137,7 +169,19 @@
           </p>
 
           <p
-            v-if="showTagFilterChrome && tagFilterState.loading"
+            v-if="showTodoSourceFilterChrome && todoSourceFilterState.loading"
+            class="empty-state"
+          >
+            加载中…
+          </p>
+          <p
+            v-else-if="showTodoSourceFilterChrome && !todoSourceFilterState.list.length"
+            class="empty-state"
+          >
+            来源碎片不存在或已删除。
+          </p>
+          <p
+            v-else-if="showTagFilterChrome && tagFilterState.loading"
             class="empty-state"
           >
             加载中…
@@ -153,6 +197,7 @@
               noteSelectingActive &&
               (noteViewMode === 'list' || noteViewMode === 'select') &&
               !isSearchActive &&
+              !todoSourceFilterState.active &&
               !tagFilterState.active &&
               !dateFilterState.active &&
               !displayedNotes.length
@@ -182,6 +227,33 @@
                 selectable
                 selection-removable
                 selected
+                @toggle-select="toggleNoteSelect(note.id)"
+                @tag-select="handleTagSelect"
+              />
+            </li>
+          </ul>
+
+          <ul
+            v-else-if="showTodoSourceFilterChrome"
+            class="note-list-items"
+          >
+            <li
+              v-for="note in todoSourceFilterState.list"
+              :key="`todo-source-${note.id}`"
+              class="note-list-item"
+            >
+              <NoteCard
+                :note="note"
+                :selectable="showNoteSelectable && !isNoteBulkAiTagBusy(note.id)"
+                :selected="showNoteSelectable && isNoteSelected(note.id)"
+                :tag-ai-loading="isNoteBulkAiTagBusy(note.id)"
+                @edit-save="handleEditSave"
+                @delete="handleDelete"
+                @copied="handleCopied"
+                @copy-failed="handleCopyFailed"
+                @pin="handlePin"
+                @image-too-large="handleImageTooLarge"
+                @file-too-large="handleFileTooLarge"
                 @toggle-select="toggleNoteSelect(note.id)"
                 @tag-select="handleTagSelect"
               />
@@ -284,7 +356,7 @@
           </ul>
 
           <AnimatePresence
-            v-else-if="!tagFilterState.active && !dateFilterState.active"
+            v-else-if="!todoSourceFilterState.active && !tagFilterState.active && !dateFilterState.active"
             mode="popLayout"
             as="ul"
             class="note-list-items note-list-anim"
@@ -567,6 +639,7 @@ const searchState = reactive({
 const isSearchActive = computed(() => searchKeyword.value.length > 0)
 
 const displayedNotes = computed(() => {
+  if (todoSourceFilterState.active) return todoSourceFilterState.list
   if (dateFilterState.active) return dateFilterState.list
   if (tagFilterState.active) return tagFilterState.list
   if (isSearchActive.value) return searchState.list
@@ -594,6 +667,9 @@ const selectedNotesList = computed(() => {
   for (const note of dateFilterState.list) {
     registerSelectedNote(note, byId)
   }
+  for (const note of todoSourceFilterState.list) {
+    registerSelectedNote(note, byId)
+  }
   return ids.map((id) => byId.get(String(id))).filter(Boolean)
 })
 
@@ -618,6 +694,7 @@ const showTagFilterChrome = computed(
 )
 
 const isDisplayedNotesLoading = computed(() => {
+  if (todoSourceFilterState.active) return todoSourceFilterState.loading
   if (dateFilterState.active) return dateFilterState.loading
   if (tagFilterState.active) return tagFilterState.loading
   if (isSearchActive.value) return searchState.loading
@@ -626,6 +703,7 @@ const isDisplayedNotesLoading = computed(() => {
 
 const showListLoadingMore = computed(() => {
   if (noteViewMode.value === 'selected') return false
+  if (todoSourceFilterState.active) return false
   if (dateFilterState.active) return dateFilterState.loadingMore
   if (isSearchActive.value) return searchState.loadingMore
   if (tagFilterState.active) return tagFilterState.loadingMore
@@ -658,8 +736,20 @@ const dateFilterState = reactive({
   hasMore: false,
 })
 
+const todoSourceFilterState = reactive({
+  active: false,
+  loading: false,
+  projectName: '',
+  projectId: '',
+  list: [],
+})
+
 const showDateFilterChrome = computed(
   () => dateFilterState.active && noteViewMode.value !== 'selected',
+)
+
+const showTodoSourceFilterChrome = computed(
+  () => todoSourceFilterState.active && noteViewMode.value !== 'selected',
 )
 
 const inputContextTag = computed(() => {
@@ -720,6 +810,16 @@ function stashAndRemoveFromFilterLists(id) {
     }
   }
 
+  if (todoSourceFilterState.active) {
+    const index = todoSourceFilterState.list.findIndex((note) => String(note.id) === sid)
+    if (index >= 0) {
+      snapshot.todoSourceNote = todoSourceFilterState.list[index]
+      todoSourceFilterState.list = todoSourceFilterState.list.filter(
+        (note) => String(note.id) !== sid,
+      )
+    }
+  }
+
   if (isSearchActive.value) {
     const index = searchState.list.findIndex((note) => String(note.id) === sid)
     if (index >= 0) {
@@ -729,7 +829,7 @@ function stashAndRemoveFromFilterLists(id) {
     }
   }
 
-  if (snapshot.tagNote || snapshot.dateNote || snapshot.searchNote) {
+  if (snapshot.tagNote || snapshot.dateNote || snapshot.todoSourceNote || snapshot.searchNote) {
     deleteSnapshots.set(id, snapshot)
   }
 }
@@ -744,6 +844,12 @@ function restoreFromDeleteSnapshot(id) {
 
   if (snapshot.dateNote) {
     appendNoteToDateFilter(snapshot.dateNote)
+  }
+
+  if (snapshot.todoSourceNote && todoSourceFilterState.active) {
+    if (!todoSourceFilterState.list.some((note) => note.id === snapshot.todoSourceNote.id)) {
+      todoSourceFilterState.list = [snapshot.todoSourceNote, ...todoSourceFilterState.list]
+    }
   }
 
   if (snapshot.searchNote && isSearchActive.value) {
@@ -782,6 +888,12 @@ function removeNotesFromHomeLists(ids = []) {
     }
   }
 
+  if (todoSourceFilterState.active) {
+    todoSourceFilterState.list = todoSourceFilterState.list.filter(
+      (note) => !idSet.has(String(note.id)),
+    )
+  }
+
   if (searchState.list.length) {
     const nextSearch = searchState.list.filter((note) => !idSet.has(String(note.id)))
     const removedCount = searchState.list.length - nextSearch.length
@@ -815,25 +927,32 @@ const handleFragmentRestored = (note) => {
   openToast('已放回碎片列表', 'success', { duration: 1600 })
 }
 
-const handleTodoOpenSourceNote = async (note) => {
+const handleTodoOpenSourceNote = async (payload) => {
+  const note = payload?.note || (payload?.id ? payload : null)
   if (!note?.id) {
     openToast('来源碎片不存在', 'error', { duration: 1600 })
     return
   }
-  resetHomeListView()
+  clearDateFilter()
+  clearTagFilter()
+  clearSearch()
+  assistantStore.setEditingNoteId(null)
+  noteViewMode.value = 'list'
+  todoSourceFilterState.active = true
+  todoSourceFilterState.loading = false
+  todoSourceFilterState.projectName = payload?.projectName || '未命名'
+  todoSourceFilterState.projectId = payload?.projectId || ''
+  todoSourceFilterState.list = [note]
   activeTab.value = 'home'
   await nextTick()
-  assistantStore.insertRestoredNote(note)
-  assistantStore.setEditingNoteId(note.id)
-  await nextTick()
   scrollNoteListToTop()
-  openToast('已定位到来源碎片', 'success', { duration: 1600 })
 }
 
 const handleTodoOpenTag = async (tag) => {
   const tagId = tag?.tagId
   const tagName = tag?.tagName
   if (!tagId) return
+  clearTodoSourceFilter()
   activeTab.value = 'home'
   await nextTick()
   await handleTagSelect({ tagId, tagName })
@@ -886,10 +1005,14 @@ const onNoteViewModeChange = (mode) => {
   if ((mode === 'tags' || mode === 'stats') && dateFilterState.active) {
     clearDateFilter()
   }
+  if ((mode === 'tags' || mode === 'stats') && todoSourceFilterState.active) {
+    clearTodoSourceFilter()
+  }
   noteViewMode.value = mode
   if ((mode === 'list' || mode === 'select') && prev === 'tags') {
     void flushNotesRefreshOnListEnter()
     if (
+      !todoSourceFilterState.active &&
       !tagFilterState.active &&
       !isSearchActive.value &&
       !assistantStore.visibleNotes.length &&
@@ -909,6 +1032,7 @@ const onNoteSearchOpen = () => {
 const handleBulkClearSelection = () => {
   exitNoteSelectingSession()
   clearTagFilter()
+  clearTodoSourceFilter()
   onNoteSearch('')
   noteViewMode.value = 'list'
 }
@@ -996,6 +1120,7 @@ const onNoteSearch = (keyword) => {
   }
   noteViewMode.value = 'list'
   clearTagFilter()
+  clearTodoSourceFilter()
   runNoteSearch(trimmed)
 }
 
@@ -1327,6 +1452,20 @@ const clearTagFilter = () => {
   tagFilterState.hasMore = false
 }
 
+const clearTodoSourceFilter = () => {
+  todoSourceFilterState.active = false
+  todoSourceFilterState.loading = false
+  todoSourceFilterState.projectName = ''
+  todoSourceFilterState.projectId = ''
+  todoSourceFilterState.list = []
+  assistantStore.setEditingNoteId(null)
+}
+
+const returnFromTodoSource = () => {
+  activeTab.value = 'todo'
+  clearTodoSourceFilter()
+}
+
 const clearSearch = () => {
   resetNoteSearch()
   searchKeyword.value = ''
@@ -1405,6 +1544,7 @@ const loadMoreDateNotes = async () => {
 const openDayInList = async (dateKey) => {
   if (!dateKey) return
   clearTagFilter()
+  clearTodoSourceFilter()
   clearSearch()
   activeTab.value = 'home'
   noteViewMode.value = 'list'
@@ -1424,6 +1564,7 @@ const handleHeatmapOpenDay = (dateKey) => {
 const handleTagSelect = async (tag) => {
   noteViewMode.value = 'list'
   clearDateFilter()
+  clearTodoSourceFilter()
   if (searchKeyword.value) clearSearch()
 
   const tagId = tag?.tagId
@@ -1593,6 +1734,7 @@ const cancelPendingDelete = (id) => {
 const resetHomeListView = () => {
   tagFilterToken += 1
   clearTagFilter()
+  clearTodoSourceFilter()
   clearSearch()
   noteViewMode.value = 'list'
 }
@@ -1834,6 +1976,23 @@ const handleEditSave = async ({
     })
     if (tagFilterState.active) {
       await reloadActiveTagFilter()
+    }
+    if (todoSourceFilterState.active) {
+      const sid = String(id)
+      const index = todoSourceFilterState.list.findIndex((note) => String(note.id) === sid)
+      if (index >= 0) {
+        const current = todoSourceFilterState.list[index]
+        todoSourceFilterState.list = todoSourceFilterState.list.map((note, i) => {
+          if (i !== index) return note
+          return {
+            ...current,
+            title: tagName !== undefined ? tagName : title,
+            text: content,
+            markdownContent: content,
+            tagId: tagId !== undefined ? tagId : current.tagId,
+          }
+        })
+      }
     }
     openToast('已保存修改', 'success')
   } catch (error) {
@@ -2149,6 +2308,13 @@ onBeforeUnmount(() => {
 .tag-filter-summary-clear:hover {
   background: rgba(24, 24, 27, 0.08);
   color: var(--color-primary);
+}
+
+.tag-filter-summary-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  flex: 0 0 auto;
 }
 
 .placeholder-panel {
