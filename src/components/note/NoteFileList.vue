@@ -18,14 +18,13 @@
         </svg>
       </span>
       <span class="file-chip-name">{{ truncateFileName(file.name || `附件 ${idx + 1}`, compact ? 14 : 22) }}</span>
-      <span v-if="file.ext" class="file-chip-ext">{{ file.ext }}</span>
     </a>
   </div>
 </template>
 
 <script setup>
 import { computed } from 'vue'
-import { getAttachmentKind, getAttachmentName, getFileExtension, truncateFileName } from '../../utils/attachmentDisplay'
+import { getAttachmentKind, getAttachmentName, truncateFileName } from '../../utils/attachmentDisplay'
 
 const props = defineProps({
   attachments: {
@@ -45,7 +44,6 @@ const files = computed(() =>
       id: item.id,
       url: item.url,
       name: getAttachmentName(item, `附件 ${idx + 1}`),
-      ext: getFileExtension(getAttachmentName(item)),
     })),
 )
 </script>
@@ -107,13 +105,5 @@ const files = computed(() =>
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-}
-
-.file-chip-ext {
-  flex-shrink: 0;
-  font-size: 10px;
-  font-weight: 600;
-  letter-spacing: 0.3px;
-  color: var(--color-secondary-text);
 }
 </style>

@@ -12,6 +12,7 @@ import {
 } from '../api/note'
 import { isUtoolsMode } from '../storage/env'
 import { countWritingChars, recordWritingDelta } from '../storage/writingActivity'
+import { maybeRunProfileAnalysis } from '../ai/profileExtractionService'
 
 const PIN_WEIGHT = { TOP: 0, DEFAULT: 1, BOTTOM: 2 }
 
@@ -233,6 +234,8 @@ export const useAssistantStore = defineStore('assistant', () => {
       if (!isUtoolsMode()) {
         recordWritingDelta(countWritingChars(target.markdownContent || target.text || ''))
       }
+
+      maybeRunProfileAnalysis()
 
       return target
     } catch (error) {

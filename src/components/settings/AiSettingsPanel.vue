@@ -149,6 +149,32 @@
       class="ai-settings-card ai-settings-card--auto-tag"
       :initial="autoTagCardMotion.initial"
       :animate="autoTagCardMotion.animate"
+      :transition="{ ...autoTagCardMotion.transition, delay: 0.02 }"
+    >
+      <label class="ai-settings-toggle-row">
+        <span class="ai-settings-label">AI 整理后自动去 AI 味</span>
+        <span class="ai-switch" :class="{ 'is-on': form.humanizeDraft }">
+          <input
+            v-model="form.humanizeDraft"
+            type="checkbox"
+            class="ai-switch-input"
+            aria-label="AI 整理后自动去 AI 味"
+            @change="handleHumanizeDraftToggle"
+          />
+          <span class="ai-switch-track" aria-hidden="true">
+            <span class="ai-switch-thumb" />
+          </span>
+        </span>
+      </label>
+      <p class="ai-settings-hint">
+        初稿生成后自动多做一轮改写：打散均匀的句子节奏、去掉排比和总结套路，降低被 AI 检测的概率。会增加一次模型调用，整理耗时略长。
+      </p>
+    </motion.div>
+
+    <motion.div
+      class="ai-settings-card ai-settings-card--auto-tag"
+      :initial="autoTagCardMotion.initial"
+      :animate="autoTagCardMotion.animate"
       :transition="{ ...autoTagCardMotion.transition, delay: 0.04 }"
     >
       <label class="ai-settings-toggle-row">
@@ -189,6 +215,7 @@ import {
   loadAiSettings,
   saveAiSettings,
   saveAutoTagEnabled,
+  saveHumanizeDraft,
   saveMimicWritingStyle,
   saveProviderAndAutoTagEnabled,
 } from '../../storage/utools/aiSettings'
@@ -253,6 +280,7 @@ const form = reactive({
   apiKey: '',
   autoTagEnabled: false,
   mimicWritingStyle: true,
+  humanizeDraft: true,
 })
 
 const saving = ref(false)
@@ -274,6 +302,7 @@ const hydrate = () => {
   form.apiKey = saved.apiKey
   form.autoTagEnabled = saved.autoTagEnabled
   form.mimicWritingStyle = saved.mimicWritingStyle !== false
+  form.humanizeDraft = saved.humanizeDraft !== false
 }
 
 const setProviderStatus = (message, type = 'info') => {
@@ -331,6 +360,15 @@ const handleMimicStyleToggle = () => {
   } catch (error) {
     form.mimicWritingStyle = !form.mimicWritingStyle
     console.warn('[烂笔头] 文风模仿设置保存失败', error)
+  }
+}
+
+const handleHumanizeDraftToggle = () => {
+  try {
+    saveHumanizeDraft(form.humanizeDraft)
+  } catch (error) {
+    form.humanizeDraft = !form.humanizeDraft
+    console.warn('[烂笔头] 去AI味设置保存失败', error)
   }
 }
 

@@ -7,6 +7,7 @@ import {
 } from '../storage/utools/sedimentTemplates'
 import { isUtoolsAiAvailable } from './aiService'
 import { resolveWritingStylePromptSection } from './writingStyleService'
+import { humanizeDraftText } from './humanizeService'
 import { getFragmentContent } from '../composables/useStructNoteFragments'
 
 export const SEDIMENT_DRAFT_PRESETS = Object.fromEntries(
@@ -352,17 +353,25 @@ export function generateSedimentDraft({
   let accumulated = ''
   let cancelled = false
   let innerCancel = () => {}
+  let resolvedStyleSection = ''
 
-  const finish = () => {
+  const finish = async () => {
     if (cancelled) return
+
+    // 二次重写：打散 AI 生成的均匀节奏，失败时原样返回
+    const finalText = await humanizeDraftText(accumulated, {
+      styleSection: resolvedStyleSection,
+    })
+    if (cancelled) return
+
     if (draftMode === 'append' || draftMode === 'fragment') {
-      const content = parseAppendContent(accumulated)
+      const content = parseAppendContent(finalText)
       onDone?.({ title: '', content })
       return
     }
-    const { title, content } = parseDraftTitleAndContent(accumulated)
+    const { title, content } = parseDraftTitleAndContent(finalText)
     if (title) onTitle?.(title)
-    onDone?.({ title, content: content || accumulated })
+    onDone?.({ title, content: content || finalText })
   }
 
   const handleDelta = (chunk) => {
@@ -384,6 +393,7 @@ export function generateSedimentDraft({
   ;(async () => {
     try {
       const styleSection = await resolveWritingStylePromptSection({ excludeIds })
+      resolvedStyleSection = styleSection
       const systemPrompt = buildSystemPrompt(preset, customPrompt, styleSection, draftMode)
 
       if (settings.provider === 'utools') {

@@ -1,8 +1,11 @@
 import { NOTE_PREFIX } from '../storage/utools/constants'
 import { dbAllDocs } from '../storage/utools/dbClient'
 import { loadAiSettings } from '../storage/utools/aiSettings'
+import { PROFILE_TYPES, loadProfile } from '../storage/utools/profileRepository'
 
 const MAX_SAMPLES = 5
+/** 有文风卡片时只需少量鲜活样本补充，卡片承担稳定规则 */
+const MAX_SAMPLES_WITH_CARD = 3
 const MIN_SAMPLE_LEN = 12
 const MAX_SAMPLE_CHARS = 280
 
@@ -31,7 +34,7 @@ export function isMimicWritingStyleEnabled() {
   return settings.mimicWritingStyle !== false
 }
 
-export async function collectFragmentStyleSamples({ excludeIds = [] } = {}) {
+export async function collectFragmentStyleSamples({ excludeIds = [], limit = MAX_SAMPLES } = {}) {
   const excludeSet = new Set(
     (Array.isArray(excludeIds) ? excludeIds : []).map(String).filter(Boolean),
   )
@@ -48,7 +51,7 @@ export async function collectFragmentStyleSamples({ excludeIds = [] } = {}) {
     }))
     .filter((item) => item.text.length >= MIN_SAMPLE_LEN)
     .sort((a, b) => String(b.createTime).localeCompare(String(a.createTime)))
-    .slice(0, MAX_SAMPLES)
+    .slice(0, limit)
 
   return candidates.map((item) => truncateSample(item.text))
 }
@@ -69,8 +72,16 @@ export async function resolveWritingStylePromptSection({ excludeIds = [] } = {})
   if (!isMimicWritingStyleEnabled()) return ''
 
   try {
-    const samples = await collectFragmentStyleSamples({ excludeIds })
-    return buildWritingStylePromptBlock(samples)
+    const profile = await loadProfile(PROFILE_TYPES.writingStyle)
+    const cardPrompt = String(profile?.promptText || '').trim()
+
+    const samples = await collectFragmentStyleSamples({
+      excludeIds,
+      limit: cardPrompt ? MAX_SAMPLES_WITH_CARD : MAX_SAMPLES,
+    })
+    const samplesBlock = buildWritingStylePromptBlock(samples)
+
+    return [cardPrompt, samplesBlock].filter(Boolean).join('\n\n')
   } catch (error) {
     console.warn('[烂笔头] 文风样本抽取失败，将跳过模仿', error)
     return ''

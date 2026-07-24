@@ -1793,6 +1793,9 @@ const handleBackupImported = async (payload) => {
 const onTabChange = (tab) => {
   if (activeTab.value === tab) return
   activeTab.value = tab
+  if (tab === 'home') {
+    nextTick(() => inputBarRef.value?.focus())
+  }
 }
 
 const applyClipboardEnter = async (action) => {
@@ -2043,9 +2046,37 @@ const handleUndoDelete = (id) => {
   restoreFromDeleteSnapshot(id)
 }
 
+const PIN_RANK = { TOP: 0, DEFAULT: 1, BOTTOM: 2 }
+
+const sortNotesByPin = (list) =>
+  list
+    .slice()
+    .sort((a, b) => {
+      const pinDiff =
+        (PIN_RANK[a.pinWeightType] ?? 1) - (PIN_RANK[b.pinWeightType] ?? 1)
+      if (pinDiff !== 0) return pinDiff
+      return String(b.createdAt || b.createTime || '').localeCompare(
+        String(a.createdAt || a.createTime || ''),
+      )
+    })
+
+const applyPinToFilterLists = (id, pinWeightValue) => {
+  const sid = String(id)
+  const patch = (list) => {
+    const target = list.find((note) => String(note.id) === sid)
+    if (!target) return list
+    target.pinWeightType = pinWeightValue
+    return sortNotesByPin(list)
+  }
+  if (tagFilterState.active) tagFilterState.list = patch(tagFilterState.list)
+  if (dateFilterState.active) dateFilterState.list = patch(dateFilterState.list)
+  if (isSearchActive.value) searchState.list = patch(searchState.list)
+}
+
 const handlePin = async ({ id, pinWeightValue }) => {
   try {
     await assistantStore.setPinNote(id, pinWeightValue)
+    applyPinToFilterLists(id, pinWeightValue)
     const tip =
       pinWeightValue === 'TOP'
         ? '已置顶'

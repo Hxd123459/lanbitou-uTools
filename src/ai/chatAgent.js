@@ -1,5 +1,7 @@
 import { getResolvedBaseUrl, getResolvedModel } from '../storage/utools/aiSettings'
+import { PROFILE_TYPES, loadProfile } from '../storage/utools/profileRepository'
 import { isUtoolsAiAvailable } from './aiService'
+import { buildPersonaPromptText } from './profileExtractionService'
 import {
   executeNoteSearchTool,
   handleSearchFragments,
@@ -261,8 +263,30 @@ async function runUtoolsAgent({ messages, model }) {
   throw new Error('笔记检索轮次过多，请缩小问题范围后重试')
 }
 
-export function buildAgentMessages(history, userMessage) {
-  const messages = [{ role: 'system', content: CHAT_AGENT_SYSTEM_PROMPT }]
+async function resolvePersonaPromptSection() {
+  try {
+    const persona = await loadProfile(PROFILE_TYPES.persona)
+    const profileText =
+      buildPersonaPromptText(persona?.card) || String(persona?.promptText || '').trim()
+    if (!profileText) return ''
+    return `${profileText}
+
+使用边界：
+- 上述深层洞察只是概率性假设，不是事实或心理诊断。
+- 不要主动向用户复述画像或给用户贴标签。
+- 若用户当前表达与画像冲突，以用户当前表达为准。`
+  } catch {
+    return ''
+  }
+}
+
+export async function buildAgentMessages(history, userMessage) {
+  const personaSection = await resolvePersonaPromptSection()
+  const system = personaSection
+    ? `${CHAT_AGENT_SYSTEM_PROMPT}\n\n${personaSection}`
+    : CHAT_AGENT_SYSTEM_PROMPT
+
+  const messages = [{ role: 'system', content: system }]
   for (const msg of history) {
     if (msg.role === 'user' || msg.role === 'assistant') {
       messages.push({ role: msg.role, content: msg.content })
@@ -273,7 +297,7 @@ export function buildAgentMessages(history, userMessage) {
 }
 
 export async function runChatWithNoteTools(settings, { history, userMessage }) {
-  const messages = buildAgentMessages(history, userMessage)
+  const messages = await buildAgentMessages(history, userMessage)
 
   if (settings.provider === 'utools') {
     return runUtoolsAgent({ messages, model: settings.model })

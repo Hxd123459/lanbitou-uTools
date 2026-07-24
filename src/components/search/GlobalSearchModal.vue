@@ -100,17 +100,34 @@
                   </span>
                 </div>
                 <div
+                  v-if="item.content"
                   class="global-search-result-full"
                   v-html="highlightText(item.content || '')"
                 />
+                <div
+                  v-if="resultImages(item).length || resultFiles(item).length"
+                  class="global-search-result-attachments"
+                >
+                  <NoteImageGallery
+                    v-if="resultImages(item).length"
+                    :images="resultImages(item)"
+                  />
+                  <NoteFileList
+                    v-if="resultFiles(item).length"
+                    :attachments="resultFiles(item)"
+                    compact
+                  />
+                </div>
               </article>
 
               <!-- 沉淀：摘要 + 点击打开详情 -->
-              <button
+              <article
                 v-else
-                type="button"
                 class="global-search-result is-sediment"
+                role="button"
+                tabindex="0"
                 @click="openSedimentDetail(item)"
+                @keydown.enter.prevent="openSedimentDetail(item)"
               >
                 <div class="global-search-result-meta">
                   <div class="global-search-result-meta-left">
@@ -139,7 +156,22 @@
                     v-html="highlightText(snippet)"
                   />
                 </div>
-              </button>
+                <div
+                  v-if="resultImages(item).length || resultFiles(item).length"
+                  class="global-search-result-attachments"
+                  @click.stop
+                >
+                  <NoteImageGallery
+                    v-if="resultImages(item).length"
+                    :images="resultImages(item)"
+                  />
+                  <NoteFileList
+                    v-if="resultFiles(item).length"
+                    :attachments="resultFiles(item)"
+                    compact
+                  />
+                </div>
+              </article>
             </template>
 
             <p v-if="loadingMore" class="global-search-state">加载更多…</p>
@@ -163,7 +195,10 @@ import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { AnimatePresence, motion } from 'motion-v'
 import { useMotionPresets } from '../../composables/useMotionPresets'
 import { highlightPlainText } from '../../utils/searchHighlight'
+import { getAttachmentKind } from '../../utils/attachmentDisplay'
 import { findStructFolderItemByNoteId } from '../../api/structNote'
+import NoteFileList from '../note/NoteFileList.vue'
+import NoteImageGallery from '../note/NoteImageGallery.vue'
 import StructNoteViewModal from '../sediment/StructNoteViewModal.vue'
 import GlobalSearchQueryBar from './GlobalSearchQueryBar.vue'
 
@@ -233,6 +268,15 @@ const resultSnippets = (item) => {
   if (item.snippet) return [item.snippet]
   return []
 }
+
+const resultAttachments = (item) =>
+  Array.isArray(item?.attachments) ? item.attachments : []
+
+const resultImages = (item) =>
+  resultAttachments(item).filter((att) => getAttachmentKind(att) === 'image')
+
+const resultFiles = (item) =>
+  resultAttachments(item).filter((att) => getAttachmentKind(att) === 'file')
 
 const highlightText = (text) => highlightPlainText(text, highlightKeywords.value)
 
@@ -537,6 +581,23 @@ defineExpose({
   display: flex;
   flex-direction: column;
   gap: 6px;
+}
+
+.global-search-result-attachments {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 100%;
+}
+
+.global-search-result-attachments :deep(.gallery),
+.global-search-result-attachments :deep(.file-list) {
+  margin-top: 0;
+}
+
+.global-search-result-attachments :deep(.tile) {
+  width: 72px;
+  height: 72px;
 }
 
 .global-search-result-snippet {

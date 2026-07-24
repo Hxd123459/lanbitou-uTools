@@ -5,7 +5,11 @@ import { extractLbAttRefsFromMarkdown } from '../utils/attachmentMarkdown'
 import {
   ATTACHMENT_PREFIX,
   NOTE_PREFIX,
+<<<<<<< HEAD
   PROJECT_PREFIX,
+=======
+  PROFILE_PREFIX,
+>>>>>>> a7ac8a267fcd13db8ee206e25664414949b4bc2c
   STRUCT_FOLDER_PREFIX,
   STRUCT_NOTE_PREFIX,
   TODO_PREFIX,
@@ -25,6 +29,7 @@ import {
   LB_TYPE_FRAGMENT,
   LB_TYPE_SEDIMENT,
   LB_VERSION,
+  PROFILE_BACKUP_FILE,
   SEDIMENT_DIR,
   joinZipPath,
   mimeToExtension,
@@ -92,6 +97,7 @@ async function loadFolders() {
   return (docs || []).map(stripDoc).filter((doc) => doc?.id)
 }
 
+<<<<<<< HEAD
 async function loadProjects({ includeDeleted = false } = {}) {
   const docs = await dbAllDocs(PROJECT_PREFIX)
   return (docs || [])
@@ -104,6 +110,22 @@ async function loadTodos({ includeDeleted = false } = {}) {
   return (docs || [])
     .map(stripDoc)
     .filter((doc) => doc?.id && (includeDeleted || !doc.deletedAt))
+=======
+async function loadProfiles() {
+  const docs = await dbAllDocs(PROFILE_PREFIX)
+  const profiles = []
+  for (const rawDoc of docs || []) {
+    const rawId = String(rawDoc?._id || '')
+    if (!rawId.startsWith(PROFILE_PREFIX) || rawId.endsWith('/checkpoint')) continue
+    const fullDoc = stripDoc(await dbGet(rawId))
+    if (!fullDoc) continue
+    profiles.push({
+      type: rawId.slice(PROFILE_PREFIX.length),
+      ...fullDoc,
+    })
+  }
+  return profiles
+>>>>>>> a7ac8a267fcd13db8ee206e25664414949b4bc2c
 }
 
 function normalizeAttachmentBytes(bytes) {
@@ -278,13 +300,21 @@ async function buildSedimentAttachmentEntries(noteId, content, attachmentWrites)
 }
 
 export async function exportLanbitouBackup({ includeDeleted = false } = {}) {
+<<<<<<< HEAD
   const [notes, structNotes, folders, tags, projects, todos] = await Promise.all([
+=======
+  const [notes, structNotes, folders, tags, profiles] = await Promise.all([
+>>>>>>> a7ac8a267fcd13db8ee206e25664414949b4bc2c
     loadNotes({ includeDeleted }),
     loadStructNotes(),
     loadFolders(),
     listTagDocs(),
+<<<<<<< HEAD
     loadProjects({ includeDeleted }),
     loadTodos({ includeDeleted }),
+=======
+    loadProfiles(),
+>>>>>>> a7ac8a267fcd13db8ee206e25664414949b4bc2c
   ])
 
   const tagNameById = new Map(tags.map((tag) => [String(tag.id), tag.tagName || '']))
@@ -368,8 +398,12 @@ export async function exportLanbitouBackup({ includeDeleted = false } = {}) {
       folders: folders.length,
       attachments: attachmentsCount,
       tags: tags.length,
+<<<<<<< HEAD
       projects: projects.length,
       todos: todos.length,
+=======
+      profiles: profiles.length,
+>>>>>>> a7ac8a267fcd13db8ee206e25664414949b4bc2c
     },
   }
 
@@ -381,6 +415,7 @@ export async function exportLanbitouBackup({ includeDeleted = false } = {}) {
       2,
     ),
   )
+<<<<<<< HEAD
   files['projects.json'] = new TextEncoder().encode(
     JSON.stringify(
       projects.map((project) => ({
@@ -421,6 +456,10 @@ export async function exportLanbitouBackup({ includeDeleted = false } = {}) {
       null,
       2,
     ),
+=======
+  files[PROFILE_BACKUP_FILE] = new TextEncoder().encode(
+    JSON.stringify(profiles, null, 2),
+>>>>>>> a7ac8a267fcd13db8ee206e25664414949b4bc2c
   )
 
   const zipped = zipSync(files, { level: 6 })

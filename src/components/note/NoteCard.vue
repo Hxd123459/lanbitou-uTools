@@ -1868,10 +1868,6 @@ button.note-tag:focus-visible {
   font-size: 10px;
 }
 
-.note-card.is-compact :deep(.file-chip-ext) {
-  font-size: 9px;
-}
-
 .thumb-strip {
   display: flex;
   flex-wrap: wrap;

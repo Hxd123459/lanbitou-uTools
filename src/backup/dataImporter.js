@@ -5,7 +5,16 @@ import {
   saveImageFiles,
   removeAttachments,
 } from '../storage/utools/attachment'
+<<<<<<< HEAD
 import { NOTE_PREFIX, PROJECT_PREFIX, STRUCT_FOLDER_PREFIX, STRUCT_NOTE_PREFIX, TODO_PREFIX } from '../storage/utools/constants'
+=======
+import {
+  NOTE_PREFIX,
+  PROFILE_PREFIX,
+  STRUCT_FOLDER_PREFIX,
+  STRUCT_NOTE_PREFIX,
+} from '../storage/utools/constants'
+>>>>>>> a7ac8a267fcd13db8ee206e25664414949b4bc2c
 import { dbGet, dbPostAttachment, dbPut } from '../storage/utools/dbClient'
 import { pinTypeToWeight } from '../storage/utools/pin'
 import { ensureTag } from '../storage/utools/tagRepository'
@@ -16,6 +25,7 @@ import {
   FRAGMENTS_DIR,
   LB_TYPE_FRAGMENT,
   LB_TYPE_SEDIMENT,
+  PROFILE_BACKUP_FILE,
   SEDIMENT_DIR,
   extensionToMime,
   isLanbitouBackup,
@@ -257,6 +267,7 @@ async function importTags(tags = [], summary) {
   summary.tags = count
 }
 
+<<<<<<< HEAD
 async function importProjects(projects = [], summary) {
   let added = 0
   let updated = 0
@@ -337,6 +348,22 @@ async function importTodos(todos = [], summary) {
   summary.todosAdded = added
   summary.todosUpdated = updated
   summary.todosSkipped = skipped
+=======
+async function importProfiles(profiles = [], summary) {
+  const allowedTypes = new Set(['writing-style', 'persona'])
+  let count = 0
+  for (const raw of Array.isArray(profiles) ? profiles : []) {
+    const type = String(raw?.type || '')
+    if (!allowedTypes.has(type)) continue
+    const { type: _type, _id, _rev, ...profile } = raw
+    await dbPut({
+      ...profile,
+      _id: `${PROFILE_PREFIX}${type}`,
+    })
+    count += 1
+  }
+  summary.profiles = count
+>>>>>>> a7ac8a267fcd13db8ee206e25664414949b4bc2c
 }
 
 async function importFolderTree(folders = [], summary, maps) {
@@ -530,8 +557,14 @@ export async function importLanbitouBackup(file) {
   }
 
   const tags = entries['tags.json'] ? JSON.parse(decodeText(entries['tags.json'])) : []
+<<<<<<< HEAD
   const projects = entries['projects.json'] ? JSON.parse(decodeText(entries['projects.json'])) : []
   const todos = entries['todos.json'] ? JSON.parse(decodeText(entries['todos.json'])) : []
+=======
+  const profiles = entries[PROFILE_BACKUP_FILE]
+    ? JSON.parse(decodeText(entries[PROFILE_BACKUP_FILE]))
+    : []
+>>>>>>> a7ac8a267fcd13db8ee206e25664414949b4bc2c
   const summary = {
     fragmentsAdded: 0,
     fragmentsUpdated: 0,
@@ -549,6 +582,7 @@ export async function importLanbitouBackup(file) {
     todosUpdated: 0,
     todosSkipped: 0,
     tags: 0,
+    profiles: 0,
     errors: [],
   }
 
@@ -561,6 +595,7 @@ export async function importLanbitouBackup(file) {
   }
 
   await importTags(tags, summary)
+  await importProfiles(profiles, summary)
   await importFolderTree(manifest.folders || [], summary, maps)
 
   const markdownEntries = collectMarkdownEntries(entries)
