@@ -5,16 +5,14 @@ import {
   saveImageFiles,
   removeAttachments,
 } from '../storage/utools/attachment'
-<<<<<<< HEAD
-import { NOTE_PREFIX, PROJECT_PREFIX, STRUCT_FOLDER_PREFIX, STRUCT_NOTE_PREFIX, TODO_PREFIX } from '../storage/utools/constants'
-=======
 import {
   NOTE_PREFIX,
   PROFILE_PREFIX,
+  PROJECT_PREFIX,
   STRUCT_FOLDER_PREFIX,
   STRUCT_NOTE_PREFIX,
+  TODO_PREFIX,
 } from '../storage/utools/constants'
->>>>>>> a7ac8a267fcd13db8ee206e25664414949b4bc2c
 import { dbGet, dbPostAttachment, dbPut } from '../storage/utools/dbClient'
 import { pinTypeToWeight } from '../storage/utools/pin'
 import { ensureTag } from '../storage/utools/tagRepository'
@@ -267,7 +265,6 @@ async function importTags(tags = [], summary) {
   summary.tags = count
 }
 
-<<<<<<< HEAD
 async function importProjects(projects = [], summary) {
   let added = 0
   let updated = 0
@@ -295,6 +292,7 @@ async function importProjects(projects = [], summary) {
       status: project.status === 'archived' ? 'archived' : 'active',
       startAt: project.startAt || null,
       endAt: project.endAt || null,
+      localPath: project.localPath || null,
       lastSyncedAt: project.lastSyncedAt || null,
       createTime: project.createTime || existing?.createTime || now,
       updateTime: project.updateTime || now,
@@ -340,6 +338,8 @@ async function importTodos(todos = [], summary) {
       sourceTagName: todo.sourceTagName || '',
       sourceExcerpt: todo.sourceExcerpt || '',
       sourceHash: todo.sourceHash || null,
+      runStatus: todo.runStatus || 'idle',
+      lastRunId: todo.lastRunId || null,
       createTime: todo.createTime || existing?.createTime || now,
       updateTime: todo.updateTime || now,
       deletedAt: todo.deletedAt || null,
@@ -348,7 +348,8 @@ async function importTodos(todos = [], summary) {
   summary.todosAdded = added
   summary.todosUpdated = updated
   summary.todosSkipped = skipped
-=======
+}
+
 async function importProfiles(profiles = [], summary) {
   const allowedTypes = new Set(['writing-style', 'persona'])
   let count = 0
@@ -363,7 +364,6 @@ async function importProfiles(profiles = [], summary) {
     count += 1
   }
   summary.profiles = count
->>>>>>> a7ac8a267fcd13db8ee206e25664414949b4bc2c
 }
 
 async function importFolderTree(folders = [], summary, maps) {
@@ -557,14 +557,11 @@ export async function importLanbitouBackup(file) {
   }
 
   const tags = entries['tags.json'] ? JSON.parse(decodeText(entries['tags.json'])) : []
-<<<<<<< HEAD
   const projects = entries['projects.json'] ? JSON.parse(decodeText(entries['projects.json'])) : []
   const todos = entries['todos.json'] ? JSON.parse(decodeText(entries['todos.json'])) : []
-=======
   const profiles = entries[PROFILE_BACKUP_FILE]
     ? JSON.parse(decodeText(entries[PROFILE_BACKUP_FILE]))
     : []
->>>>>>> a7ac8a267fcd13db8ee206e25664414949b4bc2c
   const summary = {
     fragmentsAdded: 0,
     fragmentsUpdated: 0,

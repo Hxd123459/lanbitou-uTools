@@ -266,4 +266,23 @@ function setupLifecycle() {
 
 setupMainPush()
 setupLifecycle()
+
+try {
+  const agentBridge = require('./agentBridge.js')
+  if (typeof window !== 'undefined') {
+    window.services = window.services || {}
+    window.services.agent = {
+      ensureStarted: () => agentBridge.ensureStarted(),
+      request: (method, urlPath, body, headers) =>
+        agentBridge.request(method, urlPath, body, headers),
+      pickDirectory: () => agentBridge.pickDirectory(),
+      pathExists: (target) => agentBridge.pathExists(target),
+      healthCheck: () => agentBridge.healthCheck(),
+      port: agentBridge.DEFAULT_PORT,
+    }
+  }
+} catch (error) {
+  console.warn('[烂笔头] agentBridge 加载失败', error)
+}
+
 console.log('[烂笔头] preload mainPush.js 已加载')

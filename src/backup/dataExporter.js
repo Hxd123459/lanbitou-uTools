@@ -5,11 +5,8 @@ import { extractLbAttRefsFromMarkdown } from '../utils/attachmentMarkdown'
 import {
   ATTACHMENT_PREFIX,
   NOTE_PREFIX,
-<<<<<<< HEAD
-  PROJECT_PREFIX,
-=======
   PROFILE_PREFIX,
->>>>>>> a7ac8a267fcd13db8ee206e25664414949b4bc2c
+  PROJECT_PREFIX,
   STRUCT_FOLDER_PREFIX,
   STRUCT_NOTE_PREFIX,
   TODO_PREFIX,
@@ -97,7 +94,6 @@ async function loadFolders() {
   return (docs || []).map(stripDoc).filter((doc) => doc?.id)
 }
 
-<<<<<<< HEAD
 async function loadProjects({ includeDeleted = false } = {}) {
   const docs = await dbAllDocs(PROJECT_PREFIX)
   return (docs || [])
@@ -110,7 +106,8 @@ async function loadTodos({ includeDeleted = false } = {}) {
   return (docs || [])
     .map(stripDoc)
     .filter((doc) => doc?.id && (includeDeleted || !doc.deletedAt))
-=======
+}
+
 async function loadProfiles() {
   const docs = await dbAllDocs(PROFILE_PREFIX)
   const profiles = []
@@ -125,7 +122,6 @@ async function loadProfiles() {
     })
   }
   return profiles
->>>>>>> a7ac8a267fcd13db8ee206e25664414949b4bc2c
 }
 
 function normalizeAttachmentBytes(bytes) {
@@ -300,21 +296,14 @@ async function buildSedimentAttachmentEntries(noteId, content, attachmentWrites)
 }
 
 export async function exportLanbitouBackup({ includeDeleted = false } = {}) {
-<<<<<<< HEAD
-  const [notes, structNotes, folders, tags, projects, todos] = await Promise.all([
-=======
-  const [notes, structNotes, folders, tags, profiles] = await Promise.all([
->>>>>>> a7ac8a267fcd13db8ee206e25664414949b4bc2c
+  const [notes, structNotes, folders, tags, projects, todos, profiles] = await Promise.all([
     loadNotes({ includeDeleted }),
     loadStructNotes(),
     loadFolders(),
     listTagDocs(),
-<<<<<<< HEAD
     loadProjects({ includeDeleted }),
     loadTodos({ includeDeleted }),
-=======
     loadProfiles(),
->>>>>>> a7ac8a267fcd13db8ee206e25664414949b4bc2c
   ])
 
   const tagNameById = new Map(tags.map((tag) => [String(tag.id), tag.tagName || '']))
@@ -398,12 +387,9 @@ export async function exportLanbitouBackup({ includeDeleted = false } = {}) {
       folders: folders.length,
       attachments: attachmentsCount,
       tags: tags.length,
-<<<<<<< HEAD
       projects: projects.length,
       todos: todos.length,
-=======
       profiles: profiles.length,
->>>>>>> a7ac8a267fcd13db8ee206e25664414949b4bc2c
     },
   }
 
@@ -415,7 +401,6 @@ export async function exportLanbitouBackup({ includeDeleted = false } = {}) {
       2,
     ),
   )
-<<<<<<< HEAD
   files['projects.json'] = new TextEncoder().encode(
     JSON.stringify(
       projects.map((project) => ({
@@ -425,6 +410,7 @@ export async function exportLanbitouBackup({ includeDeleted = false } = {}) {
         status: project.status === 'archived' ? 'archived' : 'active',
         startAt: project.startAt || null,
         endAt: project.endAt || null,
+        localPath: project.localPath || null,
         lastSyncedAt: project.lastSyncedAt || null,
         createTime: project.createTime || '',
         updateTime: project.updateTime || '',
@@ -449,6 +435,8 @@ export async function exportLanbitouBackup({ includeDeleted = false } = {}) {
         sourceTagName: todo.sourceTagName || '',
         sourceExcerpt: todo.sourceExcerpt || '',
         sourceHash: todo.sourceHash || null,
+        runStatus: todo.runStatus || 'idle',
+        lastRunId: todo.lastRunId || null,
         createTime: todo.createTime || '',
         updateTime: todo.updateTime || '',
         deletedAt: todo.deletedAt || null,
@@ -456,10 +444,9 @@ export async function exportLanbitouBackup({ includeDeleted = false } = {}) {
       null,
       2,
     ),
-=======
+  )
   files[PROFILE_BACKUP_FILE] = new TextEncoder().encode(
     JSON.stringify(profiles, null, 2),
->>>>>>> a7ac8a267fcd13db8ee206e25664414949b4bc2c
   )
 
   const zipped = zipSync(files, { level: 6 })

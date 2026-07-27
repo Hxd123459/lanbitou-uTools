@@ -56,6 +56,37 @@
           </div>
 
           <div class="project-form-modal-field">
+            <span class="project-form-modal-label">本地项目路径</span>
+            <p class="project-form-modal-hint">关联后可用 Cursor 结合代码提取/执行待办</p>
+            <div class="project-form-path-row">
+              <input
+                v-model="localPath"
+                class="project-form-modal-input"
+                type="text"
+                placeholder="例如：C:\workspace\codes\my-app"
+                :disabled="saving"
+              />
+              <AppButton
+                type="button"
+                class="btn btn-icon-text project-form-path-btn"
+                :disabled="saving"
+                @click="pickLocalPath"
+              >
+                选择
+              </AppButton>
+              <AppButton
+                v-if="localPath"
+                type="button"
+                class="btn btn-icon-text project-form-path-btn"
+                :disabled="saving"
+                @click="localPath = ''"
+              >
+                清除
+              </AppButton>
+            </div>
+          </div>
+
+          <div class="project-form-modal-field">
             <span class="project-form-modal-label">同步标签（最多 {{ MAX_TAGS_PER_PROJECT }} 个）</span>
             <p class="project-form-modal-hint">绑定标签后，可从对应碎片自动提取待办</p>
             <p v-if="loadingTags" class="project-form-modal-hint">加载标签中…</p>
@@ -97,6 +128,7 @@ import { AnimatePresence, motion } from 'motion-v'
 import AppButton from '../motion/AppButton.vue'
 import DateRangePicker from '../common/DateRangePicker.vue'
 import { fetchAllTags } from '../../api/note'
+import { pickDirectory } from '../../api/agentBridge'
 import { formatDateTime } from '../../storage/utools/utils'
 import { MAX_TAGS_PER_PROJECT } from '../../constants/todoLimits'
 
@@ -111,6 +143,7 @@ const emit = defineEmits(['close', 'submit'])
 const name = ref('')
 const startAt = ref('')
 const endAt = ref('')
+const localPath = ref('')
 const selectedTagIds = ref([])
 const tags = ref([])
 const loadingTags = ref(false)
@@ -121,6 +154,15 @@ const isEdit = computed(() => Boolean(props.project?.id))
 const canSubmit = computed(() => String(name.value || '').trim().length > 0)
 
 const today = () => formatDateTime().slice(0, 10)
+
+const pickLocalPath = async () => {
+  try {
+    const dir = await pickDirectory()
+    if (dir) localPath.value = dir
+  } catch (error) {
+    errorText.value = error?.message || '选择目录失败'
+  }
+}
 
 const isTagDisabled = (tagId) => {
   const id = String(tagId)
@@ -160,6 +202,7 @@ const resetForm = () => {
   name.value = props.project?.name || ''
   startAt.value = props.project?.startAt || today()
   endAt.value = props.project?.endAt || ''
+  localPath.value = props.project?.localPath || ''
   selectedTagIds.value = Array.isArray(props.project?.tagIds)
     ? props.project.tagIds.map(String)
     : []
@@ -185,6 +228,7 @@ const handleSubmit = () => {
     tagIds: [...selectedTagIds.value],
     startAt: startAt.value || null,
     endAt: endAt.value || null,
+    localPath: String(localPath.value || '').trim() || null,
   })
 }
 
@@ -270,6 +314,22 @@ watch(
   outline: none;
   border-color: rgba(37, 99, 235, 0.45);
   box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+}
+
+.project-form-path-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.project-form-path-row .project-form-modal-input {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.project-form-path-btn {
+  flex: 0 0 auto;
+  white-space: nowrap;
 }
 
 .project-form-tag-list {

@@ -39,6 +39,11 @@ function todayDatePart() {
   return formatDateTime().slice(0, 10)
 }
 
+function normalizeLocalPath(value) {
+  const text = String(value ?? '').trim()
+  return text || null
+}
+
 function toProject(doc) {
   if (!doc?.id) return null
   return {
@@ -48,6 +53,7 @@ function toProject(doc) {
     status: doc.status === 'archived' ? 'archived' : 'active',
     startAt: normalizeProjectDate(doc.startAt) || normalizeProjectDate(doc.createTime) || null,
     endAt: normalizeProjectDate(doc.endAt),
+    localPath: normalizeLocalPath(doc.localPath),
     lastSyncedAt: doc.lastSyncedAt || null,
     createTime: doc.createTime || '',
     updateTime: doc.updateTime || '',
@@ -88,7 +94,13 @@ export async function getProject(id) {
   return toProject(doc)
 }
 
-export async function createProject({ name, tagIds = [], startAt = null, endAt = null } = {}) {
+export async function createProject({
+  name,
+  tagIds = [],
+  startAt = null,
+  endAt = null,
+  localPath = null,
+} = {}) {
   const trimmed = String(name ?? '').trim()
   if (!trimmed) throw new Error('事情名称不能为空')
 
@@ -116,6 +128,7 @@ export async function createProject({ name, tagIds = [], startAt = null, endAt =
     status: 'active',
     startAt: start,
     endAt: end,
+    localPath: normalizeLocalPath(localPath),
     lastSyncedAt: null,
     createTime: now,
     updateTime: now,
@@ -151,6 +164,9 @@ export async function updateProject(id, patch = {}) {
   }
   if (Object.prototype.hasOwnProperty.call(patch, 'endAt')) {
     doc.endAt = normalizeProjectDate(patch.endAt)
+  }
+  if (Object.prototype.hasOwnProperty.call(patch, 'localPath')) {
+    doc.localPath = normalizeLocalPath(patch.localPath)
   }
 
   const start = normalizeProjectDate(doc.startAt) || normalizeProjectDate(doc.createTime)

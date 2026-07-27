@@ -1,4 +1,5 @@
 import { NOTE_PREFIX, TODO_PREFIX } from './constants'
+import { normalizeTodoRunStatus, TODO_RUN_STATUS } from '../../constants/todoRunStatus'
 import { dbAllDocs, dbGet, dbPut } from './dbClient'
 import { createId, formatDateTime } from './utils'
 
@@ -41,6 +42,8 @@ function toTodo(doc) {
     sourceTagName: doc.sourceTagName || '',
     sourceExcerpt: doc.sourceExcerpt || '',
     sourceHash: doc.sourceHash || null,
+    runStatus: normalizeTodoRunStatus(doc.runStatus),
+    lastRunId: doc.lastRunId ? String(doc.lastRunId) : null,
     createTime: doc.createTime || '',
     updateTime: doc.updateTime || '',
     deletedAt: doc.deletedAt || null,
@@ -158,6 +161,8 @@ export async function createTodo({
     sourceTagName: String(sourceTagName ?? '').trim(),
     sourceExcerpt: String(sourceExcerpt ?? '').trim(),
     sourceHash: hash,
+    runStatus: TODO_RUN_STATUS.IDLE,
+    lastRunId: null,
     createTime: now,
     updateTime: now,
     deletedAt: null,
@@ -181,6 +186,12 @@ export async function updateTodo(id, patch = {}) {
   if (patch.done != null) doc.done = Boolean(patch.done)
   if (patch.priority != null) {
     doc.priority = patch.priority === 'high' ? 'high' : 'normal'
+  }
+  if (Object.prototype.hasOwnProperty.call(patch, 'runStatus')) {
+    doc.runStatus = normalizeTodoRunStatus(patch.runStatus)
+  }
+  if (Object.prototype.hasOwnProperty.call(patch, 'lastRunId')) {
+    doc.lastRunId = patch.lastRunId ? String(patch.lastRunId) : null
   }
 
   doc.updateTime = formatDateTime()

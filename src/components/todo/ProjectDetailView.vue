@@ -18,6 +18,9 @@
             </svg>
             {{ dateRangeText }}
           </span>
+          <span v-if="project?.localPath" class="project-detail-meta-item project-detail-path" :title="project.localPath">
+            {{ project.localPath }}
+          </span>
           <button
             v-for="tag in projectTags"
             :key="tag.id"
@@ -52,6 +55,43 @@
       </div>
     </header>
 
+    <div v-if="canRunAgents" class="project-detail-queue-bar">
+      <div class="project-detail-queue-text">
+        <template v-if="runningTitle">
+          执行中：{{ runningTitle }}
+          <span v-if="queueLength"> · 排队 {{ queueLength }}</span>
+        </template>
+        <template v-else-if="queueLength">
+          排队中 {{ queueLength }} 条
+        </template>
+        <template v-else>
+          勾选待办后加入执行队列（同项目串行）
+        </template>
+      </div>
+      <div class="project-detail-queue-actions">
+        <AppButton
+          type="button"
+          class="btn btn-primary"
+          :disabled="busy || !selectedCount"
+          @click="emit('enqueue-selected')"
+        >
+          加入执行队列{{ selectedCount ? ` (${selectedCount})` : '' }}
+        </AppButton>
+        <AppButton
+          v-if="runningTitle"
+          type="button"
+          class="btn btn-icon-text"
+          :disabled="busy"
+          @click="emit('cancel-run')"
+        >
+          取消当前
+        </AppButton>
+      </div>
+    </div>
+    <p v-else class="project-detail-path-hint">
+      编辑事情并关联本地项目路径后，可排队让 Cursor 执行待办
+    </p>
+
     <form class="project-detail-composer" @submit.prevent="handleAdd">
       <input
         ref="inputRef"
@@ -76,18 +116,27 @@
         :key="todo.id"
         :todo="todo"
         :busy="busy"
+        :selectable="canRunAgents"
+        :selected="selectedIds.has(String(todo.id))"
+        :run-detail="runDetails?.[String(todo.id)] || null"
         @toggle="emit('toggle-todo', $event)"
         @delete="emit('delete-todo', $event)"
         @open-source="emit('open-source', $event)"
         @open-tag="emit('open-tag', $event)"
         @update-title="emit('update-todo-title', $event)"
+        @select-change="onSelectChange"
+        @accept="emit('accept-todo', $event)"
+        @reject="emit('reject-todo', $event)"
+        @retry="emit('retry-todo', $event)"
+        @dismiss-failed="emit('dismiss-failed', $event)"
+        @load-run="emit('load-run', $event)"
       />
     </ul>
   </section>
 </template>
 
 <script setup>
-import { computed, nextTick, ref } from 'vue'
+import { computed, nextTick, ref, watch } from 'vue'
 import AppButton from '../motion/AppButton.vue'
 import TodoItemRow from './TodoItemRow.vue'
 
@@ -98,6 +147,9 @@ const props = defineProps({
   loading: { type: Boolean, default: false },
   busy: { type: Boolean, default: false },
   syncing: { type: Boolean, default: false },
+  queueLength: { type: Number, default: 0 },
+  runningTitle: { type: String, default: '' },
+  runDetails: { type: Object, default: () => ({}) },
 })
 
 const emit = defineEmits([
@@ -110,11 +162,21 @@ const emit = defineEmits([
   'open-source',
   'open-tag',
   'update-todo-title',
+  'enqueue-selected',
+  'cancel-run',
+  'accept-todo',
+  'reject-todo',
+  'retry-todo',
+  'dismiss-failed',
+  'load-run',
 ])
 
 const draftTitle = ref('')
 const inputRef = ref(null)
+const selectedIds = ref(new Set())
 const canAdd = computed(() => String(draftTitle.value || '').trim().length > 0)
+const canRunAgents = computed(() => Boolean(props.project?.localPath))
+const selectedCount = computed(() => selectedIds.value.size)
 
 const stats = computed(() => {
   const list = Array.isArray(props.todos) ? props.todos : []
@@ -159,7 +221,31 @@ const handleAdd = async () => {
   await focusInput()
 }
 
-defineExpose({ focusInput })
+const onSelectChange = ({ todo, selected }) => {
+  const next = new Set(selectedIds.value)
+  const id = String(todo.id)
+  if (selected) next.add(id)
+  else next.delete(id)
+  selectedIds.value = next
+}
+
+const getSelectedTodos = () => {
+  const idSet = selectedIds.value
+  return (props.todos || []).filter((todo) => idSet.has(String(todo.id)))
+}
+
+const clearSelection = () => {
+  selectedIds.value = new Set()
+}
+
+watch(
+  () => props.project?.id,
+  () => {
+    selectedIds.value = new Set()
+  },
+)
+
+defineExpose({ focusInput, getSelectedTodos, clearSelection })
 </script>
 
 <style scoped>
@@ -241,6 +327,14 @@ defineExpose({ focusInput })
   gap: 4px;
 }
 
+.project-detail-path {
+  max-width: 280px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: rgba(24, 24, 27, 0.45);
+}
+
 .project-detail-summary {
   margin: 0;
   font-size: 12px;
@@ -292,6 +386,36 @@ button.note-tag:hover {
   gap: 8px;
 }
 
+.project-detail-queue-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: var(--radius-md);
+  background: rgba(37, 99, 235, 0.06);
+  border: 1px solid rgba(37, 99, 235, 0.12);
+}
+
+.project-detail-queue-text {
+  min-width: 0;
+  font-size: 12px;
+  color: var(--color-secondary-text);
+}
+
+.project-detail-queue-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  flex: 0 0 auto;
+}
+
+.project-detail-path-hint {
+  margin: 0;
+  font-size: 12px;
+  color: var(--color-secondary-text);
+}
+
 .project-detail-composer {
   display: flex;
   align-items: center;
@@ -340,28 +464,9 @@ button.note-tag:hover {
   overflow: auto;
 }
 
-.icon-btn {
-  width: 30px;
-  height: 30px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border: 1px solid var(--color-border);
-  border-radius: 8px;
-  background: var(--color-bg);
-  color: var(--color-secondary-text);
-  cursor: pointer;
-  padding: 0;
-}
-
-.icon-btn:hover {
-  border-color: var(--btn-icon-border-hover);
-  background: var(--btn-icon-bg-hover);
-  color: var(--btn-icon-color-hover);
-}
-
 @media (max-width: 720px) {
-  .project-detail-header {
+  .project-detail-header,
+  .project-detail-queue-bar {
     flex-direction: column;
   }
 }

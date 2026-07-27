@@ -97,6 +97,19 @@
         />
       </label>
 
+      <label class="ai-settings-field">
+        <span class="ai-settings-label">Cursor API Key（待办 Agent）</span>
+        <input
+          v-model="form.cursorApiKey"
+          type="password"
+          class="ai-settings-input"
+          placeholder="用于本地项目提取/执行"
+          autocomplete="off"
+          spellcheck="false"
+        />
+        <span class="ai-settings-field-hint">仅本机桥使用，与上方服务来源独立</span>
+      </label>
+
       <p v-if="providerStatusMessage" class="ai-settings-status" :class="providerStatusType">
         {{ providerStatusMessage }}
       </p>
@@ -278,6 +291,7 @@ const form = reactive({
   model: '',
   baseUrl: '',
   apiKey: '',
+  cursorApiKey: '',
   autoTagEnabled: false,
   mimicWritingStyle: true,
   humanizeDraft: true,
@@ -300,6 +314,7 @@ const hydrate = () => {
   form.model = saved.model
   form.baseUrl = saved.baseUrl
   form.apiKey = saved.apiKey
+  form.cursorApiKey = saved.cursorApiKey || ''
   form.autoTagEnabled = saved.autoTagEnabled
   form.mimicWritingStyle = saved.mimicWritingStyle !== false
   form.humanizeDraft = saved.humanizeDraft !== false
@@ -318,6 +333,7 @@ const handleSave = async () => {
       model: form.model,
       baseUrl: form.baseUrl,
       apiKey: form.apiKey,
+      cursorApiKey: form.cursorApiKey,
     })
     setProviderStatus('服务来源已保存', 'success')
   } catch (error) {
@@ -555,6 +571,13 @@ onMounted(hydrate)
 .ai-settings-field {
   display: block;
   margin-bottom: 14px;
+}
+
+.ai-settings-field-hint {
+  display: block;
+  margin-top: 6px;
+  font-size: 12px;
+  color: var(--color-secondary-text);
 }
 
 .ai-settings-input {

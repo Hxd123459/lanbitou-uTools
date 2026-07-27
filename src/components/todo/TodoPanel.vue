@@ -24,6 +24,9 @@
       :loading="loadingTodos"
       :busy="actionBusy"
       :syncing="syncing"
+      :queue-length="queueLength"
+      :running-title="runningTitle"
+      :run-details="runByTodoId"
       @back="backToList"
       @edit="openEditModal"
       @sync="handleSync"
@@ -33,6 +36,13 @@
       @open-source="handleOpenSource"
       @open-tag="handleOpenTag"
       @update-todo-title="handleUpdateTodoTitle"
+      @enqueue-selected="handleEnqueueSelected"
+      @cancel-run="cancelActive"
+      @accept-todo="acceptTodo"
+      @reject-todo="(todo) => rejectTodo(todo, { requeue: true })"
+      @retry-todo="(todo) => rejectTodo(todo, { requeue: true })"
+      @dismiss-failed="dismissFailed"
+      @load-run="loadRunForTodo"
     />
 
     <ProjectFormModal
@@ -73,8 +83,16 @@ import {
   updateTodo,
 } from '../../api/todo'
 import { fetchAllTags, fetchNotesByIds } from '../../api/note'
+import {
+  agentExtract,
+  ensureAgentBridge,
+  isAgentBridgeAvailable,
+} from '../../api/agentBridge'
 import { extractTodosFromNotes, isTodoExtractAiAvailable } from '../../ai/todoExtractService'
+import { useTodoRunQueue } from '../../composables/useTodoRunQueue'
+import { buildTodoSourceHash, normalizeTodoTitle } from '../../storage/utools/todoRepository'
 import { formatDateTime } from '../../storage/utools/utils'
+import { loadAiSettings } from '../../storage/utools/aiSettings'
 import { MAX_PROJECTS } from '../../constants/todoLimits'
 import ProjectListView from './ProjectListView.vue'
 import ProjectDetailView from './ProjectDetailView.vue'
@@ -117,6 +135,41 @@ const notifyError = (error) => {
 
 const notifyToast = (text) => {
   emit('toast', text)
+}
+
+const patchTodoLocal = (updated) => {
+  if (!updated?.id) return
+  const index = todos.value.findIndex((item) => item.id === updated.id)
+  if (index >= 0) todos.value[index] = updated
+  else todos.value = [updated, ...todos.value]
+}
+
+const {
+  queueLength,
+  runningTitle,
+  runByTodoId,
+  enqueue,
+  acceptTodo,
+  rejectTodo,
+  dismissFailed,
+  cancelActive,
+  loadRunForTodo,
+} = useTodoRunQueue({
+  getProject: () => currentProject.value,
+  getTodos: () => todos.value,
+  patchTodoLocal,
+  onToast: notifyToast,
+  onError: notifyError,
+})
+
+const handleEnqueueSelected = async () => {
+  try {
+    const selected = detailViewRef.value?.getSelectedTodos?.() || []
+    await enqueue(selected)
+    detailViewRef.value?.clearSelection?.()
+  } catch (error) {
+    notifyError(error)
+  }
 }
 
 const loadTags = async () => {
@@ -375,6 +428,38 @@ const closeSyncPreview = () => {
   syncCandidates.value = []
 }
 
+const mapCursorExtractCandidates = (items, notes, existingHashes) => {
+  const noteMap = new Map((notes || []).map((note) => [String(note.id), note]))
+  const hashSet = existingHashes instanceof Set ? existingHashes : new Set(existingHashes || [])
+  const seen = new Set()
+  const result = []
+
+  for (const item of items || []) {
+    const title = normalizeTodoTitle(item?.title)
+    if (!title) continue
+    const sourceNoteId = item?.sourceNoteId ? String(item.sourceNoteId).trim() : ''
+    const note = sourceNoteId ? noteMap.get(sourceNoteId) : null
+    const sourceHash = sourceNoteId
+      ? buildTodoSourceHash(sourceNoteId, title)
+      : `manual::${title.toLowerCase()}`
+    if (seen.has(sourceHash)) continue
+    seen.add(sourceHash)
+
+    result.push({
+      title,
+      sourceNoteId: sourceNoteId || null,
+      noteTitle: note?.title || '',
+      sourceTagId: note?.tagId || null,
+      sourceTagName: '',
+      sourceExcerpt: String(item?.excerpt || item?.reason || '').trim().slice(0, 60),
+      sourceHash,
+      exists: hashSet.has(sourceHash),
+      selected: !hashSet.has(sourceHash),
+    })
+  }
+  return result
+}
+
 const handleSync = async () => {
   const project = currentProject.value
   if (!project) return
@@ -382,9 +467,20 @@ const handleSync = async () => {
     notifyToast('请先编辑事情并绑定同步标签')
     return
   }
-  if (!isTodoExtractAiAvailable()) {
-    notifyToast('请先在设置中配置 AI')
+
+  const useCursorExtract =
+    Boolean(project.localPath) && isAgentBridgeAvailable()
+
+  if (!useCursorExtract && !isTodoExtractAiAvailable()) {
+    notifyToast('请先在设置中配置 AI，或关联本地路径使用 Cursor 提取')
     return
+  }
+  if (useCursorExtract) {
+    const settings = loadAiSettings()
+    if (!String(settings.cursorApiKey || settings.apiKey || '').trim()) {
+      notifyToast('请先在设置中填写 Cursor API Key')
+      return
+    }
   }
 
   syncing.value = true
@@ -399,13 +495,33 @@ const handleSync = async () => {
     }
 
     const existingHashes = await fetchSourceHashesByProject(project.id)
-    const candidates = await extractTodosFromNotes({ notes, existingHashes })
-    const enriched = candidates.map((item) => ({
-      ...item,
-      sourceTagName:
-        item.sourceTagName ||
-        (item.sourceTagId ? tagNameById.value[String(item.sourceTagId)] || '' : ''),
-    }))
+    let enriched = []
+
+    if (useCursorExtract) {
+      await ensureAgentBridge()
+      const extracted = await agentExtract({
+        cwd: project.localPath,
+        notes,
+        provider: 'cursor',
+      })
+      enriched = mapCursorExtractCandidates(extracted?.items || [], notes, existingHashes).map(
+        (item) => ({
+          ...item,
+          sourceTagName:
+            item.sourceTagName ||
+            (item.sourceTagId ? tagNameById.value[String(item.sourceTagId)] || '' : ''),
+        }),
+      )
+    } else {
+      const candidates = await extractTodosFromNotes({ notes, existingHashes })
+      enriched = candidates.map((item) => ({
+        ...item,
+        sourceTagName:
+          item.sourceTagName ||
+          (item.sourceTagId ? tagNameById.value[String(item.sourceTagId)] || '' : ''),
+      }))
+    }
+
     if (!enriched.length) {
       const synced = await updateProject(project.id, { lastSyncedAt: formatDateTime() })
       const index = projects.value.findIndex((item) => item.id === synced.id)
@@ -441,11 +557,12 @@ const handleSyncConfirm = async (selectedItems) => {
     const createdList = []
     for (const item of selectedItems) {
       if (item.exists) continue
+      const hasSource = Boolean(item.sourceNoteId)
       const created = await createTodo({
         projectId: project.id,
         title: item.title,
-        createdBy: 'sync',
-        sourceNoteId: item.sourceNoteId,
+        createdBy: hasSource ? 'sync' : 'manual',
+        sourceNoteId: item.sourceNoteId || null,
         sourceNoteTitle: item.noteTitle || '',
         sourceTagId: item.sourceTagId || null,
         sourceTagName: item.sourceTagName || '',
