@@ -2,7 +2,8 @@ import { TODO_RUN_PREFIX } from './constants'
 import { dbAllDocs, dbGet, dbPut } from './dbClient'
 import { createId, formatDateTime } from './utils'
 
-const MAX_LOG_CHARS = 20000
+/** 落盘日志只保留末尾，验收看 summary / files / usage */
+const MAX_STORED_LOG_CHARS = 4000
 
 function runDocId(id) {
   return `${TODO_RUN_PREFIX}${id}`
@@ -16,8 +17,27 @@ function stripDoc(doc) {
 
 function truncateLog(text) {
   const raw = String(text ?? '')
-  if (raw.length <= MAX_LOG_CHARS) return raw
-  return `${raw.slice(0, MAX_LOG_CHARS)}\n…(日志已截断)`
+  if (raw.length <= MAX_STORED_LOG_CHARS) return raw
+  return `…(前文已省略)\n${raw.slice(-MAX_STORED_LOG_CHARS)}`
+}
+
+function normalizeUsage(usage) {
+  if (!usage || typeof usage !== 'object') return null
+  const inputTokens = Number(usage.inputTokens) || 0
+  const outputTokens = Number(usage.outputTokens) || 0
+  const cacheReadTokens = Number(usage.cacheReadTokens) || 0
+  const cacheWriteTokens = Number(usage.cacheWriteTokens) || 0
+  const totalTokens =
+    Number(usage.totalTokens) ||
+    inputTokens + outputTokens + cacheReadTokens + cacheWriteTokens
+  if (!totalTokens && !inputTokens && !outputTokens) return null
+  return {
+    inputTokens,
+    outputTokens,
+    cacheReadTokens,
+    cacheWriteTokens,
+    totalTokens,
+  }
 }
 
 function toRun(doc) {
@@ -32,6 +52,7 @@ function toRun(doc) {
     log: doc.log || '',
     summary: doc.summary || '',
     changedFiles: Array.isArray(doc.changedFiles) ? doc.changedFiles : [],
+    usage: normalizeUsage(doc.usage),
     agentId: doc.agentId || null,
     bridgeRunId: doc.bridgeRunId || null,
     error: doc.error || '',
@@ -77,6 +98,7 @@ export async function createTodoRun({
     log: '',
     summary: '',
     changedFiles: [],
+    usage: null,
     agentId: null,
     bridgeRunId: null,
     error: '',
@@ -108,12 +130,15 @@ export async function updateTodoRun(id, patch = {}) {
     doc.log = truncateLog(patch.log)
   }
   if (Object.prototype.hasOwnProperty.call(patch, 'summary')) {
-    doc.summary = String(patch.summary ?? '')
+    doc.summary = String(patch.summary ?? '').slice(0, 4000)
   }
   if (Object.prototype.hasOwnProperty.call(patch, 'changedFiles')) {
     doc.changedFiles = Array.isArray(patch.changedFiles)
       ? patch.changedFiles.map(String).filter(Boolean)
       : []
+  }
+  if (Object.prototype.hasOwnProperty.call(patch, 'usage')) {
+    doc.usage = normalizeUsage(patch.usage)
   }
   if (Object.prototype.hasOwnProperty.call(patch, 'agentId')) {
     doc.agentId = patch.agentId ? String(patch.agentId) : null

@@ -39,10 +39,11 @@
       @enqueue-selected="handleEnqueueSelected"
       @cancel-run="cancelActive"
       @accept-todo="acceptTodo"
-      @reject-todo="(todo) => rejectTodo(todo, { requeue: true })"
-      @retry-todo="(todo) => rejectTodo(todo, { requeue: true })"
+      @reject-todo="(todo) => rejectTodo(todo, { requeue: false })"
+      @retry-todo="(todo) => continueTodo(todo, '')"
       @dismiss-failed="dismissFailed"
       @load-run="loadRunForTodo"
+      @continue-todo="({ todo, feedback }) => continueTodo(todo, feedback)"
     />
 
     <ProjectFormModal
@@ -149,6 +150,7 @@ const {
   runningTitle,
   runByTodoId,
   enqueue,
+  continueTodo,
   acceptTodo,
   rejectTodo,
   dismissFailed,

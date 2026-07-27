@@ -6,18 +6,38 @@
       'is-editing': editing,
       'is-selected': selected,
       'is-expanded': expanded,
+      'is-select-mode': selectMode,
     }"
   >
-    <label v-if="selectable" class="todo-item-select">
-      <input
-        type="checkbox"
-        :checked="selected"
-        :disabled="busy || editing || todo.done"
-        @change="emit('select-change', { todo, selected: $event.target.checked })"
-      />
-    </label>
+    <button
+      v-if="selectMode"
+      type="button"
+      class="todo-item-check"
+      :class="{ 'is-checked': selected }"
+      :aria-pressed="selected"
+      aria-label="选中待办"
+      :disabled="busy || editing || todo.done"
+      @click="emit('select-change', { todo, selected: !selected })"
+    >
+      <svg
+        v-if="selected"
+        class="todo-item-check-icon"
+        viewBox="0 0 24 24"
+        width="12"
+        height="12"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2.6"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+        aria-hidden="true"
+      >
+        <path d="m5 12 4 4L19 6" />
+      </svg>
+    </button>
 
     <button
+      v-else
       type="button"
       class="todo-item-check"
       :class="{ 'is-checked': todo.done }"
@@ -50,7 +70,7 @@
         v-model="editTitle"
         class="todo-item-edit-input"
         type="text"
-        maxlength="120"
+        maxlength="240"
         :disabled="busy"
         @keydown.enter.prevent="commitEdit"
         @keydown.esc.prevent="cancelEdit"
@@ -59,13 +79,16 @@
       <p v-else class="todo-item-title" @dblclick="startEdit">{{ todo.title }}</p>
 
       <div class="todo-item-meta">
-        <span
+        <motion.span
           v-if="runStatusLabel"
           class="todo-run-badge"
           :class="`is-${todo.runStatus}`"
+          :animate="todo.runStatus === 'running' ? runningPulse : undefined"
+          :transition="todo.runStatus === 'running' ? runningTransition : undefined"
         >
+          <span v-if="todo.runStatus === 'running'" class="todo-run-dot" aria-hidden="true" />
           {{ runStatusLabel }}
-        </span>
+        </motion.span>
         <button
           v-if="todo.sourceTagId && todo.sourceTagName"
           type="button"
@@ -108,30 +131,32 @@
         <p v-if="runDetail.summary" class="todo-run-summary">{{ runDetail.summary }}</p>
         <p v-else-if="runDetail.error" class="todo-run-error">{{ runDetail.error }}</p>
         <p v-else class="todo-run-summary is-muted">暂无摘要</p>
+        <p v-if="usageText(runDetail)" class="todo-run-usage">{{ usageText(runDetail) }}</p>
         <p v-if="runDetail.changedFiles?.length" class="todo-run-files">
           改动文件：{{ runDetail.changedFiles.join('、') }}
         </p>
-        <pre v-if="runDetail.log" class="todo-run-log">{{ runDetail.log.slice(-2500) }}</pre>
       </div>
 
-      <div
-        v-if="todo.runStatus === 'pending_review' || todo.runStatus === 'failed'"
-        class="todo-review-actions"
-      >
+      <div v-if="showReviewActions" class="todo-review-actions">
         <template v-if="todo.runStatus === 'pending_review'">
           <button type="button" class="todo-review-btn is-primary" :disabled="busy" @click="emit('accept', todo)">
             通过
           </button>
-          <button type="button" class="todo-review-btn" :disabled="busy" @click="emit('reject', todo)">
-            打回重跑
+          <button type="button" class="todo-review-btn" :disabled="busy" @click="openContinue">
+            继续改
           </button>
         </template>
-        <template v-else>
+        <template v-else-if="todo.runStatus === 'failed'">
           <button type="button" class="todo-review-btn" :disabled="busy" @click="emit('retry', todo)">
             重试
           </button>
           <button type="button" class="todo-review-btn" :disabled="busy" @click="emit('dismiss-failed', todo)">
             忽略
+          </button>
+        </template>
+        <template v-else-if="canContinueAccepted">
+          <button type="button" class="todo-review-btn" :disabled="busy" @click="openContinue">
+            继续改
           </button>
         </template>
         <button
@@ -144,9 +169,47 @@
           {{ expanded ? '收起' : '查看结果' }}
         </button>
       </div>
+
+      <div v-if="continueOpen" class="todo-continue-box">
+        <textarea
+          ref="continueInputRef"
+          v-model="continueFeedback"
+          class="todo-continue-input"
+          rows="2"
+          maxlength="800"
+          placeholder="哪里不满意？例如：样式再紧凑一点…"
+          :disabled="busy"
+          @keydown.enter.exact.prevent="submitContinue"
+        />
+        <div class="todo-continue-actions">
+          <button type="button" class="todo-review-btn is-primary" :disabled="busy" @click="submitContinue">
+            提交修改
+          </button>
+          <button type="button" class="todo-review-btn" :disabled="busy" @click="closeContinue">
+            取消
+          </button>
+        </div>
+      </div>
     </div>
 
     <div class="todo-item-actions">
+      <motion.button
+        v-if="!editing && hasRunHistory"
+        type="button"
+        class="icon-btn"
+        :title="`执行日志${runHistoryCount > 1 ? ` (${runHistoryCount})` : ''}`"
+        aria-label="执行日志"
+        :disabled="busy"
+        :while-hover="presets.button.hover"
+        :while-tap="presets.button.tap"
+        :transition="presets.button.transition"
+        @click="openLogModal"
+      >
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+          <path d="M14 2v6h6M16 13H8M16 17H8M10 9H8" />
+        </svg>
+      </motion.button>
       <motion.button
         v-if="!editing"
         type="button"
@@ -183,12 +246,82 @@
         </svg>
       </motion.button>
     </div>
+
+    <Teleport to="body">
+      <AnimatePresence>
+        <motion.div
+          v-if="logModalVisible"
+          key="todo-log-modal"
+          class="todo-log-modal"
+          role="dialog"
+          aria-modal="true"
+          aria-label="执行日志"
+          :initial="{ opacity: 0 }"
+          :animate="{ opacity: 1 }"
+          :exit="{ opacity: 0 }"
+          :transition="{ duration: 0.18 }"
+        >
+          <motion.div
+            class="todo-log-modal-backdrop"
+            aria-hidden="true"
+            :initial="{ opacity: 0 }"
+            :animate="{ opacity: 1 }"
+            :exit="{ opacity: 0 }"
+            @click="closeLogModal"
+          />
+          <motion.div
+            class="todo-log-modal-card"
+            :initial="{ opacity: 0, y: 16, scale: 0.98 }"
+            :animate="{ opacity: 1, y: 0, scale: 1 }"
+            :exit="{ opacity: 0, y: 12, scale: 0.98 }"
+            :transition="{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }"
+          >
+            <header class="todo-log-modal-header">
+              <h3 class="todo-log-modal-title">执行日志</h3>
+              <p class="todo-log-modal-desc">{{ todo.title }}</p>
+            </header>
+            <div class="todo-log-modal-body">
+              <p v-if="logLoading" class="todo-run-summary is-muted">加载日志…</p>
+              <template v-else-if="runHistory.length">
+                <div v-for="(run, index) in runHistory" :key="run.id || index" class="todo-log-entry">
+                  <p class="todo-log-entry-head">
+                    <span>{{ formatRunTime(run) }}</span>
+                    <span class="todo-log-entry-status">{{ runStatusText(run.status) }}</span>
+                  </p>
+                  <p v-if="run.summary" class="todo-run-summary">{{ run.summary }}</p>
+                  <p v-if="run.error" class="todo-run-error">{{ run.error }}</p>
+                  <p v-if="usageText(run)" class="todo-run-usage">{{ usageText(run) }}</p>
+                  <p v-if="run.changedFiles?.length" class="todo-run-files">
+                    改动文件：{{ run.changedFiles.join('、') }}
+                  </p>
+                  <pre v-if="run.log" class="todo-run-log">{{ run.log }}</pre>
+                  <p v-else class="todo-run-summary is-muted">暂无日志内容</p>
+                </div>
+              </template>
+              <p v-else class="todo-run-summary is-muted">暂无执行记录</p>
+            </div>
+            <div class="todo-log-modal-actions">
+              <motion.button
+                type="button"
+                class="todo-log-modal-close-btn"
+                :while-hover="presets.button.hover"
+                :while-tap="presets.button.tap"
+                :transition="presets.button.transition"
+                @click="closeLogModal"
+              >
+                关闭
+              </motion.button>
+            </div>
+          </motion.div>
+        </motion.div>
+      </AnimatePresence>
+    </Teleport>
   </li>
 </template>
 
 <script setup>
-import { computed, nextTick, ref } from 'vue'
-import { motion } from 'motion-v'
+import { computed, nextTick, ref, watch } from 'vue'
+import { AnimatePresence, motion } from 'motion-v'
 import { useMotionPresets } from '../../composables/useMotionPresets'
 import { TODO_RUN_STATUS_LABEL } from '../../constants/todoRunStatus'
 
@@ -201,7 +334,7 @@ const props = defineProps({
     type: Boolean,
     default: false,
   },
-  selectable: {
+  selectMode: {
     type: Boolean,
     default: false,
   },
@@ -227,18 +360,98 @@ const emit = defineEmits([
   'retry',
   'dismiss-failed',
   'load-run',
+  'continue',
 ])
 const { presets } = useMotionPresets()
 
 const editing = ref(false)
 const editTitle = ref('')
 const editInputRef = ref(null)
+const continueInputRef = ref(null)
 const expanded = ref(false)
+const logModalVisible = ref(false)
+const logLoading = ref(false)
+const continueOpen = ref(false)
+const continueFeedback = ref('')
 let committing = false
+
+const canContinueAccepted = computed(
+  () =>
+    Boolean(props.todo?.done) &&
+    Boolean(props.todo?.lastRunId) &&
+    props.todo?.runStatus !== 'queued' &&
+    props.todo?.runStatus !== 'running' &&
+    props.todo?.runStatus !== 'pending_review',
+)
+
+const showReviewActions = computed(
+  () =>
+    props.todo?.runStatus === 'pending_review' ||
+    props.todo?.runStatus === 'failed' ||
+    canContinueAccepted.value,
+)
+
+const usageText = (run) => {
+  const usage = run?.usage
+  if (!usage) return ''
+  const input = Number(usage.inputTokens) || 0
+  const output = Number(usage.outputTokens) || 0
+  const total = Number(usage.totalTokens) || input + output
+  if (!total && !input && !output) return ''
+  return `Token：输入 ${input} / 输出 ${output} / 合计 ${total}`
+}
+
+const openContinue = async () => {
+  continueOpen.value = true
+  continueFeedback.value = ''
+  await nextTick()
+  continueInputRef.value?.focus?.()
+}
+
+const closeContinue = () => {
+  continueOpen.value = false
+  continueFeedback.value = ''
+}
+
+const submitContinue = () => {
+  if (props.busy) return
+  emit('continue', {
+    todo: props.todo,
+    feedback: String(continueFeedback.value || '').trim(),
+  })
+  closeContinue()
+}
+
+const runningPulse = { opacity: [1, 0.72, 1] }
+const runningTransition = { duration: 1.4, repeat: Infinity, ease: 'easeInOut' }
 
 const runStatusLabel = computed(
   () => TODO_RUN_STATUS_LABEL[props.todo?.runStatus] || '',
 )
+
+const runHistory = computed(() => {
+  const history = props.runDetail?.history
+  if (Array.isArray(history) && history.length) return history
+  if (props.runDetail?.id) return [props.runDetail]
+  return []
+})
+
+const runHistoryCount = computed(() => runHistory.value.length)
+
+const hasRunHistory = computed(
+  () => Boolean(props.todo?.lastRunId) || runHistoryCount.value > 0,
+)
+
+const runStatusText = (status) => {
+  const key = String(status || '')
+  return TODO_RUN_STATUS_LABEL[key] || key || '未知'
+}
+
+const formatRunTime = (run) => {
+  const time = run?.finishedAt || run?.startedAt || run?.createTime
+  if (!time) return '执行记录'
+  return String(time).replace('T', ' ').slice(0, 19)
+}
 
 const startEdit = async () => {
   if (props.busy) return
@@ -273,6 +486,24 @@ const toggleExpand = () => {
   expanded.value = !expanded.value
   if (expanded.value) emit('load-run', props.todo)
 }
+
+const openLogModal = () => {
+  logModalVisible.value = true
+  if (runHistoryCount.value) return
+  logLoading.value = true
+  emit('load-run', props.todo)
+}
+
+const closeLogModal = () => {
+  logModalVisible.value = false
+}
+
+watch(
+  () => props.runDetail,
+  () => {
+    if (logLoading.value) logLoading.value = false
+  },
+)
 </script>
 
 <style scoped>
@@ -295,12 +526,6 @@ const toggleExpand = () => {
   background: rgba(37, 99, 235, 0.04);
 }
 
-.todo-item-select {
-  flex: 0 0 auto;
-  margin-top: 4px;
-  display: inline-flex;
-}
-
 .todo-item-check {
   flex: 0 0 auto;
   width: 22px;
@@ -315,6 +540,16 @@ const toggleExpand = () => {
   color: transparent;
   cursor: pointer;
   padding: 0;
+}
+
+.todo-item-row.is-select-mode .todo-item-check:not(.is-checked) {
+  border-color: rgba(37, 99, 235, 0.35);
+}
+
+.todo-item-row.is-select-mode .todo-item-check.is-checked {
+  background: rgba(37, 99, 235, 0.12);
+  border-color: rgba(37, 99, 235, 0.55);
+  color: var(--color-accent);
 }
 
 .todo-item-check.is-checked {
@@ -381,6 +616,7 @@ const toggleExpand = () => {
 .todo-run-badge {
   display: inline-flex;
   align-items: center;
+  gap: 5px;
   height: 20px;
   padding: 0 7px;
   border-radius: 999px;
@@ -388,6 +624,13 @@ const toggleExpand = () => {
   font-weight: 500;
   background: rgba(24, 24, 27, 0.06);
   color: var(--color-secondary-text);
+}
+
+.todo-run-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
 }
 
 .todo-run-badge.is-queued,
@@ -466,6 +709,81 @@ button.note-tag:hover:not(:disabled) {
   max-width: 100%;
 }
 
+.todo-log-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+
+.todo-log-modal-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(24, 24, 27, 0.28);
+}
+
+.todo-log-modal-card {
+  position: relative;
+  z-index: 1;
+  width: min(560px, 100%);
+  max-height: min(72vh, 640px);
+  display: flex;
+  flex-direction: column;
+  padding: 20px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-card);
+}
+
+.todo-log-modal-header {
+  margin-bottom: 12px;
+}
+
+.todo-log-modal-title {
+  margin: 0 0 6px;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--color-primary);
+}
+
+.todo-log-modal-desc {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--color-secondary-text);
+  word-break: break-word;
+}
+
+.todo-log-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--color-border);
+}
+
+.todo-log-modal-close-btn {
+  height: 32px;
+  padding: 0 14px;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  background: var(--color-bg);
+  color: var(--color-primary);
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.todo-log-modal-close-btn:hover {
+  border-color: var(--btn-icon-border-hover);
+  background: var(--btn-icon-bg-hover);
+}
+
 .todo-run-detail {
   margin-top: 8px;
   padding: 10px;
@@ -474,15 +792,47 @@ button.note-tag:hover:not(:disabled) {
   border: 1px solid var(--color-border);
 }
 
+.todo-log-modal-body {
+  max-height: 320px;
+  overflow: auto;
+}
+
+.todo-log-entry + .todo-log-entry {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px dashed var(--color-border);
+}
+
+.todo-log-entry-head {
+  margin: 0 0 6px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 11px;
+  color: var(--color-secondary-text);
+}
+
+.todo-log-entry-status {
+  color: var(--color-accent);
+  font-weight: 500;
+}
+
 .todo-run-summary,
 .todo-run-error,
-.todo-run-files {
+.todo-run-files,
+.todo-run-usage {
   margin: 0 0 6px;
   font-size: 12px;
   line-height: 1.5;
   color: var(--color-secondary-text);
   white-space: pre-wrap;
   word-break: break-word;
+}
+
+.todo-run-usage {
+  color: var(--color-accent);
+  font-variant-numeric: tabular-nums;
 }
 
 .todo-run-summary.is-muted {
@@ -495,8 +845,8 @@ button.note-tag:hover:not(:disabled) {
 
 .todo-run-log {
   margin: 0;
-  max-height: 160px;
-  overflow: auto;
+  max-height: none;
+  overflow: visible;
   font-size: 11px;
   line-height: 1.45;
   color: var(--color-secondary-text);
@@ -506,6 +856,43 @@ button.note-tag:hover:not(:disabled) {
 
 .todo-review-actions {
   margin-top: 8px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.todo-continue-box {
+  margin-top: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  background: rgba(24, 24, 27, 0.02);
+}
+
+.todo-continue-input {
+  width: 100%;
+  resize: vertical;
+  min-height: 52px;
+  padding: 8px 10px;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  font: inherit;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--color-primary);
+  background: var(--color-bg, #fff);
+  box-sizing: border-box;
+}
+
+.todo-continue-input:focus {
+  outline: none;
+  border-color: var(--color-accent);
+}
+
+.todo-continue-actions {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;

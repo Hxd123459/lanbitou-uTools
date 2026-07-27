@@ -1,7 +1,8 @@
 /**
  * Agent bridge helpers for uTools preload (CommonJS).
+ * 注意：uTools/Electron 下 process.execPath 是宿主程序，不能用来跑 bridge。
  */
-const { spawn } = require('node:child_process')
+const { spawn, spawnSync } = require('node:child_process')
 const fs = require('node:fs')
 const path = require('node:path')
 const http = require('node:http')
@@ -12,10 +13,11 @@ const HEALTH_PATH = '/health'
 
 let bridgeProcess = null
 let startingPromise = null
+let installingPromise = null
 
 function getBridgeRootCandidates() {
   return [
-    path.resolve(__dirname, '..', '..', 'bridge'), // repo root / public→../..
+    path.resolve(__dirname, '..', '..', 'bridge'), // public/preload 或 dist/preload → 项目根/bridge
     path.resolve(__dirname, '..', 'bridge'), // dist/bridge
     path.resolve(process.cwd(), 'bridge'),
   ]
@@ -30,8 +32,107 @@ function getBridgeRoot() {
   return candidates[0]
 }
 
+function hasBridgeDeps(root) {
+  return fs.existsSync(path.join(root, 'node_modules', '@cursor', 'sdk'))
+}
+
+function resolveNodeBinary() {
+  const execPath = String(process.execPath || '')
+  const base = path.basename(execPath).toLowerCase()
+  if (base === 'node' || base === 'node.exe') {
+    return execPath
+  }
+
+  const finder = process.platform === 'win32' ? 'where' : 'which'
+  const found = spawnSync(finder, ['node'], {
+    encoding: 'utf8',
+    windowsHide: true,
+    shell: process.platform === 'win32',
+  })
+  if (found.status === 0) {
+    const line = String(found.stdout || '')
+      .split(/\r?\n/)
+      .map((s) => s.trim())
+      .find(Boolean)
+    if (line && fs.existsSync(line)) return line
+  }
+
+  const fallbacks =
+    process.platform === 'win32'
+      ? [
+          'C:\\Program Files\\nodejs\\node.exe',
+          'C:\\Program Files (x86)\\nodejs\\node.exe',
+        ]
+      : ['/usr/local/bin/node', '/usr/bin/node']
+
+  for (let i = 0; i < fallbacks.length; i += 1) {
+    if (fs.existsSync(fallbacks[i])) return fallbacks[i]
+  }
+
+  throw new Error('未找到本机 Node.js，请安装 Node.js 并确保终端可执行 node')
+}
+
+function runNpmInstall(root) {
+  const lockFile = path.join(root, 'package-lock.json')
+  const args = fs.existsSync(lockFile)
+    ? ['ci', '--omit=dev']
+    : ['install', '--omit=dev']
+  const result = spawnSync('npm', args, {
+    cwd: root,
+    stdio: 'ignore',
+    windowsHide: true,
+    env: process.env,
+    shell: process.platform === 'win32',
+  })
+  if (result.error) {
+    throw new Error(`Agent 桥依赖安装失败：${result.error.message}`)
+  }
+  if (result.status !== 0) {
+    throw new Error('Agent 桥依赖安装失败，请确认本机已安装 Node.js 与 npm')
+  }
+}
+
+async function ensureBridgeDeps() {
+  const root = getBridgeRoot()
+  if (!fs.existsSync(path.join(root, 'server.js'))) {
+    throw new Error(`找不到 bridge 目录：${root}`)
+  }
+  if (hasBridgeDeps(root)) return root
+  if (installingPromise) return installingPromise
+
+  installingPromise = Promise.resolve().then(() => {
+    if (hasBridgeDeps(root)) return root
+    runNpmInstall(root)
+    if (!hasBridgeDeps(root)) {
+      throw new Error('Agent 桥依赖安装后仍不可用，请检查 bridge 目录')
+    }
+    return root
+  })
+
+  try {
+    return await installingPromise
+  } finally {
+    installingPromise = null
+  }
+}
+
 function getServerEntry() {
   return path.join(getBridgeRoot(), 'server.js')
+}
+
+function getSpawnLogPath() {
+  return path.join(getBridgeRoot(), 'bridge-spawn.log')
+}
+
+function readSpawnLogTail(maxChars = 1200) {
+  try {
+    const logPath = getSpawnLogPath()
+    if (!fs.existsSync(logPath)) return ''
+    const text = fs.readFileSync(logPath, 'utf8')
+    return text.slice(-maxChars).trim()
+  } catch {
+    return ''
+  }
 }
 
 function requestHttp(method, urlPath, body, headers = {}) {
@@ -95,22 +196,42 @@ function spawnBridge() {
     throw new Error(`找不到 bridge/server.js：${entry}`)
   }
 
+  const nodeBin = resolveNodeBinary()
+  const root = getBridgeRoot()
   const env = {
     ...process.env,
     LANBITOU_AGENT_BRIDGE_PORT: String(DEFAULT_PORT),
     LANBITOU_AGENT_BRIDGE_HOST: HOST,
   }
 
-  const child = spawn(process.execPath || 'node', [entry], {
-    cwd: getBridgeRoot(),
+  const logPath = getSpawnLogPath()
+  fs.writeFileSync(
+    logPath,
+    `\n===== spawn ${new Date().toISOString()} =====\nnode=${nodeBin}\nentry=${entry}\ncwd=${root}\n`,
+    { flag: 'a' },
+  )
+  const outFd = fs.openSync(logPath, 'a')
+
+  const child = spawn(nodeBin, [entry], {
+    cwd: root,
     env,
-    stdio: 'ignore',
+    stdio: ['ignore', outFd, outFd],
     detached: true,
     windowsHide: true,
   })
+
+  child.on('error', (error) => {
+    try {
+      fs.appendFileSync(logPath, `[spawn error] ${error.message}\n`)
+    } catch {
+      /* ignore */
+    }
+  })
+
+  // 勿立刻 close fd，子进程仍在使用
   child.unref()
   bridgeProcess = child
-  return child
+  return { child, nodeBin, entry, root }
 }
 
 async function waitUntilHealthy({ tries = 20, intervalMs = 250 } = {}) {
@@ -129,9 +250,16 @@ async function ensureStarted() {
 
   startingPromise = (async () => {
     try {
-      spawnBridge()
-      const ok = await waitUntilHealthy()
-      if (!ok) throw new Error('Agent 桥启动超时，请在 bridge 目录手动 npm start')
+      await ensureBridgeDeps()
+      const spawned = spawnBridge()
+      const ok = await waitUntilHealthy({ tries: 40, intervalMs: 500 })
+      if (!ok) {
+        const tail = readSpawnLogTail()
+        const hint = tail ? `\n日志：${tail}` : ''
+        throw new Error(
+          `Agent 桥启动超时（node=${spawned.nodeBin}）。请确认 Node.js 可用且端口 ${DEFAULT_PORT} 空闲。${hint}`,
+        )
+      }
       return { ok: true, already: false, port: DEFAULT_PORT }
     } finally {
       startingPromise = null
@@ -179,4 +307,5 @@ module.exports = {
   pickDirectory,
   pathExists,
   healthCheck,
+  resolveNodeBinary,
 }

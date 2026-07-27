@@ -4,15 +4,15 @@
 
 ## 启动
 
+插件进入 uTools 后，preload 会自动安装依赖（若缺失）并后台拉起本机桥，默认监听 `127.0.0.1:39281`。
+
+开发调试也可手动执行：
+
 ```bash
 cd bridge
 npm install
 npm start
 ```
-
-默认监听 `127.0.0.1:39281`。
-
-也可在设置中填写 Cursor API Key 后，由 uTools preload 自动尝试拉起（需本机能执行 `node`）。
 
 ## 环境变量
 

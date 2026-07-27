@@ -280,6 +280,9 @@ try {
       healthCheck: () => agentBridge.healthCheck(),
       port: agentBridge.DEFAULT_PORT,
     }
+    void agentBridge.ensureStarted().catch((error) => {
+      console.warn('[烂笔头] agentBridge 后台启动失败', error?.message || error)
+    })
   }
 } catch (error) {
   console.warn('[烂笔头] agentBridge 加载失败', error)

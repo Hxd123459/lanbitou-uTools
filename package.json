@@ -7,7 +7,8 @@
     "dev": "vite",
     "build": "vite build",
     "build:utools": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "postinstall": "npm install --prefix bridge --omit=dev"
   },
   "dependencies": {
     "@tiptap/core": "^3.24.0",

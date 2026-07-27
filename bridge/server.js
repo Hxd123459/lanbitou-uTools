@@ -90,6 +90,7 @@ async function handleRunCreate(req, res) {
   }
 
   const bridgeRunId = createId()
+  const resumeAgentId = String(body.agentId || '').trim() || null
   const record = {
     id: bridgeRunId,
     todoId: body.todoId || null,
@@ -98,7 +99,8 @@ async function handleRunCreate(req, res) {
     log: '',
     summary: '',
     changedFiles: [],
-    agentId: null,
+    usage: null,
+    agentId: resumeAgentId,
     error: '',
     startedAt: new Date().toISOString(),
     finishedAt: null,
@@ -112,15 +114,18 @@ async function handleRunCreate(req, res) {
       prompt,
       apiKey,
       model: body.model,
+      agentId: resumeAgentId,
       onEvent: (event) => {
         if (!event) return
         if (event.type === 'log') record.log = event.log || record.log
+        if (event.type === 'usage') record.usage = event.usage || record.usage
         if (event.type === 'agent') record.agentId = event.agentId || record.agentId
         if (event.type === 'done') {
           record.status = event.status || 'finished'
           record.log = event.log || record.log
           record.summary = event.summary || record.summary
           record.changedFiles = event.changedFiles || record.changedFiles
+          record.usage = event.usage || record.usage
           record.agentId = event.agentId || record.agentId
           record.error = event.error || record.error
           record.finishedAt = new Date().toISOString()
@@ -157,6 +162,7 @@ function publicRun(record) {
     log: live.log || record.log,
     summary: live.summary || record.summary,
     changedFiles: live.changedFiles || record.changedFiles,
+    usage: live.usage || record.usage || null,
     agentId: live.agentId || record.agentId,
     error: live.error || record.error,
     startedAt: record.startedAt,

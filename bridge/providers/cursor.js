@@ -1,5 +1,8 @@
 import { createId } from '../utils.js'
 
+const LIVE_LOG_CHARS = 20000
+const DONE_LOG_CHARS = 4000
+
 function getApiKey(options = {}) {
   return String(options.apiKey || process.env.CURSOR_API_KEY || '').trim()
 }
@@ -63,6 +66,45 @@ function collectTextFromResult(result) {
   }
 }
 
+function normalizeUsage(usage) {
+  if (!usage || typeof usage !== 'object') return null
+  const inputTokens = Number(usage.inputTokens) || 0
+  const outputTokens = Number(usage.outputTokens) || 0
+  const cacheReadTokens = Number(usage.cacheReadTokens) || 0
+  const cacheWriteTokens = Number(usage.cacheWriteTokens) || 0
+  const totalTokens =
+    Number(usage.totalTokens) ||
+    inputTokens + outputTokens + cacheReadTokens + cacheWriteTokens
+  if (!totalTokens && !inputTokens && !outputTokens) return null
+  return {
+    inputTokens,
+    outputTokens,
+    cacheReadTokens,
+    cacheWriteTokens,
+    totalTokens,
+  }
+}
+
+function sliceLog(text, max) {
+  const raw = String(text || '')
+  if (raw.length <= max) return raw
+  return `…(前文已省略)\n${raw.slice(-max)}`
+}
+
+function disposeAgent(agent) {
+  return (async () => {
+    try {
+      if (agent && typeof agent[Symbol.asyncDispose] === 'function') {
+        await agent[Symbol.asyncDispose]()
+      } else if (agent && typeof agent.close === 'function') {
+        await agent.close()
+      }
+    } catch {
+      /* ignore */
+    }
+  })()
+}
+
 export default {
   id: 'cursor',
 
@@ -92,7 +134,7 @@ export default {
     return { items, raw: text.slice(0, 4000), status: result?.status || 'finished' }
   },
 
-  async execute({ cwd, prompt, apiKey, model, onEvent } = {}) {
+  async execute({ cwd, prompt, apiKey, model, agentId, onEvent } = {}) {
     const key = getApiKey({ apiKey })
     if (!key) {
       const err = new Error('缺少 CURSOR_API_KEY')
@@ -101,13 +143,15 @@ export default {
     }
     const { Agent } = await loadCursorSdk()
     const runId = createId()
+    const resumeId = String(agentId || '').trim() || null
     const state = {
       id: runId,
       status: 'running',
       log: '',
       summary: '',
       changedFiles: [],
-      agentId: null,
+      usage: null,
+      agentId: resumeId,
       error: '',
       cancelRequested: false,
       agent: null,
@@ -117,28 +161,33 @@ export default {
     const appendLog = (chunk) => {
       const text = String(chunk || '')
       if (!text) return
-      state.log = `${state.log}${text}`.slice(-20000)
-      onEvent?.({ type: 'log', log: state.log })
+      state.log = `${state.log}${text}`.slice(-LIVE_LOG_CHARS)
+      onEvent?.({ type: 'log', log: state.log, usage: state.usage })
     }
 
     ;(async () => {
       try {
-        const agent = await Agent.create({
+        const agentOptions = {
           apiKey: key,
           model: { id: model || 'composer-2.5' },
           local: { cwd },
-        })
+        }
+        const agent = resumeId
+          ? await Agent.resume(resumeId, agentOptions)
+          : await Agent.create(agentOptions)
         state.agent = agent
-        state.agentId = agent.agentId || null
+        state.agentId = agent.agentId || resumeId || null
         onEvent?.({ type: 'agent', agentId: state.agentId })
 
-        const run = await agent.send(
-          [
-            '请完成以下待办。完成后用简短中文总结改动，并尽量列出改动文件路径。',
-            '',
-            String(prompt || '').trim(),
-          ].join('\n'),
-        )
+        const message = resumeId
+          ? String(prompt || '').trim()
+          : [
+              '请完成以下待办。完成后用简短中文总结改动，并尽量列出改动文件路径。',
+              '',
+              String(prompt || '').trim(),
+            ].join('\n')
+
+        const run = await agent.send(message)
         state.run = run
 
         if (typeof run.stream === 'function') {
@@ -151,8 +200,11 @@ export default {
                   if (block?.type === 'text' && block.text) appendLog(block.text)
                 }
               }
+            } else if (event?.type === 'usage') {
+              state.usage = normalizeUsage(event.usage) || state.usage
+              onEvent?.({ type: 'usage', usage: state.usage })
             } else if (event?.type === 'tool_call' || event?.type === 'tool') {
-              appendLog(`\n[tool] ${JSON.stringify(event).slice(0, 500)}\n`)
+              appendLog(`\n[tool] ${JSON.stringify(event).slice(0, 400)}\n`)
             }
           }
         }
@@ -160,6 +212,10 @@ export default {
         if (typeof run.wait === 'function') {
           const waited = await run.wait()
           const status = waited?.status || resultStatus(waited)
+          state.usage =
+            normalizeUsage(waited?.usage) ||
+            normalizeUsage(run?.usage) ||
+            state.usage
           state.summary =
             String(waited?.result || waited?.summary || collectTextFromResult(waited) || '')
               .trim()
@@ -179,27 +235,21 @@ export default {
         } else {
           state.status = state.cancelRequested ? 'cancelled' : 'finished'
           state.summary = state.log.slice(-1200)
+          state.usage = normalizeUsage(run?.usage) || state.usage
         }
       } catch (error) {
         state.status = 'error'
         state.error = error?.message || String(error)
         appendLog(`\n[error] ${state.error}\n`)
       } finally {
-        try {
-          if (state.agent && typeof state.agent[Symbol.asyncDispose] === 'function') {
-            await state.agent[Symbol.asyncDispose]()
-          } else if (state.agent && typeof state.agent.close === 'function') {
-            await state.agent.close()
-          }
-        } catch {
-          /* ignore */
-        }
+        await disposeAgent(state.agent)
         onEvent?.({
           type: 'done',
           status: state.status,
-          log: state.log,
+          log: sliceLog(state.log, DONE_LOG_CHARS),
           summary: state.summary,
           changedFiles: state.changedFiles,
+          usage: state.usage,
           agentId: state.agentId,
           error: state.error,
         })
@@ -214,6 +264,7 @@ export default {
         log: state.log,
         summary: state.summary,
         changedFiles: state.changedFiles,
+        usage: state.usage,
         agentId: state.agentId,
         error: state.error,
       }),

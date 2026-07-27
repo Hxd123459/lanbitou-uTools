@@ -80,6 +80,7 @@ export async function agentStartRun({
   prompt,
   provider = 'cursor',
   model,
+  agentId,
 } = {}) {
   return agentBridgeRequest('POST', '/run', {
     cwd,
@@ -87,6 +88,7 @@ export async function agentStartRun({
     prompt,
     provider,
     model,
+    agentId: agentId || undefined,
   })
 }
 
