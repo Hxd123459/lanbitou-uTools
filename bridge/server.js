@@ -22,7 +22,7 @@ import {
 } from './archive.js'
 import { createId, readJsonBody, sendJson } from './utils.js'
 
-// Agent shell 会继承这些环境；压低 npm 进度条/交互，减少额外子进程弹窗
+// Agent shell 会继承这些环境；压低 npm 进度条/交互
 if (process.platform === 'win32') {
   process.env.npm_config_progress = process.env.npm_config_progress || 'false'
   process.env.npm_config_loglevel = process.env.npm_config_loglevel || 'error'
@@ -32,6 +32,7 @@ if (process.platform === 'win32') {
 
 const PORT = Number(process.env.LANBITOU_AGENT_BRIDGE_PORT || 39281)
 const HOST = process.env.LANBITOU_AGENT_BRIDGE_HOST || '127.0.0.1'
+const LAUNCHER = String(process.env.LANBITOU_BRIDGE_LAUNCHER || 'unknown')
 
 const providers = {
   cursor: cursorProvider,
@@ -376,6 +377,7 @@ const server = http.createServer(async (req, res) => {
         ok: true,
         service: 'lanbitou-agent-bridge',
         providers: Object.keys(providers),
+        launcher: LAUNCHER,
       })
       return
     }

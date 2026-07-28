@@ -215,6 +215,66 @@ async function healthCheck() {
   }
 }
 
+async function healthInfo() {
+  try {
+    const result = await requestHttp('GET', HEALTH_PATH)
+    if (result.status === 200 && result.data?.ok === true) return result.data
+  } catch {
+    /* ignore */
+  }
+  return null
+}
+
+/** 旧 bridge（无控制台会话）会导致 SDK shell 狂弹窗，需要换掉 */
+function isBridgeLauncherOk(info) {
+  if (process.platform !== 'win32') return true
+  const launcher = String(info?.launcher || '')
+  return launcher === 'conhost-headless' || launcher === 'node-with-console'
+}
+
+function killListenerOnPort(port) {
+  if (process.platform !== 'win32') return false
+  try {
+    const listed = spawnSync(
+      'powershell.exe',
+      [
+        '-NoProfile',
+        '-Command',
+        `Get-NetTCPConnection -LocalPort ${Number(port)} -State Listen -ErrorAction SilentlyContinue | Select-Object -ExpandProperty OwningProcess -Unique`,
+      ],
+      { encoding: 'utf8', windowsHide: true, shell: false },
+    )
+    const pids = String(listed.stdout || '')
+      .split(/\r?\n/)
+      .map((s) => s.trim())
+      .filter((s) => /^\d+$/.test(s))
+    let killed = false
+    for (const pid of pids) {
+      const r = spawnSync('taskkill.exe', ['/PID', pid, '/T', '/F'], {
+        encoding: 'utf8',
+        windowsHide: true,
+        shell: false,
+      })
+      if (r.status === 0) killed = true
+    }
+    return killed
+  } catch {
+    return false
+  }
+}
+
+function getConhostPath() {
+  if (process.platform !== 'win32') return null
+  const candidates = [
+    path.join(process.env.SystemRoot || 'C:\\Windows', 'System32', 'conhost.exe'),
+    'C:\\Windows\\System32\\conhost.exe',
+  ]
+  for (let i = 0; i < candidates.length; i += 1) {
+    if (fs.existsSync(candidates[i])) return candidates[i]
+  }
+  return null
+}
+
 function spawnBridge() {
   const entry = getServerEntry()
   if (!fs.existsSync(entry)) {
@@ -223,29 +283,63 @@ function spawnBridge() {
 
   const nodeBin = resolveNodeBinary()
   const root = getBridgeRoot()
+  let launcher = 'node'
+  if (process.platform === 'win32') {
+    launcher = getConhostPath() ? 'conhost-headless' : 'node-with-console'
+  }
+
   const env = {
     ...process.env,
     LANBITOU_AGENT_BRIDGE_PORT: String(DEFAULT_PORT),
     LANBITOU_AGENT_BRIDGE_HOST: HOST,
+    LANBITOU_BRIDGE_LAUNCHER: launcher,
   }
 
   const logPath = getSpawnLogPath()
   fs.writeFileSync(
     logPath,
-    `\n===== spawn ${new Date().toISOString()} =====\nnode=${nodeBin}\nentry=${entry}\ncwd=${root}\n`,
+    `\n===== spawn ${new Date().toISOString()} =====\nnode=${nodeBin}\nentry=${entry}\ncwd=${root}\nlauncher=${launcher}\n`,
     { flag: 'a' },
   )
   const outFd = fs.openSync(logPath, 'a')
 
-  // Windows + Electron(uTools) 下 detached:true 容易弹出并残留控制台窗口
-  const child = spawn(nodeBin, [entry], {
-    cwd: root,
-    env,
-    stdio: ['ignore', outFd, outFd],
-    detached: process.platform !== 'win32',
-    windowsHide: true,
-    shell: false,
-  })
+  /**
+   * Windows 关键：不能用 CREATE_NO_WINDOW 把 bridge 变成「无控制台」进程。
+   * Cursor SDK 的 shell/npm 会挂到父进程控制台；没有可继承控制台时就会疯狂弹新 CMD。
+   * 手动在终端启动之所以不弹窗，就是因为有控制台可继承。
+   * conhost --headless = 有控制台会话、无可见窗口（Win10+）。
+   */
+  let child
+  if (process.platform === 'win32') {
+    const conhost = getConhostPath()
+    if (conhost) {
+      child = spawn(conhost, ['--headless', nodeBin, entry], {
+        cwd: root,
+        env,
+        stdio: ['ignore', outFd, outFd],
+        detached: true,
+        windowsHide: true,
+        shell: false,
+      })
+    } else {
+      child = spawn(nodeBin, [entry], {
+        cwd: root,
+        env,
+        stdio: ['ignore', outFd, outFd],
+        detached: true,
+        windowsHide: false,
+        shell: false,
+      })
+    }
+  } else {
+    child = spawn(nodeBin, [entry], {
+      cwd: root,
+      env,
+      stdio: ['ignore', outFd, outFd],
+      detached: true,
+      shell: false,
+    })
+  }
 
   child.on('error', (error) => {
     try {
@@ -255,12 +349,9 @@ function spawnBridge() {
     }
   })
 
-  // 勿立刻 close fd，子进程仍在使用
-  if (process.platform !== 'win32') {
-    child.unref()
-  }
+  child.unref()
   bridgeProcess = child
-  return { child, nodeBin, entry, root }
+  return { child, nodeBin, entry, root, launcher }
 }
 
 async function waitUntilHealthy({ tries = 20, intervalMs = 250 } = {}) {
@@ -272,24 +363,40 @@ async function waitUntilHealthy({ tries = 20, intervalMs = 250 } = {}) {
 }
 
 async function ensureStarted() {
-  if (await healthCheck()) {
-    return { ok: true, already: true, port: DEFAULT_PORT }
+  const info = await healthInfo()
+  if (info && isBridgeLauncherOk(info)) {
+    return { ok: true, already: true, port: DEFAULT_PORT, launcher: info.launcher }
+  }
+  if (info && !isBridgeLauncherOk(info)) {
+    // 旧 bridge 无正确控制台会话 → 杀掉换新
+    killListenerOnPort(DEFAULT_PORT)
+    await new Promise((resolve) => setTimeout(resolve, 400))
   }
   if (startingPromise) return startingPromise
 
   startingPromise = (async () => {
     try {
       await ensureBridgeDeps()
+      // 启动前再清一次，避免端口占用
+      if (await healthCheck()) {
+        killListenerOnPort(DEFAULT_PORT)
+        await new Promise((resolve) => setTimeout(resolve, 400))
+      }
       const spawned = spawnBridge()
       const ok = await waitUntilHealthy({ tries: 40, intervalMs: 500 })
       if (!ok) {
         const tail = readSpawnLogTail()
         const hint = tail ? `\n日志：${tail}` : ''
         throw new Error(
-          `Agent 桥启动超时（node=${spawned.nodeBin}）。请确认 Node.js 可用且端口 ${DEFAULT_PORT} 空闲。${hint}`,
+          `Agent 桥启动超时（node=${spawned.nodeBin}, launcher=${spawned.launcher}）。请确认 Node.js 可用且端口 ${DEFAULT_PORT} 空闲。${hint}`,
         )
       }
-      return { ok: true, already: false, port: DEFAULT_PORT }
+      return {
+        ok: true,
+        already: false,
+        port: DEFAULT_PORT,
+        launcher: spawned.launcher,
+      }
     } finally {
       startingPromise = null
     }

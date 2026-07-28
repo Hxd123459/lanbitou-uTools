@@ -2,39 +2,48 @@ import { getNotePlainText } from './copyNoteContent'
 import { blobToClipboardPng } from './imageExport'
 
 const CARD_WIDTH = 480
-const PADDING = 28
+const CARD_PADDING = 32
+const OUTER_PADDING = 20
 const SCALE = 2
-const SUMMARY_MAX_CHARS = 240
+/** 超长内容最多渲染行数，超出加省略号，避免画布过大 */
+const SUMMARY_MAX_LINES = 60
+const TITLE_LINE_HEIGHT = 26
+const SUMMARY_LINE_HEIGHT = 26
 const BRAND = '烂笔头'
 
 const FONT =
   '"Inter", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Helvetica Neue", Arial, sans-serif'
 
 const COLORS = {
-  bg: '#ffffff',
-  border: '#e4e4e7',
+  canvasBg: '#f4f4f5',
+  cardBg: '#ffffff',
   text: '#09090b',
-  secondary: '#71717a',
-  accent: '#2563eb',
-  tagBg: 'rgba(24, 24, 27, 0.08)',
-  tagText: '#3f3f46',
-  divider: '#f4f4f5',
+  summary: '#3f3f46',
+  secondary: '#a1a1aa',
+  shadow: 'rgba(24, 24, 27, 0.08)',
 }
 
 export function buildShareCardData(note) {
   const title = String(note?.title ?? '').trim()
-  const tag = title ? `#${title}` : ''
   const plain = getNotePlainText(note)
-  const summary = truncateSummary(plain)
+  const summary = normalizeSummary(plain)
   const time = formatShareTime(note?.createdAt)
-  return { title, tag, summary, time, brand: BRAND }
+  return { title, summary, time }
 }
 
-function truncateSummary(text) {
-  const normalized = String(text ?? '').replace(/\s+/g, ' ').trim()
+function formatFooter(time) {
+  const source = `截图来自「${BRAND}」`
+  return time ? `${source} · ${time}` : source
+}
+
+function normalizeSummary(text) {
+  const normalized = String(text ?? '')
+    .replace(/\r\n/g, '\n')
+    .replace(/[ \t]+\n/g, '\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim()
   if (!normalized) return '（暂无内容）'
-  if (normalized.length <= SUMMARY_MAX_CHARS) return normalized
-  return `${normalized.slice(0, SUMMARY_MAX_CHARS).trim()}…`
+  return normalized
 }
 
 function formatShareTime(dateValue) {
@@ -51,12 +60,12 @@ function wrapText(ctx, text, maxWidth) {
   const lines = []
   let line = ''
   for (const char of text) {
-    const next = line + char
     if (char === '\n') {
-      if (line) lines.push(line)
+      lines.push(line)
       line = ''
       continue
     }
+    const next = line + char
     if (ctx.measureText(next).width > maxWidth && line) {
       lines.push(line)
       line = char
@@ -64,8 +73,16 @@ function wrapText(ctx, text, maxWidth) {
       line = next
     }
   }
-  if (line) lines.push(line)
-  return lines.length ? lines : ['']
+  if (line || !lines.length) lines.push(line)
+  return lines
+}
+
+function limitLines(lines, maxLines) {
+  if (lines.length <= maxLines) return lines
+  const clipped = lines.slice(0, maxLines)
+  const last = clipped[clipped.length - 1] || ''
+  clipped[clipped.length - 1] = `${last.replace(/…$/, '').trimEnd()}…`
+  return clipped
 }
 
 function roundRect(ctx, x, y, w, h, r) {
@@ -79,84 +96,86 @@ function roundRect(ctx, x, y, w, h, r) {
   ctx.closePath()
 }
 
-function measureCardHeight(ctx, data, contentWidth) {
-  let height = PADDING
-  if (data.title) {
-    height += 30
-    height += 12
-  }
-  if (data.tag) {
-    height += 26
-    height += 16
-  }
-  height += 1 + 16
-  ctx.font = `400 15px ${FONT}`
-  const summaryLines = wrapText(ctx, data.summary, contentWidth)
-  height += summaryLines.length * 24
-  height += 16 + 1 + PADDING
-  if (data.time) height += 18
-  return Math.max(180, height)
+function getTitleLines(ctx, title, contentWidth) {
+  if (!title) return []
+  const label = title.startsWith('#') ? title : `#${title}`
+  ctx.font = `700 18px ${FONT}`
+  return wrapText(ctx, label, contentWidth)
 }
 
-function drawShareCard(ctx, data, width, height) {
-  const contentWidth = width - PADDING * 2
-  let y = PADDING
+function getSummaryLines(ctx, summary, contentWidth) {
+  ctx.font = `400 16px ${FONT}`
+  return limitLines(wrapText(ctx, summary, contentWidth), SUMMARY_MAX_LINES)
+}
 
-  ctx.fillStyle = COLORS.bg
-  roundRect(ctx, 0, 0, width, height, 14)
+function measureCardHeight(ctx, data, contentWidth) {
+  let height = CARD_PADDING
+
+  const titleLines = getTitleLines(ctx, data.title, contentWidth)
+  if (titleLines.length) {
+    height += titleLines.length * TITLE_LINE_HEIGHT
+    height += 18
+  } else {
+    height += 4
+  }
+
+  const summaryLines = getSummaryLines(ctx, data.summary, contentWidth)
+  height += summaryLines.length * SUMMARY_LINE_HEIGHT
+  height += 24 + CARD_PADDING + 20
+  return Math.max(160, height)
+}
+
+function drawCardShadow(ctx, x, y, w, h) {
+  ctx.save()
+  ctx.shadowColor = COLORS.shadow
+  ctx.shadowBlur = 24
+  ctx.shadowOffsetY = 8
+  ctx.fillStyle = COLORS.cardBg
+  roundRect(ctx, x, y, w, h, 16)
+  ctx.fill()
+  ctx.restore()
+}
+
+function drawShareCard(ctx, data, cardWidth, cardHeight) {
+  const contentWidth = cardWidth - CARD_PADDING * 2
+  const cardX = OUTER_PADDING
+  const cardY = OUTER_PADDING
+  const textX = cardX + CARD_PADDING
+
+  ctx.fillStyle = COLORS.canvasBg
+  ctx.fillRect(0, 0, cardWidth + OUTER_PADDING * 2, cardHeight + OUTER_PADDING * 2)
+
+  drawCardShadow(ctx, cardX, cardY, cardWidth, cardHeight)
+
+  ctx.fillStyle = COLORS.cardBg
+  roundRect(ctx, cardX, cardY, cardWidth, cardHeight, 16)
   ctx.fill()
 
-  ctx.strokeStyle = COLORS.border
-  ctx.lineWidth = 1
-  roundRect(ctx, 0.5, 0.5, width - 1, height - 1, 14)
-  ctx.stroke()
+  let y = cardY + CARD_PADDING
 
-  if (data.title) {
+  const titleLines = getTitleLines(ctx, data.title, contentWidth)
+  if (titleLines.length) {
     ctx.fillStyle = COLORS.text
-    ctx.font = `700 20px ${FONT}`
-    ctx.fillText(data.title, PADDING, y + 20)
-    y += 30 + 12
+    ctx.font = `700 18px ${FONT}`
+    titleLines.forEach((line) => {
+      ctx.fillText(line, textX, y + 18)
+      y += TITLE_LINE_HEIGHT
+    })
+    y += 18
   }
 
-  if (data.tag) {
-    ctx.font = `600 13px ${FONT}`
-    const tagWidth = ctx.measureText(data.tag).width + 20
-    const tagHeight = 26
-    ctx.fillStyle = COLORS.tagBg
-    roundRect(ctx, PADDING, y, tagWidth, tagHeight, 999)
-    ctx.fill()
-    ctx.fillStyle = COLORS.tagText
-    ctx.fillText(data.tag, PADDING + 10, y + 18)
-    y += tagHeight + 16
-  }
-
-  ctx.strokeStyle = COLORS.divider
-  ctx.beginPath()
-  ctx.moveTo(PADDING, y)
-  ctx.lineTo(width - PADDING, y)
-  ctx.stroke()
-  y += 17
-
-  ctx.fillStyle = COLORS.text
-  ctx.font = `400 15px ${FONT}`
-  const summaryLines = wrapText(ctx, data.summary, contentWidth)
+  ctx.fillStyle = COLORS.summary
+  ctx.font = `400 16px ${FONT}`
+  const summaryLines = getSummaryLines(ctx, data.summary, contentWidth)
   summaryLines.forEach((line) => {
-    ctx.fillText(line, PADDING, y + 14)
-    y += 24
+    ctx.fillText(line, textX, y + 16)
+    y += SUMMARY_LINE_HEIGHT
   })
 
-  y += 16
-  ctx.strokeStyle = COLORS.divider
-  ctx.beginPath()
-  ctx.moveTo(PADDING, y)
-  ctx.lineTo(width - PADDING, y)
-  ctx.stroke()
-  y += 17
-
+  const footerY = cardY + cardHeight - CARD_PADDING
   ctx.fillStyle = COLORS.secondary
-  ctx.font = `400 12px ${FONT}`
-  const footer = data.time ? `${data.brand} · ${data.time}` : data.brand
-  ctx.fillText(footer, PADDING, y + 10)
+  ctx.font = `400 11px ${FONT}`
+  ctx.fillText(formatFooter(data.time), textX, footerY)
 }
 
 export async function renderShareCardBlob(note) {
@@ -165,13 +184,14 @@ export async function renderShareCardBlob(note) {
   const measureCtx = measureCanvas.getContext('2d')
   if (!measureCtx) throw new Error('canvas unsupported')
 
-  measureCtx.font = `400 15px ${FONT}`
-  const contentWidth = CARD_WIDTH - PADDING * 2
+  const contentWidth = CARD_WIDTH - CARD_PADDING * 2
   const cardHeight = measureCardHeight(measureCtx, data, contentWidth)
+  const totalWidth = CARD_WIDTH + OUTER_PADDING * 2
+  const totalHeight = cardHeight + OUTER_PADDING * 2
 
   const canvas = document.createElement('canvas')
-  canvas.width = CARD_WIDTH * SCALE
-  canvas.height = cardHeight * SCALE
+  canvas.width = totalWidth * SCALE
+  canvas.height = totalHeight * SCALE
   const ctx = canvas.getContext('2d')
   if (!ctx) throw new Error('canvas unsupported')
 
