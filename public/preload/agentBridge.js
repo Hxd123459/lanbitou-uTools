@@ -135,8 +135,9 @@ function readSpawnLogTail(maxChars = 1200) {
   }
 }
 
-function requestHttp(method, urlPath, body, headers = {}) {
+function requestHttp(method, urlPath, body, headers = {}, options = {}) {
   const payload = body == null ? null : JSON.stringify(body)
+  const timeoutMs = Number(options.timeoutMs) > 0 ? Number(options.timeoutMs) : 120000
   return new Promise((resolve, reject) => {
     const req = http.request(
       {
@@ -151,7 +152,7 @@ function requestHttp(method, urlPath, body, headers = {}) {
             : {}),
           ...headers,
         },
-        timeout: 120000,
+        timeout: timeoutMs,
       },
       (res) => {
         const chunks = []
@@ -174,7 +175,7 @@ function requestHttp(method, urlPath, body, headers = {}) {
     req.on('error', reject)
     req.on('timeout', () => {
       req.destroy()
-      reject(new Error('agent bridge 请求超时'))
+      reject(new Error(`agent bridge 请求超时（${Math.round(timeoutMs / 1000)}s）`))
     })
     if (payload) req.write(payload)
     req.end()
@@ -269,9 +270,9 @@ async function ensureStarted() {
   return startingPromise
 }
 
-async function request(method, urlPath, body, headers = {}) {
+async function request(method, urlPath, body, headers = {}, options = {}) {
   await ensureStarted()
-  return requestHttp(method, urlPath, body, headers)
+  return requestHttp(method, urlPath, body, headers, options)
 }
 
 function pickDirectory() {
@@ -300,12 +301,35 @@ function pathExists(target) {
   }
 }
 
+function revealInFolder(target) {
+  const text = String(target || '').trim()
+  if (!text) return false
+  const api =
+    (typeof utools !== 'undefined' && utools) ||
+    (typeof window !== 'undefined' && window.utools) ||
+    null
+  try {
+    if (api && typeof api.shellOpenPath === 'function') {
+      api.shellOpenPath(text)
+      return true
+    }
+    if (api && typeof api.shellShowItemInFolder === 'function') {
+      api.shellShowItemInFolder(text)
+      return true
+    }
+  } catch {
+    /* ignore */
+  }
+  return false
+}
+
 module.exports = {
   DEFAULT_PORT,
   ensureStarted,
   request,
   pickDirectory,
   pathExists,
+  revealInFolder,
   healthCheck,
   resolveNodeBinary,
 }

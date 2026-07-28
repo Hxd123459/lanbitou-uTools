@@ -470,6 +470,7 @@ import {
   createStructFolder,
   deleteStructItem,
   fetchFolderList,
+  fetchFolderPathStack,
   moveStructItem,
   renameStructItem,
   updateStructSort,
@@ -650,6 +651,24 @@ const enterFolder = (folder) => {
   if (folder.type !== 'folder') return
   pathStack.value.push({ id: folder.id, name: folder.name })
   loadCurrentList()
+}
+
+const openFolderById = async (folderId) => {
+  const id = String(folderId || '').trim()
+  if (!id) {
+    pathStack.value = []
+    await loadCurrentList()
+    return
+  }
+  try {
+    const stack = await fetchFolderPathStack(id)
+    pathStack.value = Array.isArray(stack)
+      ? stack.map((item) => ({ id: item.id, name: item.name }))
+      : []
+  } catch {
+    pathStack.value = []
+  }
+  await loadCurrentList()
 }
 
 const navigateToCrumb = (index) => {
@@ -1025,6 +1044,7 @@ onBeforeUnmount(() => {
 defineExpose({
   openCreateNoteModal,
   openNoteViewByNoteId,
+  openFolderById,
   dismissOverlays,
   reload: loadCurrentList,
 })

@@ -31,7 +31,7 @@
         >
           <header class="todo-sync-modal-header">
             <h3 class="todo-sync-modal-title">同步待办预览</h3>
-            <p class="todo-sync-modal-desc">勾选要写入的待办，已存在项不会重复创建</p>
+            <p class="todo-sync-modal-desc">勾选要写入的待办；稍后再说会保留结果，确认或放弃前不能再次同步</p>
           </header>
 
           <p v-if="!candidates.length" class="todo-sync-modal-empty">没有可新增的待办</p>
@@ -52,6 +52,7 @@
                 />
                 <span class="todo-sync-item-body">
                   <span class="todo-sync-item-title">{{ item.title }}</span>
+                  <span v-if="item.doneWhen" class="todo-sync-item-meta">验收：{{ item.doneWhen }}</span>
                   <span class="todo-sync-item-meta">
                     <span v-if="item.exists" class="todo-sync-badge">已存在</span>
                     <span v-if="item.noteTitle">来自「{{ item.noteTitle }}」</span>
@@ -62,8 +63,11 @@
           </ul>
 
           <div class="todo-sync-modal-actions">
+            <AppButton class="btn btn-icon-text" type="button" :disabled="confirming" @click="emit('discard')">
+              放弃
+            </AppButton>
             <AppButton class="btn btn-icon-text" type="button" :disabled="confirming" @click="emit('close')">
-              取消
+              稍后再说
             </AppButton>
             <AppButton
               class="btn btn-primary"
@@ -91,7 +95,7 @@ const props = defineProps({
   confirming: { type: Boolean, default: false },
 })
 
-const emit = defineEmits(['close', 'confirm'])
+const emit = defineEmits(['close', 'discard', 'confirm'])
 
 const candidates = ref([])
 

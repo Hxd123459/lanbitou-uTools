@@ -471,6 +471,7 @@
         @toast="(text) => openToast(text, 'success', { duration: 2000 })"
         @open-source-note="handleTodoOpenSourceNote"
         @open-tag="handleTodoOpenTag"
+        @open-sediment-folder="handleTodoOpenSedimentFolder"
       />
 
       <!-- 热力图 -->
@@ -956,6 +957,17 @@ const handleTodoOpenTag = async (tag) => {
   activeTab.value = 'home'
   await nextTick()
   await handleTagSelect({ tagId, tagName })
+}
+
+const handleTodoOpenSedimentFolder = async (payload) => {
+  const folderId = String(payload?.folderId || '').trim()
+  if (!folderId) {
+    openToast('沉淀文件夹不存在', 'error', { duration: 1600 })
+    return
+  }
+  activeTab.value = 'sediment'
+  await nextTick()
+  await sedimentPanelRef.value?.openFolderById?.(folderId)
 }
 
 const clearNoteSelection = () => {

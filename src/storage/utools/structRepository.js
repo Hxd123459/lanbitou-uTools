@@ -132,6 +132,14 @@ export async function renameItem({ id, name }) {
   return true
 }
 
+export async function getFolderItem(id) {
+  const targetId = String(id ?? '').trim()
+  if (!targetId) return null
+  const doc = stripDoc(await dbGet(folderDocId(targetId)))
+  if (!doc || doc.deletedAt) return null
+  return toFolderItem(doc)
+}
+
 export async function moveItem({ id, targetParentId }) {
   const doc = stripDoc(await dbGet(folderDocId(id)))
   if (!doc) return false

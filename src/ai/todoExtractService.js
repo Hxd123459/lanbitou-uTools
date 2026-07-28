@@ -7,16 +7,17 @@ import { isSedimentDraftAiAvailable } from './sedimentDraftService'
 const CONTENT_LIMIT = 800
 const EXTRACT_MAX_TOKENS = 4096
 
-const SYSTEM_PROMPT = `你是烂笔头的待办提取助手。根据用户提供的碎片笔记，提取可执行的行动项。
+const SYSTEM_PROMPT = `你是烂笔头的待办提取助手。根据用户提供的碎片笔记，提取可执行的行动项（事情包）。
 
 输出规则（严格遵守）：
 1. 只输出一个 JSON 数组，不要 Markdown 代码围栏，不要解释或寒暄
-2. 数组元素格式：{"title":"待办短句","sourceNoteId":"碎片id","excerpt":"原文短摘录"}
+2. 数组元素格式：{"title":"待办短句","doneWhen":"怎样算完成","sourceNoteId":"碎片id","excerpt":"原文短摘录"}
 3. title 必须是可执行行动项（动词开头更佳），不超过 40 字
-4. sourceNoteId 必须来自输入中的碎片 id，禁止编造
-5. excerpt 从对应碎片原文截取，不超过 60 字
-6. 同一碎片可提取多条；没有行动项的碎片不要输出
-7. 不要把纯记录、感想、无行动信息写成待办`
+4. doneWhen 用一句话写验收标准（例如：列表可多选且切换 tab 清空选中），不超过 40 字
+5. sourceNoteId 必须来自输入中的碎片 id，禁止编造
+6. excerpt 从对应碎片原文截取，不超过 60 字
+7. 同一碎片可提取多条；没有行动项的碎片不要输出
+8. 过大目标请拆成 2～4 条可独立验收的小待办；不要把纯记录、感想写成待办`
 
 function truncateText(text, limit = CONTENT_LIMIT) {
   const raw = String(text ?? '').replace(/\s+/g, ' ').trim()
@@ -77,8 +78,11 @@ function normalizeCandidates(rawItems, notes, existingHashes) {
       60,
     )
 
+    const doneWhen = String(item?.doneWhen || '').trim().slice(0, 120)
+
     result.push({
       title,
+      doneWhen,
       sourceNoteId,
       sourceExcerpt: excerpt,
       sourceHash,

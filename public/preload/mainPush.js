@@ -273,10 +273,11 @@ try {
     window.services = window.services || {}
     window.services.agent = {
       ensureStarted: () => agentBridge.ensureStarted(),
-      request: (method, urlPath, body, headers) =>
-        agentBridge.request(method, urlPath, body, headers),
+      request: (method, urlPath, body, headers, options) =>
+        agentBridge.request(method, urlPath, body, headers, options),
       pickDirectory: () => agentBridge.pickDirectory(),
       pathExists: (target) => agentBridge.pathExists(target),
+      revealInFolder: (target) => agentBridge.revealInFolder(target),
       healthCheck: () => agentBridge.healthCheck(),
       port: agentBridge.DEFAULT_PORT,
     }

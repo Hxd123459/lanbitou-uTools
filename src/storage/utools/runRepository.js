@@ -40,6 +40,22 @@ function normalizeUsage(usage) {
   }
 }
 
+function normalizeChecklist(list) {
+  if (!Array.isArray(list)) return []
+  return list
+    .map((item) => {
+      if (typeof item === 'string') {
+        const text = item.trim()
+        return text ? { text: text.slice(0, 200), checked: false } : null
+      }
+      const text = String(item?.text || '').trim()
+      if (!text) return null
+      return { text: text.slice(0, 200), checked: Boolean(item?.checked) }
+    })
+    .filter(Boolean)
+    .slice(0, 12)
+}
+
 function toRun(doc) {
   if (!doc?.id) return null
   return {
@@ -52,9 +68,13 @@ function toRun(doc) {
     log: doc.log || '',
     summary: doc.summary || '',
     changedFiles: Array.isArray(doc.changedFiles) ? doc.changedFiles : [],
+    checklist: normalizeChecklist(doc.checklist),
     usage: normalizeUsage(doc.usage),
     agentId: doc.agentId || null,
     bridgeRunId: doc.bridgeRunId || null,
+    baseRef: doc.baseRef || null,
+    branchName: doc.branchName || null,
+    reviewNote: doc.reviewNote || '',
     error: doc.error || '',
     startedAt: doc.startedAt || null,
     finishedAt: doc.finishedAt || null,
@@ -81,6 +101,8 @@ export async function createTodoRun({
   provider = 'cursor',
   prompt = '',
   status = 'queued',
+  baseRef = null,
+  branchName = null,
 } = {}) {
   const tid = String(todoId ?? '').trim()
   const pid = String(projectId ?? '').trim()
@@ -98,9 +120,13 @@ export async function createTodoRun({
     log: '',
     summary: '',
     changedFiles: [],
+    checklist: [],
     usage: null,
     agentId: null,
     bridgeRunId: null,
+    baseRef: baseRef ? String(baseRef) : null,
+    branchName: branchName ? String(branchName) : null,
+    reviewNote: '',
     error: '',
     startedAt: null,
     finishedAt: null,
@@ -137,6 +163,9 @@ export async function updateTodoRun(id, patch = {}) {
       ? patch.changedFiles.map(String).filter(Boolean)
       : []
   }
+  if (Object.prototype.hasOwnProperty.call(patch, 'checklist')) {
+    doc.checklist = normalizeChecklist(patch.checklist)
+  }
   if (Object.prototype.hasOwnProperty.call(patch, 'usage')) {
     doc.usage = normalizeUsage(patch.usage)
   }
@@ -145,6 +174,15 @@ export async function updateTodoRun(id, patch = {}) {
   }
   if (Object.prototype.hasOwnProperty.call(patch, 'bridgeRunId')) {
     doc.bridgeRunId = patch.bridgeRunId ? String(patch.bridgeRunId) : null
+  }
+  if (Object.prototype.hasOwnProperty.call(patch, 'baseRef')) {
+    doc.baseRef = patch.baseRef ? String(patch.baseRef) : null
+  }
+  if (Object.prototype.hasOwnProperty.call(patch, 'branchName')) {
+    doc.branchName = patch.branchName ? String(patch.branchName) : null
+  }
+  if (Object.prototype.hasOwnProperty.call(patch, 'reviewNote')) {
+    doc.reviewNote = String(patch.reviewNote ?? '').slice(0, 1000)
   }
   if (Object.prototype.hasOwnProperty.call(patch, 'error')) {
     doc.error = String(patch.error ?? '')

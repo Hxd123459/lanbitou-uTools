@@ -41,6 +41,7 @@ function toTodo(doc) {
     sourceTagId: doc.sourceTagId || null,
     sourceTagName: doc.sourceTagName || '',
     sourceExcerpt: doc.sourceExcerpt || '',
+    doneWhen: doc.doneWhen || '',
     sourceHash: doc.sourceHash || null,
     runStatus: normalizeTodoRunStatus(doc.runStatus),
     lastRunId: doc.lastRunId ? String(doc.lastRunId) : null,
@@ -132,6 +133,7 @@ export async function createTodo({
   sourceTagId = null,
   sourceTagName = '',
   sourceExcerpt = '',
+  doneWhen = '',
   sourceHash = null,
 } = {}) {
   const pid = String(projectId ?? '').trim()
@@ -160,6 +162,7 @@ export async function createTodo({
     sourceTagId: sourceTagId ? String(sourceTagId).trim() : null,
     sourceTagName: String(sourceTagName ?? '').trim(),
     sourceExcerpt: String(sourceExcerpt ?? '').trim(),
+    doneWhen: String(doneWhen ?? '').trim().slice(0, 120),
     sourceHash: hash,
     runStatus: TODO_RUN_STATUS.IDLE,
     lastRunId: null,
@@ -192,6 +195,12 @@ export async function updateTodo(id, patch = {}) {
   }
   if (Object.prototype.hasOwnProperty.call(patch, 'lastRunId')) {
     doc.lastRunId = patch.lastRunId ? String(patch.lastRunId) : null
+  }
+  if (Object.prototype.hasOwnProperty.call(patch, 'doneWhen')) {
+    doc.doneWhen = String(patch.doneWhen ?? '').trim().slice(0, 120)
+  }
+  if (Object.prototype.hasOwnProperty.call(patch, 'sourceExcerpt')) {
+    doc.sourceExcerpt = String(patch.sourceExcerpt ?? '').trim()
   }
 
   doc.updateTime = formatDateTime()
@@ -245,6 +254,7 @@ export async function softDeleteTodosByProject(projectId) {
 /**
  * 增量拉取可用于待办同步的碎片。
  * since 为空时取各标签下最近 FIRST_SYNC_NOTE_LIMIT 条，避免首次灌爆。
+ * 增量时按 createTime / updateTime 较新者判断，旧碎片改写内容也会纳入。
  */
 export async function listNotesForTodoSync({ tagIds = [], since = null } = {}) {
   const tags = [...new Set((Array.isArray(tagIds) ? tagIds : []).map((id) => String(id).trim()).filter(Boolean))]
@@ -253,15 +263,22 @@ export async function listNotesForTodoSync({ tagIds = [], since = null } = {}) {
   const tagSet = new Set(tags)
   const sinceText = since ? String(since).trim() : ''
   const docs = await dbAllDocs(NOTE_PREFIX)
+
+  const noteActivityTime = (doc) => {
+    const createTime = String(doc?.createTime || '')
+    const updateTime = String(doc?.updateTime || '')
+    return updateTime > createTime ? updateTime : createTime
+  }
+
   const notes = (docs || [])
     .map(stripNoteDoc)
     .filter((doc) => {
       if (!doc?.id || doc.deletedAt || doc.archivedAt) return false
       if (!doc.tagId || !tagSet.has(String(doc.tagId))) return false
-      if (sinceText && String(doc.createTime || '') <= sinceText) return false
+      if (sinceText && noteActivityTime(doc) <= sinceText) return false
       return true
     })
-    .sort((a, b) => String(b.createTime || '').localeCompare(String(a.createTime || '')))
+    .sort((a, b) => noteActivityTime(b).localeCompare(noteActivityTime(a)))
 
   const limited = sinceText ? notes : notes.slice(0, FIRST_SYNC_NOTE_LIMIT)
 

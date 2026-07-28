@@ -36,14 +36,26 @@ export function pathExists(target) {
   return svc.pathExists(target)
 }
 
-export async function agentBridgeRequest(method, urlPath, body = undefined, headers = {}) {
+export function revealInFolder(target) {
+  const svc = getAgentService()
+  if (!svc?.revealInFolder) return false
+  return svc.revealInFolder(target)
+}
+
+export async function agentBridgeRequest(method, urlPath, body = undefined, headers = {}, options = {}) {
   const svc = getAgentService()
   if (!svc) throw new Error('Agent 桥不可用（需在 uTools 中运行）')
   await svc.ensureStarted()
-  const result = await svc.request(method, urlPath, body, {
-    ...cursorHeaders(),
-    ...headers,
-  })
+  const result = await svc.request(
+    method,
+    urlPath,
+    body,
+    {
+      ...cursorHeaders(),
+      ...headers,
+    },
+    options,
+  )
   if (!result || result.status >= 400 || result.data?.ok === false) {
     const message = result?.data?.error || `Agent 桥请求失败 (${result?.status || 0})`
     const err = new Error(message)
@@ -66,12 +78,19 @@ export async function agentHealth() {
 }
 
 export async function agentExtract({ cwd, notes, provider = 'cursor', model } = {}) {
-  return agentBridgeRequest('POST', '/extract', {
-    cwd,
-    notes,
-    provider,
-    model,
-  })
+  // Cursor Agent.prompt 可能数分钟，单独放宽超时
+  return agentBridgeRequest(
+    'POST',
+    '/extract',
+    {
+      cwd,
+      notes,
+      provider,
+      model,
+    },
+    {},
+    { timeoutMs: 600000 },
+  )
 }
 
 export async function agentStartRun({
@@ -81,6 +100,8 @@ export async function agentStartRun({
   provider = 'cursor',
   model,
   agentId,
+  createBranch = true,
+  branchName,
 } = {}) {
   return agentBridgeRequest('POST', '/run', {
     cwd,
@@ -89,6 +110,8 @@ export async function agentStartRun({
     provider,
     model,
     agentId: agentId || undefined,
+    createBranch: Boolean(createBranch),
+    branchName: branchName || undefined,
   })
 }
 
@@ -98,4 +121,16 @@ export async function agentGetRun(bridgeRunId) {
 
 export async function agentCancelRun(bridgeRunId) {
   return agentBridgeRequest('POST', `/run/${encodeURIComponent(bridgeRunId)}/cancel`)
+}
+
+export async function agentGitDiff({ cwd, baseRef, file } = {}) {
+  return agentBridgeRequest('POST', '/git/diff', { cwd, baseRef, file })
+}
+
+export async function agentGitBaseline({ cwd } = {}) {
+  return agentBridgeRequest('POST', '/git/baseline', { cwd })
+}
+
+export async function agentArchive(payload = {}) {
+  return agentBridgeRequest('POST', '/archive', payload)
 }

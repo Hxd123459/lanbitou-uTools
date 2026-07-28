@@ -87,6 +87,53 @@
           </div>
 
           <div class="project-form-modal-field">
+            <span class="project-form-modal-label">沉淀文件夹</span>
+            <p class="project-form-modal-hint">
+              {{
+                sedimentFolderId
+                  ? `已关联沉淀文件夹（保存后与事情同名同步）`
+                  : '保存时会在沉淀根目录自动创建同名文件夹，专门收纳这件事的产出'
+              }}
+            </p>
+          </div>
+
+          <label class="project-form-modal-field">
+            <span class="project-form-modal-label">为什么做 / 初衷</span>
+            <textarea
+              v-model="purpose"
+              class="project-form-modal-textarea"
+              rows="2"
+              maxlength="2000"
+              placeholder="这件事要解决什么问题？"
+              :disabled="saving"
+            />
+          </label>
+
+          <label class="project-form-modal-field">
+            <span class="project-form-modal-label">怎样算值了</span>
+            <textarea
+              v-model="successLooksLike"
+              class="project-form-modal-textarea"
+              rows="2"
+              maxlength="2000"
+              placeholder="成功时用户能感知到什么？"
+              :disabled="saving"
+            />
+          </label>
+
+          <label class="project-form-modal-field">
+            <span class="project-form-modal-label">明确不做</span>
+            <textarea
+              v-model="outOfScope"
+              class="project-form-modal-textarea"
+              rows="2"
+              maxlength="2000"
+              placeholder="本期刻意不做的范围"
+              :disabled="saving"
+            />
+          </label>
+
+          <div class="project-form-modal-field">
             <span class="project-form-modal-label">同步标签（最多 {{ MAX_TAGS_PER_PROJECT }} 个）</span>
             <p class="project-form-modal-hint">绑定标签后，可从对应碎片自动提取待办</p>
             <p v-if="loadingTags" class="project-form-modal-hint">加载标签中…</p>
@@ -144,6 +191,10 @@ const name = ref('')
 const startAt = ref('')
 const endAt = ref('')
 const localPath = ref('')
+const sedimentFolderId = ref('')
+const purpose = ref('')
+const successLooksLike = ref('')
+const outOfScope = ref('')
 const selectedTagIds = ref([])
 const tags = ref([])
 const loadingTags = ref(false)
@@ -152,8 +203,6 @@ const nameInputRef = ref(null)
 
 const isEdit = computed(() => Boolean(props.project?.id))
 const canSubmit = computed(() => String(name.value || '').trim().length > 0)
-
-const today = () => formatDateTime().slice(0, 10)
 
 const pickLocalPath = async () => {
   try {
@@ -200,9 +249,13 @@ const loadTags = async () => {
 
 const resetForm = () => {
   name.value = props.project?.name || ''
-  startAt.value = props.project?.startAt || today()
+  startAt.value = props.project?.startAt || formatDateTime().slice(0, 10)
   endAt.value = props.project?.endAt || ''
   localPath.value = props.project?.localPath || ''
+  sedimentFolderId.value = props.project?.sedimentFolderId || ''
+  purpose.value = props.project?.purpose || ''
+  successLooksLike.value = props.project?.successLooksLike || ''
+  outOfScope.value = props.project?.outOfScope || ''
   selectedTagIds.value = Array.isArray(props.project?.tagIds)
     ? props.project.tagIds.map(String)
     : []
@@ -229,6 +282,9 @@ const handleSubmit = () => {
     startAt: startAt.value || null,
     endAt: endAt.value || null,
     localPath: String(localPath.value || '').trim() || null,
+    purpose: String(purpose.value || '').trim(),
+    successLooksLike: String(successLooksLike.value || '').trim(),
+    outOfScope: String(outOfScope.value || '').trim(),
   })
 }
 
@@ -264,7 +320,9 @@ watch(
 .project-form-modal-card {
   position: relative;
   z-index: 1;
-  width: min(460px, 100%);
+  width: min(520px, 100%);
+  max-height: min(90vh, 840px);
+  overflow: auto;
   padding: 20px;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-lg);
@@ -310,7 +368,23 @@ watch(
   box-sizing: border-box;
 }
 
-.project-form-modal-input:focus {
+.project-form-modal-textarea {
+  width: 100%;
+  min-height: 56px;
+  padding: 10px 12px;
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  background: var(--color-surface);
+  color: var(--color-primary);
+  font-family: inherit;
+  font-size: 13px;
+  line-height: 1.45;
+  box-sizing: border-box;
+  resize: vertical;
+}
+
+.project-form-modal-input:focus,
+.project-form-modal-textarea:focus {
   outline: none;
   border-color: rgba(37, 99, 235, 0.45);
   box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);

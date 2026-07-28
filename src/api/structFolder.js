@@ -38,6 +38,13 @@ export async function createStructFolder({ parentId = 0, name }) {
   return post('/struct/folder/createFolder', { parentId, name })
 }
 
+export async function fetchStructFolder(id) {
+  if (isUtoolsMode()) {
+    return utoolsStruct.getFolderItem(id)
+  }
+  return null
+}
+
 export async function createNoteInFolder({
   parentId = 0,
   title,

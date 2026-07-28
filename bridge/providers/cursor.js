@@ -30,9 +30,9 @@ function notesToPrompt(notes = []) {
     '你是资深工程师助手。请结合当前代码仓库，从以下碎片笔记中提取可执行的开发待办。',
     '要求：',
     '1. 只输出 JSON 数组，不要 markdown 代码块以外的解释。',
-    '2. 每项字段：title(string), sourceNoteId(string|null), excerpt(string), reason(string)',
-    '3. title 要具体可执行；结合仓库现状，避免已完成或无法落地的项。',
-    '4. 最多 20 条。',
+    '2. 每项字段：title(string), doneWhen(string), sourceNoteId(string|null), excerpt(string), reason(string)',
+    '3. title 要具体可执行；doneWhen 写一句话验收标准；结合仓库现状，避免已完成或无法落地的项。',
+    '4. 过大目标拆成 2～4 条；最多 20 条。',
     '',
     blocks.join('\n\n') || '（无碎片内容）',
   ].join('\n')
@@ -91,6 +91,28 @@ function sliceLog(text, max) {
   return `…(前文已省略)\n${raw.slice(-max)}`
 }
 
+function parseChecklist(text) {
+  const raw = String(text || '')
+  const items = []
+  const re = /^\s*[-*]\s*\[[ xX]?\]\s*(.+)$/gm
+  let match
+  while ((match = re.exec(raw))) {
+    const textItem = String(match[1] || '').trim()
+    if (textItem) items.push({ text: textItem.slice(0, 200), checked: false })
+    if (items.length >= 8) break
+  }
+  if (items.length) return items
+  const section = raw.match(/验收清单[：:]\s*([\s\S]*?)(?:\n\n|$)/)
+  if (section) {
+    for (const line of section[1].split(/\r?\n/)) {
+      const cleaned = line.replace(/^\s*[-*\d.、]+\s*/, '').trim()
+      if (cleaned) items.push({ text: cleaned.slice(0, 200), checked: false })
+      if (items.length >= 8) break
+    }
+  }
+  return items
+}
+
 function disposeAgent(agent) {
   return (async () => {
     try {
@@ -126,6 +148,7 @@ export default {
     const items = parseJsonArray(text)
       .map((item) => ({
         title: String(item?.title || '').trim(),
+        doneWhen: String(item?.doneWhen || '').trim().slice(0, 120),
         sourceNoteId: item?.sourceNoteId ? String(item.sourceNoteId) : null,
         excerpt: String(item?.excerpt || item?.reason || '').trim().slice(0, 240),
         reason: String(item?.reason || '').trim().slice(0, 240),
@@ -150,6 +173,7 @@ export default {
       log: '',
       summary: '',
       changedFiles: [],
+      checklist: [],
       usage: null,
       agentId: resumeId,
       error: '',
@@ -180,9 +204,17 @@ export default {
         onEvent?.({ type: 'agent', agentId: state.agentId })
 
         const message = resumeId
-          ? String(prompt || '').trim()
+          ? [
+              String(prompt || '').trim(),
+              '',
+              '完成后请附上：1) 简短中文总结 2) 改动文件 3) 给用户的验收清单（2～5 条，用 - [ ] 格式）。',
+            ].join('\n')
           : [
-              '请完成以下待办。完成后用简短中文总结改动，并尽量列出改动文件路径。',
+              '请完成以下待办。保持改动最小且可验证。',
+              '完成后请输出：',
+              '1) 简短中文总结改动',
+              '2) 改动文件路径列表',
+              '3) 给用户的验收清单（2～5 条，用 Markdown：- [ ] 请确认…）',
               '',
               String(prompt || '').trim(),
             ].join('\n')
@@ -220,6 +252,7 @@ export default {
             String(waited?.result || waited?.summary || collectTextFromResult(waited) || '')
               .trim()
               .slice(0, 4000) || state.log.slice(-1200)
+          state.checklist = parseChecklist(state.summary) || parseChecklist(state.log)
           if (Array.isArray(waited?.changedFiles)) {
             state.changedFiles = waited.changedFiles.map(String)
           }
@@ -235,6 +268,7 @@ export default {
         } else {
           state.status = state.cancelRequested ? 'cancelled' : 'finished'
           state.summary = state.log.slice(-1200)
+          state.checklist = parseChecklist(state.summary)
           state.usage = normalizeUsage(run?.usage) || state.usage
         }
       } catch (error) {
@@ -249,6 +283,7 @@ export default {
           log: sliceLog(state.log, DONE_LOG_CHARS),
           summary: state.summary,
           changedFiles: state.changedFiles,
+          checklist: state.checklist,
           usage: state.usage,
           agentId: state.agentId,
           error: state.error,
@@ -264,6 +299,7 @@ export default {
         log: state.log,
         summary: state.summary,
         changedFiles: state.changedFiles,
+        checklist: state.checklist,
         usage: state.usage,
         agentId: state.agentId,
         error: state.error,

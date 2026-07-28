@@ -1,12 +1,15 @@
 import { computed, onBeforeUnmount, ref } from 'vue'
 import {
+  agentArchive,
   agentCancelRun,
   agentGetRun,
+  agentGitDiff,
   agentStartRun,
   ensureAgentBridge,
   isAgentBridgeAvailable,
   pathExists,
 } from '../api/agentBridge'
+import { createNoteInFolder } from '../api/structFolder'
 import {
   createTodoRun,
   fetchTodoRun,
@@ -22,6 +25,7 @@ import { formatDateTime } from '../storage/utools/utils'
 
 function buildPrompt(todo) {
   const lines = [`待办：${todo.title}`]
+  if (todo.doneWhen) lines.push(`验收标准：${todo.doneWhen}`)
   if (todo.sourceExcerpt) lines.push(`来源摘录：${todo.sourceExcerpt}`)
   if (todo.sourceNoteTitle) lines.push(`来源标题：${todo.sourceNoteTitle}`)
   if (todo.sourceTagName) lines.push(`来源标签：#${todo.sourceTagName}`)
@@ -31,7 +35,7 @@ function buildPrompt(todo) {
 
 function buildContinuePrompt(todo, feedback, prevRun) {
   const lines = [
-    '请根据以下反馈继续修改（保留与反馈无关的已有正确改动）。完成后用简短中文总结本轮改动，并列出改动文件。',
+    '请根据以下反馈继续修改（保留与反馈无关的已有正确改动）。',
     '',
     `原待办：${todo.title}`,
   ]
@@ -44,13 +48,102 @@ function buildContinuePrompt(todo, feedback, prevRun) {
   return lines.join('\n')
 }
 
+function branchNameForTodo(todoId) {
+  const safe = String(todoId || '')
+    .replace(/[^a-zA-Z0-9_-]/g, '')
+    .slice(0, 24)
+  return `lanbitou/${safe || 'todo'}`
+}
+
+async function syncArchiveMeta(project) {
+  // 本地档案目录仅兼容旧数据；新流程写入沉淀文件夹
+  if (!project?.archivePath || !pathExists(project.archivePath)) return
+  try {
+    await agentArchive({
+      action: 'ensure',
+      archivePath: project.archivePath,
+    })
+    await agentArchive({
+      action: 'syncReadme',
+      archivePath: project.archivePath,
+      project: {
+        name: project.name,
+        purpose: project.purpose,
+        successLooksLike: project.successLooksLike,
+        outOfScope: project.outOfScope,
+      },
+    })
+  } catch {
+    /* ignore archive sync errors */
+  }
+}
+
+async function persistAcceptedRun(project, todo, run) {
+  if (!run) return
+
+  if (project?.sedimentFolderId) {
+    try {
+      const date = formatDateTime().slice(0, 10)
+      const lines = [
+        `# 验收通过 · ${todo?.title || '待办'}`,
+        '',
+        `- 日期：${date}`,
+        `- 分支：${run.branchName || '—'}`,
+        `- 基准：${run.baseRef || '—'}`,
+      ]
+      if (run.reviewNote) lines.push(`- 验收备注：${run.reviewNote}`)
+      if (run.summary) {
+        lines.push('', '## 摘要', '', run.summary)
+      }
+      if (Array.isArray(run.changedFiles) && run.changedFiles.length) {
+        lines.push('', '## 改动文件', '', ...run.changedFiles.map((f) => `- ${f}`))
+      }
+      await createNoteInFolder({
+        parentId: project.sedimentFolderId,
+        title: `验收 · ${todo?.title || '待办'} · ${date}`,
+        content: lines.join('\n'),
+      })
+    } catch {
+      /* ignore */
+    }
+    return
+  }
+
+  if (!project?.archivePath || !pathExists(project.archivePath)) return
+  try {
+    await agentArchive({
+      action: 'writeRun',
+      archivePath: project.archivePath,
+      run: {
+        id: run.id,
+        todoTitle: todo?.title || '',
+        status: 'accepted',
+        startedAt: run.startedAt,
+        finishedAt: run.finishedAt,
+        branchName: run.branchName,
+        baseRef: run.baseRef,
+        summary: run.summary,
+        reviewNote: run.reviewNote,
+        checklist: run.checklist,
+        changedFiles: run.changedFiles,
+        usage: run.usage,
+      },
+    })
+    const line = run.reviewNote
+      ? `${todo?.title || '待办'} — ${run.reviewNote}`
+      : `${todo?.title || '待办'} — 验收通过`
+    await agentArchive({
+      action: 'appendChangelog',
+      archivePath: project.archivePath,
+      line,
+    })
+  } catch {
+    /* ignore */
+  }
+}
+
 /**
  * @param {object} options
- * @param {() => object|null} options.getProject
- * @param {() => any[]} options.getTodos
- * @param {(todo: any) => void} options.patchTodoLocal
- * @param {(msg: string) => void} [options.onToast]
- * @param {(err: any) => void} [options.onError]
  */
 export function useTodoRunQueue({
   getProject,
@@ -64,7 +157,6 @@ export function useTodoRunQueue({
   const activeRunId = ref(null)
   const runByTodoId = ref({})
   const pumping = ref(false)
-  /** @type {Record<string, { agentId?: string|null, feedback?: string, mode?: 'create'|'resume' }>} */
   const startOptionsByTodoId = {}
   let pollTimer = null
 
@@ -223,19 +315,21 @@ export function useTodoRunQueue({
 
     try {
       await ensureAgentBridge()
-      const isResume = startOpts.mode === 'resume' && startOpts.agentId
-      const prompt = isResume
-        ? buildContinuePrompt(todo, startOpts.feedback, startOpts.prevRun)
-        : startOpts.feedback
-          ? buildContinuePrompt(todo, startOpts.feedback, startOpts.prevRun)
-          : buildPrompt(todo)
+      await syncArchiveMeta(project)
 
+      const isResume = startOpts.mode === 'resume' && startOpts.agentId
+      const prompt = isResume || startOpts.feedback
+        ? buildContinuePrompt(todo, startOpts.feedback, startOpts.prevRun)
+        : buildPrompt(todo)
+
+      const branchName = branchNameForTodo(todoId)
       const runDoc = await createTodoRun({
         todoId,
         projectId: project.id,
         provider: 'cursor',
         prompt,
         status: 'running',
+        branchName,
       })
       activeRunId.value = runDoc.id
       setRunCache(todoId, runDoc)
@@ -254,13 +348,27 @@ export function useTodoRunQueue({
         prompt,
         provider: 'cursor',
         agentId: isResume ? startOpts.agentId : undefined,
+        createBranch: !isResume,
+        branchName,
       })
       const bridgeRunId = started?.run?.id
       if (!bridgeRunId) throw new Error('桥未返回 run id')
 
       const agentId = started.run.agentId || (isResume ? startOpts.agentId : null)
-      await updateTodoRun(runDoc.id, { bridgeRunId, agentId })
-      setRunCache(todoId, { ...runDoc, bridgeRunId, agentId })
+      const baseRef = started.run.baseRef || started.baseline?.baseRef || null
+      await updateTodoRun(runDoc.id, {
+        bridgeRunId,
+        agentId,
+        baseRef,
+        branchName: started.run.branchName || branchName,
+      })
+      setRunCache(todoId, {
+        ...runDoc,
+        bridgeRunId,
+        agentId,
+        baseRef,
+        branchName: started.run.branchName || branchName,
+      })
 
       await pollUntilDone(todoId, runDoc.id, bridgeRunId)
     } catch (error) {
@@ -296,8 +404,11 @@ export function useTodoRunQueue({
             log: remote.log || '',
             summary: remote.summary || '',
             changedFiles: remote.changedFiles || [],
+            checklist: remote.checklist || [],
             usage: remote.usage || null,
             agentId: remote.agentId || null,
+            baseRef: remote.baseRef || null,
+            branchName: remote.branchName || null,
             error: remote.error || '',
           })
           setRunCache(todoId, patched)
@@ -333,13 +444,29 @@ export function useTodoRunQueue({
       pollTimer = setInterval(tick, 2000)
     })
 
-  const acceptTodo = async (todo) => {
+  const acceptTodo = async (todo, { reviewNote = '', checklist = null } = {}) => {
     if (!todo?.id) return
+    const project = getProject?.()
+    let run = null
+    if (todo.lastRunId) {
+      const patch = { reviewNote: String(reviewNote || '').trim() }
+      if (Array.isArray(checklist)) patch.checklist = checklist
+      run = await updateTodoRun(todo.lastRunId, patch)
+      setRunCache(todo.id, run)
+    }
     await applyTodoPatch(todo.id, {
       done: true,
       runStatus: TODO_RUN_STATUS.IDLE,
     })
+    await persistAcceptedRun(project, todo, run)
     onToast?.('已验收通过')
+  }
+
+  const updateRunChecklist = async (todo, checklist) => {
+    if (!todo?.lastRunId) return null
+    const run = await updateTodoRun(todo.lastRunId, { checklist })
+    setRunCache(todo.id, run)
+    return run
   }
 
   const rejectTodo = async (todo, { requeue = false } = {}) => {
@@ -390,6 +517,17 @@ export function useTodoRunQueue({
     return detail
   }
 
+  const loadDiffForTodo = async (todo, file = null) => {
+    const project = getProject?.()
+    if (!project?.localPath) throw new Error('未关联本地项目路径')
+    const run = (await loadRunForTodo(todo)) || {}
+    return agentGitDiff({
+      cwd: project.localPath,
+      baseRef: run.baseRef || null,
+      file,
+    })
+  }
+
   onBeforeUnmount(() => {
     clearPoll()
   })
@@ -403,10 +541,13 @@ export function useTodoRunQueue({
     enqueue,
     continueTodo,
     acceptTodo,
+    updateRunChecklist,
     rejectTodo,
     dismissFailed,
     cancelActive,
     loadRunForTodo,
+    loadDiffForTodo,
+    syncArchiveMeta: () => syncArchiveMeta(getProject?.()),
     statusLabel: TODO_RUN_STATUS_LABEL,
   }
 }

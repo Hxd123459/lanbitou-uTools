@@ -44,6 +44,26 @@ function normalizeLocalPath(value) {
   return text || null
 }
 
+function normalizeSedimentFolderId(value) {
+  const text = String(value ?? '').trim()
+  return text || null
+}
+
+function normalizeDecisions(list) {
+  if (!Array.isArray(list)) return []
+  return list
+    .map((item) => {
+      const text = String(item?.text ?? item ?? '').trim()
+      if (!text) return null
+      return {
+        at: String(item?.at || '').trim() || formatDateTime().slice(0, 10),
+        text: text.slice(0, 500),
+      }
+    })
+    .filter(Boolean)
+    .slice(0, 50)
+}
+
 function toProject(doc) {
   if (!doc?.id) return null
   return {
@@ -54,6 +74,12 @@ function toProject(doc) {
     startAt: normalizeProjectDate(doc.startAt) || normalizeProjectDate(doc.createTime) || null,
     endAt: normalizeProjectDate(doc.endAt),
     localPath: normalizeLocalPath(doc.localPath),
+    archivePath: normalizeLocalPath(doc.archivePath),
+    sedimentFolderId: normalizeSedimentFolderId(doc.sedimentFolderId),
+    purpose: String(doc.purpose || ''),
+    successLooksLike: String(doc.successLooksLike || ''),
+    outOfScope: String(doc.outOfScope || ''),
+    decisions: normalizeDecisions(doc.decisions),
     lastSyncedAt: doc.lastSyncedAt || null,
     createTime: doc.createTime || '',
     updateTime: doc.updateTime || '',
@@ -100,6 +126,12 @@ export async function createProject({
   startAt = null,
   endAt = null,
   localPath = null,
+  archivePath = null,
+  sedimentFolderId = null,
+  purpose = '',
+  successLooksLike = '',
+  outOfScope = '',
+  decisions = [],
 } = {}) {
   const trimmed = String(name ?? '').trim()
   if (!trimmed) throw new Error('事情名称不能为空')
@@ -129,6 +161,12 @@ export async function createProject({
     startAt: start,
     endAt: end,
     localPath: normalizeLocalPath(localPath),
+    archivePath: normalizeLocalPath(archivePath),
+    sedimentFolderId: normalizeSedimentFolderId(sedimentFolderId),
+    purpose: String(purpose || '').slice(0, 2000),
+    successLooksLike: String(successLooksLike || '').slice(0, 2000),
+    outOfScope: String(outOfScope || '').slice(0, 2000),
+    decisions: normalizeDecisions(decisions),
     lastSyncedAt: null,
     createTime: now,
     updateTime: now,
@@ -167,6 +205,24 @@ export async function updateProject(id, patch = {}) {
   }
   if (Object.prototype.hasOwnProperty.call(patch, 'localPath')) {
     doc.localPath = normalizeLocalPath(patch.localPath)
+  }
+  if (Object.prototype.hasOwnProperty.call(patch, 'archivePath')) {
+    doc.archivePath = normalizeLocalPath(patch.archivePath)
+  }
+  if (Object.prototype.hasOwnProperty.call(patch, 'sedimentFolderId')) {
+    doc.sedimentFolderId = normalizeSedimentFolderId(patch.sedimentFolderId)
+  }
+  if (Object.prototype.hasOwnProperty.call(patch, 'purpose')) {
+    doc.purpose = String(patch.purpose ?? '').slice(0, 2000)
+  }
+  if (Object.prototype.hasOwnProperty.call(patch, 'successLooksLike')) {
+    doc.successLooksLike = String(patch.successLooksLike ?? '').slice(0, 2000)
+  }
+  if (Object.prototype.hasOwnProperty.call(patch, 'outOfScope')) {
+    doc.outOfScope = String(patch.outOfScope ?? '').slice(0, 2000)
+  }
+  if (Object.prototype.hasOwnProperty.call(patch, 'decisions')) {
+    doc.decisions = normalizeDecisions(patch.decisions)
   }
 
   const start = normalizeProjectDate(doc.startAt) || normalizeProjectDate(doc.createTime)

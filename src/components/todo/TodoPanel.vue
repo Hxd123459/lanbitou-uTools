@@ -24,26 +24,33 @@
       :loading="loadingTodos"
       :busy="actionBusy"
       :syncing="syncing"
+      :sync-phase="syncPhase"
+      :pending-sync-count="pendingSyncCount"
       :queue-length="queueLength"
       :running-title="runningTitle"
       :run-details="runByTodoId"
+      :load-diff="loadDiffForTodo"
       @back="backToList"
       @edit="openEditModal"
       @sync="handleSync"
+      @open-pending-sync="openPendingSyncPreview"
       @add-todo="handleAddTodo"
       @toggle-todo="handleToggleTodo"
       @delete-todo="handleDeleteTodo"
       @open-source="handleOpenSource"
       @open-tag="handleOpenTag"
+      @open-sediment-folder="handleOpenSedimentFolder"
       @update-todo-title="handleUpdateTodoTitle"
       @enqueue-selected="handleEnqueueSelected"
+      @generate-selected="openGenerateModal"
       @cancel-run="cancelActive"
-      @accept-todo="acceptTodo"
+      @accept-todo="handleAcceptTodo"
       @reject-todo="(todo) => rejectTodo(todo, { requeue: false })"
       @retry-todo="(todo) => continueTodo(todo, '')"
       @dismiss-failed="dismissFailed"
       @load-run="loadRunForTodo"
       @continue-todo="({ todo, feedback }) => continueTodo(todo, feedback)"
+      @checklist-change="handleChecklistChange"
     />
 
     <ProjectFormModal
@@ -54,11 +61,22 @@
       @submit="handleFormSubmit"
     />
 
+    <TodoGenerateModal
+      :visible="generateVisible"
+      :project="currentProject"
+      :todos="generateTodos"
+      :runs-by-id="runByTodoId"
+      @close="generateVisible = false"
+      @toast="notifyToast"
+      @save-archive="handleSaveGenerateArchive"
+    />
+
     <TodoSyncPreviewModal
       :visible="syncPreviewVisible"
       :items="syncCandidates"
       :confirming="syncConfirming"
       @close="closeSyncPreview"
+      @discard="discardPendingSync"
       @confirm="handleSyncConfirm"
     />
   </section>
@@ -89,22 +107,34 @@ import {
   ensureAgentBridge,
   isAgentBridgeAvailable,
 } from '../../api/agentBridge'
+import {
+  createNoteInFolder,
+  createStructFolder,
+  fetchStructFolder,
+  renameStructItem,
+} from '../../api/structFolder'
 import { extractTodosFromNotes, isTodoExtractAiAvailable } from '../../ai/todoExtractService'
 import { useTodoRunQueue } from '../../composables/useTodoRunQueue'
 import { buildTodoSourceHash, normalizeTodoTitle } from '../../storage/utools/todoRepository'
 import { formatDateTime } from '../../storage/utools/utils'
 import { loadAiSettings } from '../../storage/utools/aiSettings'
 import { MAX_PROJECTS } from '../../constants/todoLimits'
+import {
+  clearPendingTodoSync,
+  getPendingTodoSync,
+  setPendingTodoSync,
+} from '../../storage/utools/todoSyncCache'
 import ProjectListView from './ProjectListView.vue'
 import ProjectDetailView from './ProjectDetailView.vue'
 import ProjectFormModal from './ProjectFormModal.vue'
+import TodoGenerateModal from './TodoGenerateModal.vue'
 import TodoSyncPreviewModal from './TodoSyncPreviewModal.vue'
 
 const props = defineProps({
   active: { type: Boolean, default: false },
 })
 
-const emit = defineEmits(['error', 'toast', 'open-source-note', 'open-tag'])
+const emit = defineEmits(['error', 'toast', 'open-source-note', 'open-tag', 'open-sediment-folder'])
 
 const view = ref('list')
 const projects = ref([])
@@ -121,14 +151,26 @@ const formSaving = ref(false)
 const editingProject = ref(null)
 
 const syncing = ref(false)
+const syncPhase = ref('')
 const syncPreviewVisible = ref(false)
 const syncCandidates = ref([])
 const syncConfirming = ref(false)
+const pendingSyncCount = ref(0)
 const detailViewRef = ref(null)
+const generateVisible = ref(false)
+const generateTodos = ref([])
 
 const currentProject = computed(() =>
   projects.value.find((item) => item.id === currentProjectId.value) || null,
 )
+
+const refreshPendingSyncCount = () => {
+  const id = currentProject.value?.id
+  const pending = id ? getPendingTodoSync(id) : null
+  pendingSyncCount.value = pending?.candidates?.filter((item) => !item.exists).length
+    || pending?.candidates?.length
+    || 0
+}
 
 const notifyError = (error) => {
   emit('error', error instanceof Error ? error : new Error(String(error || '操作失败')))
@@ -152,10 +194,12 @@ const {
   enqueue,
   continueTodo,
   acceptTodo,
+  updateRunChecklist,
   rejectTodo,
   dismissFailed,
   cancelActive,
   loadRunForTodo,
+  loadDiffForTodo,
 } = useTodoRunQueue({
   getProject: () => currentProject.value,
   getTodos: () => todos.value,
@@ -164,10 +208,129 @@ const {
   onError: notifyError,
 })
 
+const handleAcceptTodo = async (payload) => {
+  const todo = payload?.todo || payload
+  try {
+    await acceptTodo(todo, {
+      reviewNote: payload?.reviewNote || '',
+      checklist: payload?.checklist,
+    })
+  } catch (error) {
+    notifyError(error)
+  }
+}
+
+const handleChecklistChange = async ({ todo, checklist }) => {
+  try {
+    await updateRunChecklist(todo, checklist)
+  } catch {
+    /* ignore */
+  }
+}
+
+const openGenerateModal = () => {
+  const selected = detailViewRef.value?.getSelectedTodos?.() || []
+  if (!selected.length) {
+    notifyToast('请先选择待办')
+    return
+  }
+  generateTodos.value = selected
+  generateVisible.value = true
+}
+
+const handleSaveGenerateArchive = async ({ template, text }) => {
+  const project = currentProject.value
+  if (!project?.sedimentFolderId) {
+    notifyToast('请先保存事情以关联沉淀文件夹')
+    return
+  }
+  try {
+    const date = formatDateTime().slice(0, 10)
+    const titleMap = {
+      daily: `日报 · ${date}`,
+      release: `版本说明 · ${date}`,
+      retro: `复盘 · ${date}`,
+    }
+    await createNoteInFolder({
+      parentId: project.sedimentFolderId,
+      title: titleMap[template] || `产出 · ${date}`,
+      content: String(text || '').trim(),
+    })
+    notifyToast('已写入沉淀文件夹')
+    generateVisible.value = false
+  } catch (error) {
+    notifyError(error)
+  }
+}
+
+const ensureSedimentFolder = async (project) => {
+  if (!project?.id) return project
+  const folderName = String(project.name || '').trim() || '未命名事情'
+  let folderId = String(project.sedimentFolderId || '').trim()
+
+  if (folderId) {
+    const existing = await fetchStructFolder(folderId)
+    if (existing?.type === 'folder') {
+      if (existing.name !== folderName) {
+        await renameStructItem({ id: folderId, name: folderName })
+      }
+      return project
+    }
+    folderId = ''
+  }
+
+  const createdId = await createStructFolder({ parentId: 0, name: folderName })
+  const updated = await updateProject(project.id, { sedimentFolderId: createdId })
+  const index = projects.value.findIndex((item) => item.id === updated.id)
+  if (index >= 0) projects.value[index] = updated
+  return updated
+}
+
+const handleOpenSedimentFolder = () => {
+  const project = currentProject.value
+  if (!project?.sedimentFolderId) {
+    notifyToast('尚未关联沉淀文件夹，请先编辑并保存事情')
+    return
+  }
+  emit('open-sediment-folder', {
+    folderId: project.sedimentFolderId,
+    projectName: project.name || '',
+  })
+}
+
+const handleFormSubmit = async (payload) => {
+  formSaving.value = true
+  try {
+    let saved = null
+    if (editingProject.value?.id) {
+      saved = await updateProject(editingProject.value.id, payload)
+      const index = projects.value.findIndex((item) => item.id === saved.id)
+      if (index >= 0) projects.value[index] = saved
+      else projects.value = [saved, ...projects.value]
+      notifyToast('已更新事情')
+    } else {
+      saved = await createProject(payload)
+      projects.value = [saved, ...projects.value]
+      notifyToast('已创建事情')
+    }
+    try {
+      saved = await ensureSedimentFolder(saved)
+    } catch (error) {
+      notifyToast(`事情已保存，但沉淀文件夹创建失败：${error?.message || '未知错误'}`)
+    }
+    formVisible.value = false
+    editingProject.value = null
+  } catch (error) {
+    notifyError(error)
+  } finally {
+    formSaving.value = false
+  }
+}
+
 const handleEnqueueSelected = async () => {
   try {
     const selected = detailViewRef.value?.getSelectedTodos?.() || []
-    await enqueue(selected)
+    await enqueue(selected.filter((t) => !t.done))
     detailViewRef.value?.clearSelection?.()
   } catch (error) {
     notifyError(error)
@@ -260,6 +423,16 @@ const openProject = async (project) => {
   currentProjectId.value = project.id
   view.value = 'detail'
   await loadTodos()
+  try {
+    await ensureSedimentFolder(project)
+  } catch {
+    /* ignore */
+  }
+  refreshPendingSyncCount()
+  const pending = getPendingTodoSync(project.id)
+  if (pending?.candidates?.length) {
+    notifyToast(`有 ${pending.candidates.filter((i) => !i.exists).length || pending.candidates.length} 条待确认的同步结果`)
+  }
 }
 
 const openCreateModal = () => {
@@ -281,29 +454,6 @@ const closeFormModal = () => {
   if (formSaving.value) return
   formVisible.value = false
   editingProject.value = null
-}
-
-const handleFormSubmit = async (payload) => {
-  formSaving.value = true
-  try {
-    if (editingProject.value?.id) {
-      const updated = await updateProject(editingProject.value.id, payload)
-      const index = projects.value.findIndex((item) => item.id === updated.id)
-      if (index >= 0) projects.value[index] = updated
-      else projects.value = [updated, ...projects.value]
-      notifyToast('已更新事情')
-    } else {
-      const created = await createProject(payload)
-      projects.value = [created, ...projects.value]
-      notifyToast('已创建事情')
-    }
-    formVisible.value = false
-    editingProject.value = null
-  } catch (error) {
-    notifyError(error)
-  } finally {
-    formSaving.value = false
-  }
 }
 
 const handleToggleArchive = async (project) => {
@@ -427,7 +577,40 @@ const handleOpenSource = async (todo) => {
 const closeSyncPreview = () => {
   if (syncConfirming.value) return
   syncPreviewVisible.value = false
+  refreshPendingSyncCount()
+}
+
+const discardPendingSync = () => {
+  if (syncConfirming.value) return
+  const projectId = currentProject.value?.id
+  if (projectId) clearPendingTodoSync(projectId)
+  syncPreviewVisible.value = false
   syncCandidates.value = []
+  refreshPendingSyncCount()
+  notifyToast('已放弃本次提取，可重新同步')
+}
+
+const openPendingSyncPreview = () => {
+  const project = currentProject.value
+  if (!project?.id) return
+  const pending = getPendingTodoSync(project.id)
+  if (!pending?.candidates?.length) {
+    refreshPendingSyncCount()
+    notifyToast('没有待确认的同步结果')
+    return
+  }
+  syncCandidates.value = pending.candidates
+  syncPreviewVisible.value = true
+}
+
+const cacheSyncResult = (project, candidates, source) => {
+  setPendingTodoSync(project.id, {
+    candidates,
+    projectName: project.name || '',
+    source,
+  })
+  syncCandidates.value = candidates
+  refreshPendingSyncCount()
 }
 
 const mapCursorExtractCandidates = (items, notes, existingHashes) => {
@@ -449,6 +632,7 @@ const mapCursorExtractCandidates = (items, notes, existingHashes) => {
 
     result.push({
       title,
+      doneWhen: String(item?.doneWhen || '').trim().slice(0, 120),
       sourceNoteId: sourceNoteId || null,
       noteTitle: note?.title || '',
       sourceTagId: note?.tagId || null,
@@ -462,91 +646,155 @@ const mapCursorExtractCandidates = (items, notes, existingHashes) => {
   return result
 }
 
+const enrichCandidates = (list) =>
+  (list || []).map((item) => ({
+    ...item,
+    sourceTagName:
+      item.sourceTagName ||
+      (item.sourceTagId ? tagNameById.value[String(item.sourceTagId)] || '' : ''),
+  }))
+
+const extractWithLocalAi = async (notes, existingHashes) => {
+  syncPhase.value = '正在用本地 AI 提取待办…'
+  const candidates = await extractTodosFromNotes({ notes, existingHashes })
+  return enrichCandidates(candidates)
+}
+
+const extractWithCursor = async (project, notes, existingHashes) => {
+  syncPhase.value = '正在启动 Agent 桥…'
+  await ensureAgentBridge()
+  syncPhase.value = 'Cursor 结合仓库提取中（可能较久，请稍候）…'
+  notifyToast('正在用 Cursor 结合代码仓库提取…')
+  const extracted = await agentExtract({
+    cwd: project.localPath,
+    notes,
+    provider: 'cursor',
+  })
+  return enrichCandidates(
+    mapCursorExtractCandidates(extracted?.items || [], notes, existingHashes),
+  )
+}
+
 const handleSync = async () => {
   const project = currentProject.value
   if (!project) return
+
+  if (syncing.value) {
+    notifyToast(syncPhase.value || '同步进行中，可先去别处，完成后会缓存待确认')
+    return
+  }
+
+  const pending = getPendingTodoSync(project.id)
+  if (pending?.candidates?.length) {
+    syncCandidates.value = pending.candidates
+    syncPreviewVisible.value = true
+    refreshPendingSyncCount()
+    notifyToast('请先确认上次提取结果，确认或放弃后才能再次同步')
+    return
+  }
+
   if (!Array.isArray(project.tagIds) || !project.tagIds.length) {
     notifyToast('请先编辑事情并绑定同步标签')
     return
   }
 
-  const useCursorExtract =
+  const preferCursor =
     Boolean(project.localPath) && isAgentBridgeAvailable()
+  const canLocalAi = isTodoExtractAiAvailable()
 
-  if (!useCursorExtract && !isTodoExtractAiAvailable()) {
+  if (!preferCursor && !canLocalAi) {
     notifyToast('请先在设置中配置 AI，或关联本地路径使用 Cursor 提取')
     return
   }
-  if (useCursorExtract) {
+  if (preferCursor) {
     const settings = loadAiSettings()
     if (!String(settings.cursorApiKey || settings.apiKey || '').trim()) {
-      notifyToast('请先在设置中填写 Cursor API Key')
-      return
+      if (!canLocalAi) {
+        notifyToast('请先在设置中填写 Cursor API Key')
+        return
+      }
     }
   }
 
+  const projectIdAtStart = project.id
   syncing.value = true
+  syncPhase.value = '正在拉取碎片…'
+  notifyToast('开始同步（后台提取中，可先去别处）')
   try {
     const notes = await fetchNotesForTodoSync({
       tagIds: project.tagIds,
       since: project.lastSyncedAt || null,
     })
     if (!notes.length) {
-      notifyToast('暂无新碎片')
+      notifyToast('暂无新碎片（可检查标签绑定，或清空同步时间后重试）')
       return
     }
 
-    const existingHashes = await fetchSourceHashesByProject(project.id)
+    const existingHashes = await fetchSourceHashesByProject(projectIdAtStart)
     let enriched = []
+    let usedCursor = false
 
-    if (useCursorExtract) {
-      await ensureAgentBridge()
-      const extracted = await agentExtract({
-        cwd: project.localPath,
-        notes,
-        provider: 'cursor',
-      })
-      enriched = mapCursorExtractCandidates(extracted?.items || [], notes, existingHashes).map(
-        (item) => ({
-          ...item,
-          sourceTagName:
-            item.sourceTagName ||
-            (item.sourceTagId ? tagNameById.value[String(item.sourceTagId)] || '' : ''),
-        }),
-      )
+    const settings = loadAiSettings()
+    const hasCursorKey = Boolean(
+      String(settings.cursorApiKey || settings.apiKey || '').trim(),
+    )
+    const tryCursor = preferCursor && hasCursorKey
+
+    if (tryCursor) {
+      try {
+        enriched = await extractWithCursor(project, notes, existingHashes)
+        usedCursor = true
+      } catch (error) {
+        if (!canLocalAi) throw error
+        notifyToast(
+          `Cursor 提取失败，改用本地 AI：${error?.message || '未知错误'}`,
+        )
+        enriched = await extractWithLocalAi(notes, existingHashes)
+      }
     } else {
-      const candidates = await extractTodosFromNotes({ notes, existingHashes })
-      enriched = candidates.map((item) => ({
-        ...item,
-        sourceTagName:
-          item.sourceTagName ||
-          (item.sourceTagId ? tagNameById.value[String(item.sourceTagId)] || '' : ''),
-      }))
+      enriched = await extractWithLocalAi(notes, existingHashes)
     }
 
+    // 仍以启动时的事情为准缓存，避免用户已切到别的事情
+    const targetProject =
+      projects.value.find((item) => item.id === projectIdAtStart) || project
+
     if (!enriched.length) {
-      const synced = await updateProject(project.id, { lastSyncedAt: formatDateTime() })
-      const index = projects.value.findIndex((item) => item.id === synced.id)
-      if (index >= 0) projects.value[index] = synced
-      notifyToast('未提取到新待办，已更新同步时间')
+      notifyToast(
+        `已扫描 ${notes.length} 条碎片，未识别到可执行待办（不会更新同步时间，可改写后再试）`,
+      )
       return
     }
 
     const creatable = enriched.filter((item) => !item.exists)
     if (!creatable.length) {
-      const synced = await updateProject(project.id, { lastSyncedAt: formatDateTime() })
+      const synced = await updateProject(projectIdAtStart, { lastSyncedAt: formatDateTime() })
       const index = projects.value.findIndex((item) => item.id === synced.id)
       if (index >= 0) projects.value[index] = synced
       notifyToast('待办均已存在，已更新同步时间')
       return
     }
 
-    syncCandidates.value = enriched
-    syncPreviewVisible.value = true
+    cacheSyncResult(
+      targetProject,
+      enriched,
+      usedCursor ? 'cursor' : 'local',
+    )
+
+    const stillOnSameProject = currentProjectId.value === projectIdAtStart
+    if (stillOnSameProject) {
+      syncPreviewVisible.value = true
+    }
+    notifyToast(
+      stillOnSameProject
+        ? `已提取 ${creatable.length} 条，请确认写入`
+        : `「${targetProject.name || '事情'}」已提取 ${creatable.length} 条，返回后确认即可`,
+    )
   } catch (error) {
     notifyError(error)
   } finally {
     syncing.value = false
+    syncPhase.value = ''
   }
 }
 
@@ -569,6 +817,7 @@ const handleSyncConfirm = async (selectedItems) => {
         sourceTagId: item.sourceTagId || null,
         sourceTagName: item.sourceTagName || '',
         sourceExcerpt: item.sourceExcerpt,
+        doneWhen: item.doneWhen || '',
         sourceHash: item.sourceHash,
       })
       createdList.push(created)
@@ -583,8 +832,10 @@ const handleSyncConfirm = async (selectedItems) => {
     }
     await loadTodoCounts()
 
+    clearPendingTodoSync(project.id)
     syncPreviewVisible.value = false
     syncCandidates.value = []
+    refreshPendingSyncCount()
     notifyToast(createdList.length ? `已写入 ${createdList.length} 条待办` : '未写入新待办')
   } catch (error) {
     notifyError(error)

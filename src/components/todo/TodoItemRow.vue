@@ -16,7 +16,7 @@
       :class="{ 'is-checked': selected }"
       :aria-pressed="selected"
       aria-label="选中待办"
-      :disabled="busy || editing || todo.done"
+      :disabled="busy || editing"
       @click="emit('select-change', { todo, selected: !selected })"
     >
       <svg
@@ -122,24 +122,34 @@
         >
           查看来源
         </button>
+        <span v-if="todo.doneWhen" class="todo-item-excerpt" :title="todo.doneWhen">
+          验收：{{ todo.doneWhen }}
+        </span>
         <span v-if="todo.sourceExcerpt" class="todo-item-excerpt" :title="todo.sourceExcerpt">
           {{ todo.sourceExcerpt }}
         </span>
       </div>
 
       <div v-if="expanded && runDetail" class="todo-run-detail">
-        <p v-if="runDetail.summary" class="todo-run-summary">{{ runDetail.summary }}</p>
-        <p v-else-if="runDetail.error" class="todo-run-error">{{ runDetail.error }}</p>
-        <p v-else class="todo-run-summary is-muted">暂无摘要</p>
-        <p v-if="usageText(runDetail)" class="todo-run-usage">{{ usageText(runDetail) }}</p>
-        <p v-if="runDetail.changedFiles?.length" class="todo-run-files">
-          改动文件：{{ runDetail.changedFiles.join('、') }}
-        </p>
+        <TodoRunReviewPanel
+          :todo="todo"
+          :run-detail="runDetail"
+          :busy="busy"
+          :show-accept-note="todo.runStatus === 'pending_review'"
+          :load-diff="loadDiff"
+          @checklist-change="onChecklistChange"
+          @review-note-change="onReviewNoteChange"
+        />
       </div>
 
       <div v-if="showReviewActions" class="todo-review-actions">
         <template v-if="todo.runStatus === 'pending_review'">
-          <button type="button" class="todo-review-btn is-primary" :disabled="busy" @click="emit('accept', todo)">
+          <button
+            type="button"
+            class="todo-review-btn is-primary"
+            :disabled="busy"
+            @click="emitAccept"
+          >
             通过
           </button>
           <button type="button" class="todo-review-btn" :disabled="busy" @click="openContinue">
@@ -324,6 +334,7 @@ import { computed, nextTick, ref, watch } from 'vue'
 import { AnimatePresence, motion } from 'motion-v'
 import { useMotionPresets } from '../../composables/useMotionPresets'
 import { TODO_RUN_STATUS_LABEL } from '../../constants/todoRunStatus'
+import TodoRunReviewPanel from './TodoRunReviewPanel.vue'
 
 const props = defineProps({
   todo: {
@@ -346,6 +357,10 @@ const props = defineProps({
     type: Object,
     default: null,
   },
+  loadDiff: {
+    type: Function,
+    default: null,
+  },
 })
 
 const emit = defineEmits([
@@ -361,6 +376,7 @@ const emit = defineEmits([
   'dismiss-failed',
   'load-run',
   'continue',
+  'checklist-change',
 ])
 const { presets } = useMotionPresets()
 
@@ -373,6 +389,8 @@ const logModalVisible = ref(false)
 const logLoading = ref(false)
 const continueOpen = ref(false)
 const continueFeedback = ref('')
+const pendingReviewNote = ref('')
+const pendingChecklist = ref(null)
 let committing = false
 
 const canContinueAccepted = computed(
@@ -390,6 +408,23 @@ const showReviewActions = computed(
     props.todo?.runStatus === 'failed' ||
     canContinueAccepted.value,
 )
+
+const onChecklistChange = (list) => {
+  pendingChecklist.value = list
+  emit('checklist-change', { todo: props.todo, checklist: list })
+}
+
+const onReviewNoteChange = (note) => {
+  pendingReviewNote.value = note
+}
+
+const emitAccept = () => {
+  emit('accept', {
+    todo: props.todo,
+    reviewNote: pendingReviewNote.value,
+    checklist: pendingChecklist.value,
+  })
+}
 
 const usageText = (run) => {
   const usage = run?.usage
