@@ -36,6 +36,22 @@ function hasBridgeDeps(root) {
   return fs.existsSync(path.join(root, 'node_modules', '@cursor', 'sdk'))
 }
 
+function resolveViaWhere(command) {
+  const finder = process.platform === 'win32' ? 'where.exe' : 'which'
+  const found = spawnSync(finder, [command], {
+    encoding: 'utf8',
+    windowsHide: true,
+    shell: false,
+  })
+  if (found.status !== 0) return null
+  return (
+    String(found.stdout || '')
+      .split(/\r?\n/)
+      .map((s) => s.trim())
+      .find((line) => line && fs.existsSync(line)) || null
+  )
+}
+
 function resolveNodeBinary() {
   const execPath = String(process.execPath || '')
   const base = path.basename(execPath).toLowerCase()
@@ -43,19 +59,8 @@ function resolveNodeBinary() {
     return execPath
   }
 
-  const finder = process.platform === 'win32' ? 'where' : 'which'
-  const found = spawnSync(finder, ['node'], {
-    encoding: 'utf8',
-    windowsHide: true,
-    shell: process.platform === 'win32',
-  })
-  if (found.status === 0) {
-    const line = String(found.stdout || '')
-      .split(/\r?\n/)
-      .map((s) => s.trim())
-      .find(Boolean)
-    if (line && fs.existsSync(line)) return line
-  }
+  const fromPath = resolveViaWhere('node')
+  if (fromPath) return fromPath
 
   const fallbacks =
     process.platform === 'win32'
@@ -72,17 +77,36 @@ function resolveNodeBinary() {
   throw new Error('未找到本机 Node.js，请安装 Node.js 并确保终端可执行 node')
 }
 
+/** Windows 上避免 `shell:true` 调 npm（会闪 CMD）；直接跑 npm.cmd */
+function resolveNpmBinary() {
+  if (process.platform !== 'win32') {
+    return resolveViaWhere('npm') || 'npm'
+  }
+  const fromPath = resolveViaWhere('npm.cmd')
+  if (fromPath) return fromPath
+  const nodeDir = path.dirname(resolveNodeBinary())
+  const candidate = path.join(nodeDir, 'npm.cmd')
+  if (fs.existsSync(candidate)) return candidate
+  return 'npm.cmd'
+}
+
 function runNpmInstall(root) {
   const lockFile = path.join(root, 'package-lock.json')
   const args = fs.existsSync(lockFile)
     ? ['ci', '--omit=dev']
     : ['install', '--omit=dev']
-  const result = spawnSync('npm', args, {
+  const npmBin = resolveNpmBinary()
+  const result = spawnSync(npmBin, args, {
     cwd: root,
     stdio: 'ignore',
     windowsHide: true,
-    env: process.env,
-    shell: process.platform === 'win32',
+    env: {
+      ...process.env,
+      npm_config_progress: 'false',
+      npm_config_loglevel: 'error',
+    },
+    // 关键：Windows 下 shell:true 会弹/残留 CMD 窗口
+    shell: false,
   })
   if (result.error) {
     throw new Error(`Agent 桥依赖安装失败：${result.error.message}`)
@@ -213,12 +237,14 @@ function spawnBridge() {
   )
   const outFd = fs.openSync(logPath, 'a')
 
+  // Windows + Electron(uTools) 下 detached:true 容易弹出并残留控制台窗口
   const child = spawn(nodeBin, [entry], {
     cwd: root,
     env,
     stdio: ['ignore', outFd, outFd],
-    detached: true,
+    detached: process.platform !== 'win32',
     windowsHide: true,
+    shell: false,
   })
 
   child.on('error', (error) => {
@@ -230,7 +256,9 @@ function spawnBridge() {
   })
 
   // 勿立刻 close fd，子进程仍在使用
-  child.unref()
+  if (process.platform !== 'win32') {
+    child.unref()
+  }
   bridgeProcess = child
   return { child, nodeBin, entry, root }
 }

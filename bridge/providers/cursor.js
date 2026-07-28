@@ -142,7 +142,8 @@ export default {
     const result = await Agent.prompt(prompt, {
       apiKey: key,
       model: { id: model || 'composer-2.5' },
-      local: { cwd },
+      // 明确不加载用户/项目 MCP、plugins，避免 Windows 上误触发 hooks/.sh 弹窗
+      local: { cwd, settingSources: [] },
     })
     const text = collectTextFromResult(result)
     const items = parseJsonArray(text)
@@ -194,7 +195,8 @@ export default {
         const agentOptions = {
           apiKey: key,
           model: { id: model || 'composer-2.5' },
-          local: { cwd },
+          // 明确不加载用户/项目 MCP、plugins，避免 Windows 上误触发 hooks/.sh 弹窗
+          local: { cwd, settingSources: [] },
         }
         const agent = resumeId
           ? await Agent.resume(resumeId, agentOptions)

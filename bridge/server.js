@@ -1,3 +1,4 @@
+import './winHideConsole.js'
 import http from 'node:http'
 import fs from 'node:fs'
 import path from 'node:path'
@@ -20,6 +21,14 @@ import {
   writeRunSummary,
 } from './archive.js'
 import { createId, readJsonBody, sendJson } from './utils.js'
+
+// Agent shell 会继承这些环境；压低 npm 进度条/交互，减少额外子进程弹窗
+if (process.platform === 'win32') {
+  process.env.npm_config_progress = process.env.npm_config_progress || 'false'
+  process.env.npm_config_loglevel = process.env.npm_config_loglevel || 'error'
+  process.env.npm_config_fund = process.env.npm_config_fund || 'false'
+  process.env.CI = process.env.CI || '1'
+}
 
 const PORT = Number(process.env.LANBITOU_AGENT_BRIDGE_PORT || 39281)
 const HOST = process.env.LANBITOU_AGENT_BRIDGE_HOST || '127.0.0.1'

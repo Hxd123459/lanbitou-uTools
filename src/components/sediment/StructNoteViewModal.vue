@@ -136,6 +136,66 @@
         </header>
 
         <div class="note-view-content-wrap">
+          <div
+            v-if="findOpen && !fetching && !loadError"
+            class="note-view-find-bar"
+            role="search"
+            aria-label="文内查找"
+          >
+            <span class="note-view-find-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+                <circle cx="11" cy="11" r="7" />
+                <path d="m20 20-3.5-3.5" />
+              </svg>
+            </span>
+            <input
+              ref="findInputRef"
+              v-model="findQuery"
+              class="note-view-find-input"
+              type="text"
+              placeholder="文内查找"
+              spellcheck="false"
+              autocomplete="off"
+              @keydown.enter.prevent="handleFindEnter"
+              @keydown.escape.prevent="closeFindBar"
+            />
+            <span class="note-view-find-count" aria-live="polite">
+              {{ findCountLabel }}
+            </span>
+            <button
+              type="button"
+              class="note-view-find-btn"
+              aria-label="上一个匹配"
+              :disabled="!findMatchCount"
+              @click="goFindPrevious"
+            >
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+                <path d="M18 15l-6-6-6 6" />
+              </svg>
+            </button>
+            <button
+              type="button"
+              class="note-view-find-btn"
+              aria-label="下一个匹配"
+              :disabled="!findMatchCount"
+              @click="goFindNext"
+            >
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+                <path d="M6 9l6 6 6-6" />
+              </svg>
+            </button>
+            <button
+              type="button"
+              class="note-view-find-btn note-view-find-btn--close"
+              aria-label="关闭查找"
+              @click="closeFindBar"
+            >
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+                <path d="M6 6l12 12M18 6L6 18" />
+              </svg>
+            </button>
+          </div>
+
           <p v-if="loadError" class="note-view-error">加载失败，请稍后重试</p>
           <p v-else-if="fetching" class="note-view-loading">加载中…</p>
 
@@ -242,6 +302,11 @@ const lastSaved = ref({ title: '', content: '', parentId: 0 })
 const titleInputRef = ref(null)
 const contentEditorRef = ref(null)
 const folderBreadcrumbRef = ref(null)
+const findOpen = ref(false)
+const findQuery = ref('')
+const findInputRef = ref(null)
+const findMatchCount = ref(0)
+const findActiveIndex = ref(-1)
 const pathStack = ref([])
 const folderItemId = ref('')
 const localFragmentNotes = ref([])
@@ -328,6 +393,66 @@ const isDirty = computed(
 const saveButtonDisabled = computed(
   () => saving.value || aiProcessing.value || !canSave.value || (!isDirty.value && saveStatus.value === 'saved'),
 )
+
+const findCountLabel = computed(() => {
+  const q = findQuery.value.trim()
+  if (!q) return ''
+  if (!findMatchCount.value) return '无匹配'
+  return `${findActiveIndex.value + 1} / ${findMatchCount.value}`
+})
+
+const syncFindStateFromEditor = () => {
+  const state = contentEditorRef.value?.getFindState?.()
+  if (!state) {
+    findMatchCount.value = 0
+    findActiveIndex.value = -1
+    return
+  }
+  findMatchCount.value = state.matchCount ?? state.matches?.length ?? 0
+  findActiveIndex.value = state.activeIndex ?? -1
+}
+
+const applyFindQuery = (query) => {
+  contentEditorRef.value?.setFindQuery?.(query)
+  syncFindStateFromEditor()
+}
+
+const openFindBar = async () => {
+  if (fetching.value || loadError.value) return
+  findOpen.value = true
+  await nextTick()
+  findInputRef.value?.focus()
+  findInputRef.value?.select()
+  if (findQuery.value.trim()) {
+    applyFindQuery(findQuery.value)
+  }
+}
+
+const closeFindBar = () => {
+  findOpen.value = false
+  findQuery.value = ''
+  findMatchCount.value = 0
+  findActiveIndex.value = -1
+  contentEditorRef.value?.clearFind?.()
+}
+
+const goFindNext = () => {
+  contentEditorRef.value?.findNext?.()
+  syncFindStateFromEditor()
+}
+
+const goFindPrevious = () => {
+  contentEditorRef.value?.findPrevious?.()
+  syncFindStateFromEditor()
+}
+
+const handleFindEnter = (event) => {
+  if (event.shiftKey) {
+    goFindPrevious()
+  } else {
+    goFindNext()
+  }
+}
 
 const syncLastSavedFromDraft = () => {
   lastSaved.value = {
@@ -631,8 +756,17 @@ const emitClose = () => {
 
 const onKeydown = (e) => {
   if (!props.visible || saving.value) return
+  if ((e.metaKey || e.ctrlKey) && e.key === 'f') {
+    e.preventDefault()
+    openFindBar()
+    return
+  }
   if (e.key === 'Escape') {
     e.preventDefault()
+    if (findOpen.value) {
+      closeFindBar()
+      return
+    }
     if (folderBreadcrumbRef.value?.handleEscape()) return
     if (aiProcessing.value) {
       stopInsertProcessing()
@@ -646,6 +780,16 @@ const onKeydown = (e) => {
     handleSave(false)
   }
 }
+
+watch(findQuery, (query) => {
+  if (!findOpen.value) return
+  applyFindQuery(query)
+})
+
+watch(draftContent, () => {
+  if (!findOpen.value || !findQuery.value.trim()) return
+  nextTick(() => syncFindStateFromEditor())
+})
 
 watch([draftTitle, draftContent, pathStack, localFragmentNotes], () => {
   if (!props.visible || fetching.value || loadError.value) return
@@ -681,6 +825,7 @@ watch(
       window.addEventListener('keydown', onKeydown)
     } else {
       clearAutoSaveTimer()
+      closeFindBar()
       disposeFragmentInsert()
       window.removeEventListener('keydown', onKeydown)
     }
@@ -781,11 +926,95 @@ onBeforeUnmount(() => {
 }
 
 .note-view-content-wrap {
+  position: relative;
   flex: 1;
   min-height: 0;
   display: flex;
   flex-direction: column;
   overflow: hidden;
+}
+
+.note-view-find-bar {
+  position: absolute;
+  top: 12px;
+  right: 24px;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 36px;
+  padding: 4px 8px 4px 10px;
+  border-radius: 10px;
+  border: 1px solid var(--color-border);
+  background: #fff;
+  box-sizing: border-box;
+  box-shadow: 0 8px 24px rgba(24, 24, 27, 0.08);
+}
+
+.note-view-find-bar:focus-within {
+  border-color: rgba(37, 99, 235, 0.45);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.08);
+}
+
+.note-view-find-icon {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  color: var(--color-secondary-text);
+}
+
+.note-view-find-input {
+  width: 168px;
+  height: 28px;
+  margin: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  font-family: inherit;
+  font-size: 14px;
+  line-height: 28px;
+  color: var(--color-text);
+}
+
+.note-view-find-input::placeholder {
+  color: #a1a1aa;
+}
+
+.note-view-find-count {
+  min-width: 48px;
+  padding: 0 2px;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-secondary-text);
+  text-align: center;
+  white-space: nowrap;
+}
+
+.note-view-find-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: rgba(24, 24, 27, 0.06);
+  color: var(--color-primary);
+  cursor: pointer;
+}
+
+.note-view-find-btn:hover:not(:disabled) {
+  background: rgba(24, 24, 27, 0.1);
+}
+
+.note-view-find-btn:disabled {
+  opacity: var(--btn-disabled-opacity, 0.45);
+  cursor: not-allowed;
+}
+
+.note-view-find-btn--close {
+  margin-left: 2px;
 }
 
 .note-view-content-wrap .note-view-loading,

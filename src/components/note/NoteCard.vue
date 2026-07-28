@@ -191,6 +191,26 @@
         </motion.button>
         <motion.button
           v-if="!isEditing"
+          ref="shareBtnRef"
+          class="icon-btn"
+          :class="{ 'is-active': shareMenuOpen }"
+          type="button"
+          title="分享卡片"
+          :while-hover="presets.button.hover"
+          :while-tap="presets.button.tap"
+          :transition="presets.button.transition"
+          @click.stop="toggleShareMenu"
+        >
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="none"
+            stroke="currentColor" stroke-width="1.8" stroke-linecap="round"
+            stroke-linejoin="round" aria-hidden="true">
+            <rect x="4" y="4" width="16" height="16" rx="2" />
+            <path d="M8 9h8M8 13h5" />
+            <path d="M12 17v3M9 20h6" />
+          </svg>
+        </motion.button>
+        <motion.button
+          v-if="!isEditing"
           class="icon-btn"
           type="button"
           title="编辑"
@@ -516,6 +536,62 @@
       </div>
 
       <div
+        v-if="shareMenuOpen"
+        ref="shareMenuRef"
+        class="struct-note-slash-menu struct-note-slash-menu--compact"
+        data-note-share-menu
+        role="listbox"
+        aria-label="分享选项"
+        :style="shareMenuStyle"
+        @mousedown.prevent
+      >
+        <button
+          v-for="(item, index) in shareMenuItems"
+          :key="item.mode"
+          type="button"
+          class="struct-note-slash-menu__item"
+          :class="{ 'struct-note-slash-menu__item--active': index === shareMenuIndex }"
+          role="option"
+          :aria-selected="index === shareMenuIndex"
+          :disabled="shareBusy"
+          @click="applyShareMenuItem(item)"
+        >
+          <span class="struct-note-slash-menu__icon" aria-hidden="true">
+            <svg
+              v-if="item.mode === 'share-copy'"
+              viewBox="0 0 24 24"
+              width="14"
+              height="14"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.8"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+              <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+            </svg>
+            <svg
+              v-else
+              viewBox="0 0 24 24"
+              width="14"
+              height="14"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.8"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <path d="M12 3v12" />
+              <path d="m8 11 4 4 4-4" />
+              <path d="M4 21h16" />
+            </svg>
+          </span>
+          <span class="struct-note-slash-menu__label">{{ item.label }}</span>
+        </button>
+      </div>
+
+      <div
         v-if="copyMenuOpen"
         ref="copyMenuRef"
         class="struct-note-slash-menu struct-note-slash-menu--compact"
@@ -611,6 +687,7 @@ import {
   getNoteImages,
   getNotePlainText,
 } from '../../utils/copyNoteContent'
+import { shareNoteCardByMode } from '../../utils/shareNoteCard'
 
 const { presets, reduced } = useMotionPresets()
 
@@ -710,7 +787,7 @@ let lastListScrollTop = 0
 let selectClickTimer = null
 
 const CARD_INTERACTIVE_SELECTOR =
-  'a, button, input, textarea, label, .attachment-strip, .editor-attachment-strip, .gallery, .file-list, .tile, .note-select-control, .note-tag, .lightbox, [data-note-copy-menu]'
+  'a, button, input, textarea, label, .attachment-strip, .editor-attachment-strip, .gallery, .file-list, .tile, .note-select-control, .note-tag, .lightbox, [data-note-copy-menu], [data-note-share-menu]'
 
 const HIGHLIGHT_CLASS = 'note-highlight'
 const HIGHLIGHT_SKIP_SELECTOR = 'pre, code, .hljs'
@@ -814,6 +891,18 @@ const copyMenuItems = computed(() => {
     },
   ]
 })
+
+const shareBtnRef = ref(null)
+const shareMenuRef = ref(null)
+const shareMenuOpen = ref(false)
+const shareMenuIndex = ref(0)
+const shareBusy = ref(false)
+const shareMenuStyle = ref({ left: '0px', top: '0px', visibility: 'hidden' })
+
+const shareMenuItems = [
+  { mode: 'share-copy', label: '复制分享图' },
+  { mode: 'share-save', label: '保存分享图' },
+]
 
 const openRecallModal = () => {
   if (!hasRecallId.value) return
@@ -1160,6 +1249,7 @@ const toggleCopyMenu = async () => {
     closeCopyMenu()
     return
   }
+  closeShareMenu()
   copyMenuOpen.value = true
   copyMenuIndex.value = copyMenuItems.value.findIndex((item) => !item.disabled)
   if (copyMenuIndex.value < 0) copyMenuIndex.value = 0
@@ -1179,6 +1269,117 @@ const applyCopyMenuItem = async (item) => {
     emit('copy-failed', { mode: item.mode })
   } finally {
     copyBusy.value = false
+  }
+}
+
+const closeShareMenu = () => {
+  shareMenuOpen.value = false
+  shareMenuIndex.value = 0
+  shareMenuStyle.value = { left: '0px', top: '0px', visibility: 'hidden' }
+}
+
+const positionShareMenu = async () => {
+  const anchor = shareBtnRef.value?.$el ?? shareBtnRef.value
+  if (!(anchor instanceof HTMLElement)) return
+
+  await nextTick()
+  const viewportPadding = 8
+  const menuGap = 6
+  const rect = anchor.getBoundingClientRect()
+  let left = rect.left
+  let top = rect.bottom + menuGap
+
+  shareMenuStyle.value = {
+    left: `${left}px`,
+    top: `${top}px`,
+    visibility: 'hidden',
+  }
+
+  requestAnimationFrame(() => {
+    const menuEl = shareMenuRef.value
+    if (!menuEl) return
+
+    const menuRect = menuEl.getBoundingClientRect()
+    if (menuRect.bottom > window.innerHeight - viewportPadding) {
+      top = Math.max(viewportPadding, rect.top - menuRect.height - menuGap)
+    }
+    if (left + menuRect.width > window.innerWidth - viewportPadding) {
+      left = Math.max(
+        viewportPadding,
+        window.innerWidth - menuRect.width - viewportPadding,
+      )
+    }
+
+    shareMenuStyle.value = {
+      left: `${left}px`,
+      top: `${top}px`,
+      visibility: 'visible',
+    }
+  })
+}
+
+const toggleShareMenu = async () => {
+  if (shareMenuOpen.value) {
+    closeShareMenu()
+    return
+  }
+  closeCopyMenu()
+  shareMenuOpen.value = true
+  shareMenuIndex.value = 0
+  await positionShareMenu()
+}
+
+const applyShareMenuItem = async (item) => {
+  if (!item || shareBusy.value) return
+  shareBusy.value = true
+  try {
+    const result = await shareNoteCardByMode(props.note, item.mode)
+    closeShareMenu()
+    emit('copied', result)
+  } catch (error) {
+    console.error('[NoteCard] share failed:', error)
+    closeShareMenu()
+    emit('copy-failed', { mode: item.mode })
+  } finally {
+    shareBusy.value = false
+  }
+}
+
+const onShareMenuDocumentClick = (event) => {
+  if (!shareMenuOpen.value) return
+  const anchor = shareBtnRef.value?.$el ?? shareBtnRef.value
+  const menuEl = shareMenuRef.value
+  const target = event.target
+  if (anchor?.contains?.(target) || menuEl?.contains?.(target)) return
+  closeShareMenu()
+}
+
+const onShareMenuKeydown = (event) => {
+  if (!shareMenuOpen.value) return
+
+  if (event.key === 'Escape') {
+    event.preventDefault()
+    closeShareMenu()
+    return
+  }
+
+  if (event.key === 'ArrowDown') {
+    event.preventDefault()
+    shareMenuIndex.value = (shareMenuIndex.value + 1) % shareMenuItems.length
+    return
+  }
+
+  if (event.key === 'ArrowUp') {
+    event.preventDefault()
+    shareMenuIndex.value =
+      (shareMenuIndex.value - 1 + shareMenuItems.length) % shareMenuItems.length
+    return
+  }
+
+  if (event.key === 'Enter') {
+    event.preventDefault()
+    const item = shareMenuItems[shareMenuIndex.value]
+    if (item) applyShareMenuItem(item)
   }
 }
 
@@ -1244,6 +1445,7 @@ watch(
       selectedTag.value = null
       closeTagMenu()
       closeCopyMenu()
+      closeShareMenu()
       resetDraftAttachments()
     }
   },
@@ -1255,11 +1457,15 @@ onBeforeUnmount(() => {
   resetDraftAttachments()
   document.removeEventListener('click', onCopyMenuDocumentClick, true)
   document.removeEventListener('keydown', onCopyMenuKeydown, true)
+  document.removeEventListener('click', onShareMenuDocumentClick, true)
+  document.removeEventListener('keydown', onShareMenuKeydown, true)
 })
 
 onMounted(() => {
   document.addEventListener('click', onCopyMenuDocumentClick, true)
   document.addEventListener('keydown', onCopyMenuKeydown, true)
+  document.addEventListener('click', onShareMenuDocumentClick, true)
+  document.addEventListener('keydown', onShareMenuKeydown, true)
   const platform =
     (typeof navigator !== 'undefined' &&
       (navigator.userAgentData?.platform || navigator.platform || '')) ||

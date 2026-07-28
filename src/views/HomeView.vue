@@ -2108,6 +2108,8 @@ const handleCopied = (payload) => {
     rich: payload?.imageCount
       ? `已复制（含 ${payload.imageCount} 张图片）`
       : '已复制（含图片）',
+    'share-copy': '分享图已复制',
+    'share-save': '分享图已保存',
   }
   openToast(messages[mode] || '复制成功', 'success', { duration: 1600 })
 }

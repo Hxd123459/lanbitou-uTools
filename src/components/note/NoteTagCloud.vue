@@ -1,5 +1,14 @@
 <template>
-  <section class="tag-cloud-panel" aria-label="标签云" @click="onPanelClick">
+  <section
+    ref="panelRef"
+    class="tag-cloud-panel"
+    aria-label="标签云"
+    :tabindex="panelTabIndex"
+    @click="onPanelClick"
+    @focus="onPanelFocus"
+    @blur="onPanelBlur"
+    @keydown="onPanelKeydown"
+  >
     <p v-if="loading" class="tag-cloud-status">加载标签中…</p>
     <p v-else-if="error" class="tag-cloud-status tag-cloud-status--error">
       {{ error }}
@@ -13,6 +22,7 @@
         :key="tag.tagId"
         class="tag-cloud-item-wrap"
         role="listitem"
+        :data-tag-id="tag.tagId"
         :class="{
           'is-action-open': actionTagId === tag.tagId,
           'is-editing': editingTagId === tag.tagId,
@@ -79,6 +89,7 @@
           :class="{
             'is-action-open': actionTagId === tag.tagId,
             'is-virtual': tag.isVirtual,
+            'is-keyboard-focused': isTagKeyboardFocused(tag),
           }"
           :title="`${tag.tagName} · ${tag.noteCount} 条笔记`"
           :initial="presets.reveal.initial"
@@ -215,6 +226,8 @@ const creating = ref(false)
 const adding = ref(false)
 const draftTag = ref('')
 const tags = ref([])
+const panelRef = ref(null)
+const focusedIndex = ref(-1)
 const addInputRef = ref(null)
 const editInputRef = ref(null)
 
@@ -249,6 +262,83 @@ let editBlurTimer = 0
 
 const canAddTag = computed(() => isUtoolsMode())
 
+const panelTabIndex = computed(() => {
+  if (!props.active || loading.value || error.value || !tags.value.length) return -1
+  return 0
+})
+
+const navigableTags = computed(() =>
+  tags.value.filter(
+    (tag) => editingTagId.value !== tag.tagId && deletingTagId.value !== tag.tagId,
+  ),
+)
+
+const isTagKeyboardFocused = (tag) => {
+  if (focusedIndex.value < 0) return false
+  return navigableTags.value[focusedIndex.value]?.tagId === tag.tagId
+}
+
+const syncFocusedIndex = () => {
+  const count = navigableTags.value.length
+  if (!count) {
+    focusedIndex.value = -1
+    return
+  }
+  if (focusedIndex.value >= count) focusedIndex.value = count - 1
+}
+
+const scrollFocusedTagIntoView = async () => {
+  await nextTick()
+  const tag = navigableTags.value[focusedIndex.value]
+  if (!tag) return
+  panelRef.value
+    ?.querySelector(`.tag-cloud-item-wrap[data-tag-id="${tag.tagId}"]`)
+    ?.scrollIntoView({ block: 'nearest', inline: 'nearest' })
+}
+
+const onPanelFocus = () => {
+  if (navigableTags.value.length && focusedIndex.value < 0) {
+    focusedIndex.value = 0
+  }
+}
+
+const onPanelBlur = () => {
+  focusedIndex.value = -1
+}
+
+const onPanelKeydown = (event) => {
+  if (adding.value || editingTagId.value != null || deletingTagId.value != null) return
+
+  const items = navigableTags.value
+  if (!items.length) return
+
+  if (event.key === 'ArrowDown') {
+    event.preventDefault()
+    focusedIndex.value =
+      focusedIndex.value < 0 ? 0 : (focusedIndex.value + 1) % items.length
+    scrollFocusedTagIntoView()
+    return
+  }
+
+  if (event.key === 'ArrowUp') {
+    event.preventDefault()
+    focusedIndex.value =
+      focusedIndex.value < 0
+        ? items.length - 1
+        : (focusedIndex.value - 1 + items.length) % items.length
+    scrollFocusedTagIntoView()
+    return
+  }
+
+  if (event.key === 'Enter' && !event.isComposing) {
+    if (focusedIndex.value < 0) return
+    event.preventDefault()
+    const tag = items[focusedIndex.value]
+    if (!tag) return
+    onTagClick(tag)
+  }
+}
+
 const resetTransientState = () => {
   window.clearTimeout(blurTimer)
   window.clearTimeout(editBlurTimer)
@@ -258,6 +348,7 @@ const resetTransientState = () => {
   draftEdit.value = ''
   inlineError.value = ''
   cancelAdd()
+  focusedIndex.value = -1
 }
 
 const closeActionMenu = () => {
@@ -474,6 +565,8 @@ const confirmDelete = async (tag) => {
   }
 }
 
+watch(navigableTags, syncFocusedIndex)
+
 watch(
   () => props.active,
   (on) => {
@@ -504,6 +597,12 @@ defineExpose({ reload: loadTags })
   box-sizing: border-box;
   scrollbar-width: thin;
   scrollbar-color: rgba(24, 24, 27, 0.18) transparent;
+  outline: none;
+}
+
+.tag-cloud-panel:focus-visible {
+  box-shadow: inset 0 0 0 2px rgba(37, 99, 235, 0.12);
+  border-radius: 8px;
 }
 
 .tag-cloud-status {
@@ -567,9 +666,14 @@ defineExpose({ reload: loadTags })
   font-family: inherit;
 }
 
-.tag-cloud-item:hover {
+.tag-cloud-item:hover,
+.tag-cloud-item.is-keyboard-focused {
   border-color: rgba(24, 24, 27, 0.22);
   color: var(--color-primary);
+}
+
+.tag-cloud-item.is-keyboard-focused {
+  box-shadow: var(--focus-ring);
 }
 
 .tag-cloud-count {

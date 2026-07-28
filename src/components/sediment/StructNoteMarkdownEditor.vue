@@ -95,6 +95,7 @@ import {
 } from '../../utils/fragmentIntroMarkers'
 import { createTiptapExtensions } from '../../composables/useTiptapExtensions'
 import { createImageCopyExtension } from '../../extensions/tiptapImageCopy'
+import { createEditorFindExtension, getEditorFindState } from '../../extensions/tiptapEditorFind'
 import { createAttachmentPasteExtension } from '../../extensions/tiptapAttachmentPaste'
 import { prepareAttachmentForInsert } from '../../utils/tiptapAttachmentInsert'
 import { useCopyNote } from '../../composables/useCopyNote'
@@ -286,6 +287,7 @@ const editor = useEditor({
     NodeRange,
     createAttachmentPasteExtension(getImagePasteContext),
     createImageCopyExtension(getImageCopyContext),
+    createEditorFindExtension(),
   ],
   editorProps: {
     attributes: {
@@ -435,7 +437,35 @@ const setStreamingMarkdown = (value, { emitUpdate = false } = {}) => {
   setMarkdownContent(value, { emitUpdate, preserveSelection: 'end' })
 }
 
-defineExpose({ focus, setMarkdownContent, appendMarkdownChunk, setStreamingMarkdown })
+const setFindQuery = (query) => {
+  editor.value?.commands.setFindQuery(query)
+}
+
+const findNext = () => {
+  editor.value?.commands.findNext()
+}
+
+const findPrevious = () => {
+  editor.value?.commands.findPrevious()
+}
+
+const clearFind = () => {
+  editor.value?.commands.clearFind()
+}
+
+const getFindState = () => getEditorFindState(editor.value)
+
+defineExpose({
+  focus,
+  setMarkdownContent,
+  appendMarkdownChunk,
+  setStreamingMarkdown,
+  setFindQuery,
+  findNext,
+  findPrevious,
+  clearFind,
+  getFindState,
+})
 
 onBeforeUnmount(() => {
   unmountStructNoteDragHandle(editor.value, dragHandleApi)
@@ -498,5 +528,19 @@ onBeforeUnmount(() => {
 .struct-note-md-editor :deep(a[href^='blob:']:hover),
 .struct-note-md-editor :deep(a[href^='lb-att://']:hover) {
   background: rgba(37, 99, 235, 0.1);
+}
+
+.struct-note-md-editor :deep(.note-highlight) {
+  background: rgba(37, 99, 235, 0.16);
+  color: var(--color-accent);
+  font-weight: 600;
+  border-radius: 3px;
+  padding: 0 2px;
+  margin: 0 -1px;
+}
+
+.struct-note-md-editor :deep(.note-highlight.is-active-find) {
+  background: rgba(37, 99, 235, 0.32);
+  box-shadow: inset 0 0 0 1px rgba(37, 99, 235, 0.35);
 }
 </style>
