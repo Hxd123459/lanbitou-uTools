@@ -294,6 +294,7 @@
                 @pin="handlePin"
                 @image-too-large="handleImageTooLarge"
                 @file-too-large="handleFileTooLarge"
+                @error="notifyError"
                 @toggle-select="toggleNoteSelect(note.id)"
                 @tag-select="handleTagSelect"
               />
@@ -321,6 +322,7 @@
                 @pin="handlePin"
                 @image-too-large="handleImageTooLarge"
                 @file-too-large="handleFileTooLarge"
+                @error="notifyError"
                 @toggle-select="toggleNoteSelect(note.id)"
                 @tag-select="handleTagSelect"
               />
@@ -349,6 +351,7 @@
                 @pin="handlePin"
                 @image-too-large="handleImageTooLarge"
                 @file-too-large="handleFileTooLarge"
+                @error="notifyError"
                 @toggle-select="toggleNoteSelect(note.id)"
                 @tag-select="handleTagSelect"
               />
@@ -383,6 +386,7 @@
                 @pin="handlePin"
                 @image-too-large="handleImageTooLarge"
                 @file-too-large="handleFileTooLarge"
+                @error="notifyError"
                 @toggle-select="toggleNoteSelect(note.id)"
                 @tag-select="handleTagSelect"
               />

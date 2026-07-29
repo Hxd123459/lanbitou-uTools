@@ -1,7 +1,7 @@
 import { isImageMimeType } from '../../constants/uploadLimits'
 import { ATTACHMENT_PREFIX } from './constants'
 import { dbGetAttachment, dbGetAttachmentType, dbPostAttachment, dbRemove } from './dbClient'
-import { createId, detectMimeType, fileToUint8Array } from './utils'
+import { createId, detectMimeType, fileToUint8Array, toUtoolsAttachmentType } from './utils'
 
 const urlCache = new Map()
 
@@ -10,10 +10,12 @@ export function buildAttachmentId(noteId, imageId) {
 }
 
 export function revokeAttachmentUrl(attachmentId) {
-  const cached = urlCache.get(attachmentId)
-  if (cached) {
-    URL.revokeObjectURL(cached)
-    urlCache.delete(attachmentId)
+  if (!attachmentId) return
+  for (const key of [...urlCache.keys()]) {
+    if (key === attachmentId || key.startsWith(`${attachmentId}::`)) {
+      URL.revokeObjectURL(urlCache.get(key))
+      urlCache.delete(key)
+    }
   }
 }
 
@@ -24,17 +26,21 @@ export function revokeNoteAttachmentUrls(noteId, images = []) {
   })
 }
 
-export function getAttachmentBlobUrl(attachmentId) {
+export function getAttachmentBlobUrl(attachmentId, mimeType = '') {
   if (!attachmentId) return ''
-  const cached = urlCache.get(attachmentId)
+  const cacheKey = mimeType ? `${attachmentId}::${mimeType}` : attachmentId
+  const cached = urlCache.get(cacheKey)
   if (cached) return cached
 
   const buf = dbGetAttachment(attachmentId)
   if (!buf) return ''
 
-  const type = dbGetAttachmentType(attachmentId) || 'image/png'
+  const type =
+    mimeType ||
+    dbGetAttachmentType(attachmentId) ||
+    'application/octet-stream'
   const url = URL.createObjectURL(new Blob([buf], { type }))
-  urlCache.set(attachmentId, url)
+  urlCache.set(cacheKey, url)
   return url
 }
 
@@ -49,7 +55,7 @@ export async function saveImageFiles(noteId, files = [], { onProgress } = {}) {
     const attachmentId = buildAttachmentId(noteId, imageId)
     const mimeType = detectMimeType(file, index)
     const bytes = await fileToUint8Array(file)
-    dbPostAttachment(attachmentId, bytes, mimeType)
+    dbPostAttachment(attachmentId, bytes, toUtoolsAttachmentType(mimeType))
     saved.push({
       id: imageId,
       attachmentId,
@@ -87,7 +93,10 @@ export function imagesToBlocks(noteId, images = []) {
         type: isImageMimeType(mimeType) ? 'image' : 'file',
         fileName: img.fileName || '',
         mimeType,
-        fileUrl: getAttachmentBlobUrl(img.attachmentId || buildAttachmentId(noteId, img.id)),
+        fileUrl: getAttachmentBlobUrl(
+          img.attachmentId || buildAttachmentId(noteId, img.id),
+          mimeType,
+        ),
         sortOrder: img.sortOrder ?? 0,
       }
     })

@@ -88,7 +88,9 @@ import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import {
   persistAttachmentRefsInMarkdown,
   resolveAttachmentRefsInMarkdown,
+  LB_ATT_SCHEME,
 } from '../../utils/attachmentMarkdown'
+import { getAttachmentBlobUrl } from '../../storage/utools/attachment'
 import {
   normalizeMarkdownForCompare,
   setEditorMarkdownContent,
@@ -98,6 +100,7 @@ import { createImageCopyExtension } from '../../extensions/tiptapImageCopy'
 import { createEditorFindExtension, getEditorFindState } from '../../extensions/tiptapEditorFind'
 import { createAttachmentPasteExtension } from '../../extensions/tiptapAttachmentPaste'
 import { prepareAttachmentForInsert } from '../../utils/tiptapAttachmentInsert'
+import { openAttachmentInFilePreview, hasSeenAttachmentPreviewTip, markAttachmentPreviewTipSeen } from '../../utils/openAttachmentPreview'
 import { useCopyNote } from '../../composables/useCopyNote'
 import CopyToast from '../feedback/CopyToast.vue'
 import {
@@ -292,6 +295,43 @@ const editor = useEditor({
   editorProps: {
     attributes: {
       class: 'struct-note-md-prosemirror',
+    },
+    handleDOMEvents: {
+      click: (_view, event) => {
+        const target = event.target
+        if (!(target instanceof Element)) return false
+        const link = target.closest('a[href^="blob:"], a[href^="lb-att://"]')
+        if (!link) return false
+        const href = link.getAttribute('href') || ''
+        const label = (link.textContent || '').trim() || '附件'
+        // 图片仍走默认行为；附件链接跳转文件预览
+        if (link.closest('img') || /^!/.test(label)) return false
+        event.preventDefault()
+        event.stopPropagation()
+        let previewUrl = href
+        if (href.startsWith(LB_ATT_SCHEME)) {
+          const attachmentId = decodeURIComponent(href.slice(LB_ATT_SCHEME.length))
+          previewUrl = getAttachmentBlobUrl(attachmentId) || ''
+        }
+        const openPreview = () => {
+          openAttachmentInFilePreview({
+            url: previewUrl,
+            name: label,
+          }).catch((error) => {
+            console.error('[烂笔头] 打开附件预览失败', error)
+            openToast(error?.message || '打开预览失败', 'error', { duration: 2200 })
+          })
+        }
+        if (!hasSeenAttachmentPreviewTip()) {
+          const ok = window.confirm(
+            '该功能是跳转到其他插件，首次使用需要下载预览插件！',
+          )
+          if (!ok) return true
+          markAttachmentPreviewTipSeen()
+        }
+        openPreview()
+        return true
+      },
     },
   },
   onCreate: ({ editor: currentEditor }) => {

@@ -16,7 +16,7 @@ import {
 import { dbGet, dbPostAttachment, dbPut } from '../storage/utools/dbClient'
 import { pinTypeToWeight } from '../storage/utools/pin'
 import { ensureTag } from '../storage/utools/tagRepository'
-import { formatDateTime } from '../storage/utools/utils'
+import { formatDateTime, toUtoolsAttachmentType } from '../storage/utools/utils'
 import {
   ATTACHMENTS_DIR,
   BACKUP_FORMAT,
@@ -197,7 +197,11 @@ async function restoreNoteAttachments(entryIndex, noteId, imagesMeta = [], files
     const bytes = normalizeImageBytes(fileBytes)
     if (!bytes?.length) continue
     const attachmentId = buildAttachmentId(noteId, item.id)
-    dbPostAttachment(attachmentId, bytes, item.mime || 'application/octet-stream')
+    dbPostAttachment(
+      attachmentId,
+      bytes,
+      toUtoolsAttachmentType(item.mime || item.mimeType || 'application/octet-stream'),
+    )
   }
 }
 

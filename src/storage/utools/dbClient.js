@@ -72,7 +72,13 @@ export async function dbAllDocs(prefix) {
 
 export function dbPostAttachment(id, attachment, type) {
   const db = getDb()
-  const result = db.postAttachment(id, attachment, type)
+  let result = db.postAttachment(id, attachment, type)
+  // 个别 MIME（如 OpenXML 长类型）会被 uTools 参数校验拒绝，回退通用类型再试
+  if (result?.error && /params\s*"type"/i.test(result.message || '')) {
+    if (type !== 'application/octet-stream') {
+      result = db.postAttachment(id, attachment, 'application/octet-stream')
+    }
+  }
   return wrapResult(result, '保存附件')
 }
 

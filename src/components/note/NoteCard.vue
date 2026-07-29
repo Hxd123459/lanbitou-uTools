@@ -501,6 +501,7 @@
         v-if="fileAttachments.length"
         :attachments="fileAttachments"
         :compact="compact"
+        @error="emit('error', $event)"
       />
     </template>
     </div>
@@ -765,6 +766,7 @@ const emit = defineEmits([
   'file-too-large',
   'toggle-select',
   'tag-select',
+  'error',
 ])
 
 const assistantStore = useAssistantStore()
