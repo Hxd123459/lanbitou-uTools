@@ -1,11 +1,47 @@
 <template>
   <motion.div
     class="profile-panel-card"
+    :class="{ 'profile-panel-card--embedded': embedded }"
     :initial="cardMotion.initial"
     :animate="cardMotion.animate"
     :transition="cardMotion.transition"
   >
-    <SettingsSectionHeading title="我的画像与文风" />
+    <div class="profile-panel-head">
+      <SettingsSectionHeading title="我的画像与文风" />
+      <div
+        class="profile-tip"
+        :class="{ 'is-open': disclaimerOpen }"
+        @mouseenter="disclaimerHover = true"
+        @mouseleave="disclaimerHover = false"
+      >
+        <button
+          type="button"
+          class="profile-tip-btn"
+          aria-label="深层人格说明"
+          :aria-expanded="disclaimerVisible"
+          @click.stop="disclaimerOpen = !disclaimerOpen"
+        >
+          <svg class="profile-tip-icon" viewBox="0 0 16 16" aria-hidden="true">
+            <circle cx="8" cy="8" r="7" fill="none" stroke="currentColor" stroke-width="1.5" />
+            <path
+              d="M8 4.6v5"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.6"
+              stroke-linecap="round"
+            />
+            <circle cx="8" cy="11.6" r="0.85" fill="currentColor" />
+          </svg>
+        </button>
+        <div
+          v-show="disclaimerVisible"
+          class="profile-tip-bubble"
+          role="tooltip"
+        >
+          深层人格是根据记录形成的概率性观察，不是心理诊断。每条洞察均需多条原文证据，并允许你纠正。
+        </div>
+      </div>
+    </div>
 
     <p v-if="!utoolsMode" class="profile-hint">仅 uTools 环境下可用。</p>
 
@@ -86,9 +122,6 @@
       </div>
 
       <p v-if="inlineError" class="profile-inline-error">{{ inlineError }}</p>
-      <p class="personality-disclaimer">
-        深层人格是根据记录形成的概率性观察，不是心理诊断。每条洞察均需多条原文证据，并允许你纠正。
-      </p>
 
       <div class="profile-list">
         <article
@@ -190,7 +223,7 @@
 </template>
 
 <script setup>
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { motion } from 'motion-v'
 import { useMotionPresets } from '../../composables/useMotionPresets'
 import { isUtoolsMode } from '../../storage/env'
@@ -218,6 +251,10 @@ const props = defineProps({
     type: Boolean,
     default: false,
   },
+  embedded: {
+    type: Boolean,
+    default: false,
+  },
 })
 
 const { presets } = useMotionPresets()
@@ -233,6 +270,26 @@ const editingType = ref('')
 const editingText = ref('')
 const editSaving = ref(false)
 const expandedTypes = ref(new Set())
+const disclaimerHover = ref(false)
+const disclaimerOpen = ref(false)
+
+const disclaimerVisible = computed(
+  () => disclaimerHover.value || disclaimerOpen.value,
+)
+
+const closeDisclaimerOnOutside = (event) => {
+  if (!disclaimerOpen.value) return
+  const tip = event.target?.closest?.('.profile-tip')
+  if (!tip) disclaimerOpen.value = false
+}
+
+onMounted(() => {
+  document.addEventListener('click', closeDisclaimerOnOutside)
+})
+
+onUnmounted(() => {
+  document.removeEventListener('click', closeDisclaimerOnOutside)
+})
 
 const isExpanded = (type) => expandedTypes.value.has(type)
 
@@ -434,6 +491,84 @@ const handleInsightFeedback = async ({ item, status }) => {
   border-radius: var(--radius-lg);
   background: var(--color-surface);
   box-shadow: var(--shadow-card);
+  box-sizing: border-box;
+}
+
+.profile-panel-card--embedded {
+  margin-top: 0;
+  max-width: none;
+  width: 100%;
+}
+
+.profile-panel-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.profile-panel-head :deep(.settings-section-heading) {
+  margin-bottom: 0;
+}
+
+.profile-tip {
+  position: relative;
+  flex: 0 0 auto;
+}
+
+.profile-tip-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--color-secondary-text);
+  cursor: pointer;
+}
+
+.profile-tip-btn:hover,
+.profile-tip.is-open .profile-tip-btn {
+  color: var(--color-primary);
+}
+
+.profile-tip-icon {
+  width: 15px;
+  height: 15px;
+  display: block;
+}
+
+.profile-tip-bubble {
+  position: absolute;
+  left: 50%;
+  top: calc(100% + 8px);
+  z-index: 20;
+  width: max-content;
+  max-width: 260px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: #18181b;
+  color: #fafafa;
+  font-size: 12px;
+  line-height: 1.55;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.28);
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
+.profile-tip-bubble::before {
+  content: '';
+  position: absolute;
+  left: 50%;
+  bottom: 100%;
+  width: 0;
+  height: 0;
+  border: 6px solid transparent;
+  border-bottom-color: #18181b;
+  transform: translateX(-50%);
 }
 
 .profile-hint {
@@ -608,16 +743,6 @@ const handleInsightFeedback = async ({ item, status }) => {
 .analysis-progress-detail {
   margin: 7px 0 0;
   font-size: 11px;
-  line-height: 1.5;
-  color: var(--color-secondary-text);
-}
-
-.personality-disclaimer {
-  margin: 0 0 12px;
-  padding: 9px 11px;
-  border-radius: 8px;
-  background: rgba(24, 24, 27, 0.035);
-  font-size: 12px;
   line-height: 1.5;
   color: var(--color-secondary-text);
 }

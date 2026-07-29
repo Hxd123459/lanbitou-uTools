@@ -22,197 +22,205 @@
       <SettingsSectionHeading title="AI 设置" />
     </template>
 
-    <motion.div
-      class="ai-settings-card"
-      :initial="providerCardMotion.initial"
-      :animate="providerCardMotion.animate"
-      :transition="providerCardMotion.transition"
-    >
-      <fieldset class="ai-settings-group">
-        <legend class="ai-settings-label">服务来源</legend>
-        <div class="ai-provider-list">
-          <label
-            v-for="item in providerOptions"
-            :key="item.id"
-            class="ai-provider-option"
-            :class="{ 'is-active': form.provider === item.id }"
-          >
+    <div class="ai-settings-layout" :class="{ 'ai-settings-layout--split': embedded }">
+      <div class="ai-settings-col">
+        <motion.div
+          class="ai-settings-card ai-settings-card--provider"
+          :initial="providerCardMotion.initial"
+          :animate="providerCardMotion.animate"
+          :transition="providerCardMotion.transition"
+        >
+          <fieldset class="ai-settings-group">
+            <legend class="ai-settings-label">服务来源</legend>
+            <div class="ai-provider-list">
+              <label
+                v-for="item in providerOptions"
+                :key="item.id"
+                class="ai-provider-option"
+                :class="{ 'is-active': form.provider === item.id }"
+              >
+                <input
+                  v-model="form.provider"
+                  type="radio"
+                  class="ai-provider-input"
+                  name="ai-provider"
+                  :value="item.id"
+                />
+                <span class="ai-provider-name">{{ item.label }}</span>
+                <span v-if="item.id === 'utools'" class="ai-provider-hint">使用 uTools 平台额度</span>
+              </label>
+            </div>
+          </fieldset>
+
+          <template v-if="form.provider !== 'utools'">
+            <label class="ai-settings-field">
+              <span class="ai-settings-label">API Key</span>
+              <input
+                v-model="form.apiKey"
+                type="password"
+                class="ai-settings-input"
+                placeholder="sk-..."
+                autocomplete="off"
+                spellcheck="false"
+              />
+            </label>
+
+            <label class="ai-settings-field">
+              <span class="ai-settings-label">Base URL</span>
+              <input
+                v-model="form.baseUrl"
+                type="url"
+                class="ai-settings-input"
+                :placeholder="currentProvider.defaultBaseUrl"
+                spellcheck="false"
+              />
+            </label>
+
+            <label class="ai-settings-field">
+              <span class="ai-settings-label">模型</span>
+              <input
+                v-model="form.model"
+                type="text"
+                class="ai-settings-input"
+                :placeholder="currentProvider.defaultModel"
+                spellcheck="false"
+              />
+            </label>
+          </template>
+
+          <label v-else class="ai-settings-field">
+            <span class="ai-settings-label">模型（可选）</span>
             <input
-              v-model="form.provider"
-              type="radio"
-              class="ai-provider-input"
-              name="ai-provider"
-              :value="item.id"
+              v-model="form.model"
+              type="text"
+              class="ai-settings-input"
+              placeholder="留空则使用 uTools 默认模型"
+              spellcheck="false"
             />
-            <span class="ai-provider-name">{{ item.label }}</span>
-            <span v-if="item.id === 'utools'" class="ai-provider-hint">使用 uTools 平台额度</span>
           </label>
-        </div>
-      </fieldset>
 
-      <template v-if="form.provider !== 'utools'">
-        <label class="ai-settings-field">
-          <span class="ai-settings-label">API Key</span>
-          <input
-            v-model="form.apiKey"
-            type="password"
-            class="ai-settings-input"
-            placeholder="sk-..."
-            autocomplete="off"
-            spellcheck="false"
-          />
-        </label>
+          <label class="ai-settings-field">
+            <span class="ai-settings-label">Cursor API Key（待办 Agent）</span>
+            <input
+              v-model="form.cursorApiKey"
+              type="password"
+              class="ai-settings-input"
+              placeholder="用于本地项目提取/执行"
+              autocomplete="off"
+              spellcheck="false"
+            />
+            <span class="ai-settings-field-hint">仅本机桥使用，与上方服务来源独立</span>
+          </label>
 
-        <label class="ai-settings-field">
-          <span class="ai-settings-label">Base URL</span>
-          <input
-            v-model="form.baseUrl"
-            type="url"
-            class="ai-settings-input"
-            :placeholder="currentProvider.defaultBaseUrl"
-            spellcheck="false"
-          />
-        </label>
+          <p v-if="providerStatusMessage" class="ai-settings-status" :class="providerStatusType">
+            {{ providerStatusMessage }}
+          </p>
 
-        <label class="ai-settings-field">
-          <span class="ai-settings-label">模型</span>
-          <input
-            v-model="form.model"
-            type="text"
-            class="ai-settings-input"
-            :placeholder="currentProvider.defaultModel"
-            spellcheck="false"
-          />
-        </label>
-      </template>
+          <div class="ai-settings-actions">
+            <AppButton
+              class="btn btn-dashed-tile ai-settings-btn"
+              :disabled="testing"
+              @click="handleTest"
+            >
+              {{ testing ? '测试中…' : '测试连接' }}
+            </AppButton>
+            <AppButton
+              class="btn btn-primary ai-settings-btn"
+              :disabled="saving"
+              @click="handleSave"
+            >
+              {{ saving ? '保存中…' : '保存设置' }}
+            </AppButton>
+          </div>
+        </motion.div>
 
-      <label v-else class="ai-settings-field">
-        <span class="ai-settings-label">模型（可选）</span>
-        <input
-          v-model="form.model"
-          type="text"
-          class="ai-settings-input"
-          placeholder="留空则使用 uTools 默认模型"
-          spellcheck="false"
-        />
-      </label>
-
-      <label class="ai-settings-field">
-        <span class="ai-settings-label">Cursor API Key（待办 Agent）</span>
-        <input
-          v-model="form.cursorApiKey"
-          type="password"
-          class="ai-settings-input"
-          placeholder="用于本地项目提取/执行"
-          autocomplete="off"
-          spellcheck="false"
-        />
-        <span class="ai-settings-field-hint">仅本机桥使用，与上方服务来源独立</span>
-      </label>
-
-      <p v-if="providerStatusMessage" class="ai-settings-status" :class="providerStatusType">
-        {{ providerStatusMessage }}
-      </p>
-
-      <div class="ai-settings-actions">
-        <AppButton
-          class="btn btn-dashed-tile ai-settings-btn"
-          :disabled="testing"
-          @click="handleTest"
+        <motion.div
+          class="ai-settings-card ai-settings-card--auto-tag"
+          :initial="autoTagCardMotion.initial"
+          :animate="autoTagCardMotion.animate"
+          :transition="autoTagCardMotion.transition"
         >
-          {{ testing ? '测试中…' : '测试连接' }}
-        </AppButton>
-        <AppButton
-          class="btn btn-primary ai-settings-btn"
-          :disabled="saving"
-          @click="handleSave"
-        >
-          {{ saving ? '保存中…' : '保存设置' }}
-        </AppButton>
+          <label class="ai-settings-toggle-row">
+            <span class="ai-settings-label">AI 整理时模仿我的文风</span>
+            <span class="ai-switch" :class="{ 'is-on': form.mimicWritingStyle }">
+              <input
+                v-model="form.mimicWritingStyle"
+                type="checkbox"
+                class="ai-switch-input"
+                aria-label="AI 整理时模仿我的文风"
+                @change="handleMimicStyleToggle"
+              />
+              <span class="ai-switch-track" aria-hidden="true">
+                <span class="ai-switch-thumb" />
+              </span>
+            </span>
+          </label>
+          <p class="ai-settings-hint">
+            从你的手写碎片中抽取样本，让 AI 整理初稿时更接近你的表达习惯。样本不足时自动跳过。
+          </p>
+        </motion.div>
       </div>
-    </motion.div>
 
-    <motion.div
-      class="ai-settings-card ai-settings-card--auto-tag"
-      :initial="autoTagCardMotion.initial"
-      :animate="autoTagCardMotion.animate"
-      :transition="autoTagCardMotion.transition"
-    >
-      <label class="ai-settings-toggle-row">
-        <span class="ai-settings-label">AI 整理时模仿我的文风</span>
-        <span class="ai-switch" :class="{ 'is-on': form.mimicWritingStyle }">
-          <input
-            v-model="form.mimicWritingStyle"
-            type="checkbox"
-            class="ai-switch-input"
-            aria-label="AI 整理时模仿我的文风"
-            @change="handleMimicStyleToggle"
-          />
-          <span class="ai-switch-track" aria-hidden="true">
-            <span class="ai-switch-thumb" />
-          </span>
-        </span>
-      </label>
-      <p class="ai-settings-hint">
-        从你的手写碎片中抽取样本，让 AI 整理初稿时更接近你的表达习惯。样本不足时自动跳过。
-      </p>
-    </motion.div>
+      <div class="ai-settings-side">
+        <slot name="side" />
 
-    <motion.div
-      class="ai-settings-card ai-settings-card--auto-tag"
-      :initial="autoTagCardMotion.initial"
-      :animate="autoTagCardMotion.animate"
-      :transition="{ ...autoTagCardMotion.transition, delay: 0.02 }"
-    >
-      <label class="ai-settings-toggle-row">
-        <span class="ai-settings-label">AI 整理后自动去 AI 味</span>
-        <span class="ai-switch" :class="{ 'is-on': form.humanizeDraft }">
-          <input
-            v-model="form.humanizeDraft"
-            type="checkbox"
-            class="ai-switch-input"
-            aria-label="AI 整理后自动去 AI 味"
-            @change="handleHumanizeDraftToggle"
-          />
-          <span class="ai-switch-track" aria-hidden="true">
-            <span class="ai-switch-thumb" />
-          </span>
-        </span>
-      </label>
-      <p class="ai-settings-hint">
-        初稿生成后自动多做一轮改写：打散均匀的句子节奏、去掉排比和总结套路，降低被 AI 检测的概率。会增加一次模型调用，整理耗时略长。
-      </p>
-    </motion.div>
-
-    <motion.div
-      class="ai-settings-card ai-settings-card--auto-tag"
-      :initial="autoTagCardMotion.initial"
-      :animate="autoTagCardMotion.animate"
-      :transition="{ ...autoTagCardMotion.transition, delay: 0.04 }"
-    >
-      <label class="ai-settings-toggle-row">
-        <span class="ai-settings-label">AI 自动打标签</span>
-        <span
-          class="ai-switch"
-          :class="{ 'is-on': form.autoTagEnabled, 'is-busy': autoTagChecking }"
+        <motion.div
+          class="ai-settings-card ai-settings-card--auto-tag"
+          :initial="autoTagCardMotion.initial"
+          :animate="autoTagCardMotion.animate"
+          :transition="{ ...autoTagCardMotion.transition, delay: 0.02 }"
         >
-          <input
-            v-model="form.autoTagEnabled"
-            type="checkbox"
-            class="ai-switch-input"
-            aria-label="AI 自动打标签"
-            :disabled="autoTagChecking"
-            @change="handleAutoTagToggle"
-          />
-          <span class="ai-switch-track" aria-hidden="true">
-            <span class="ai-switch-thumb" />
-          </span>
-        </span>
-      </label>
-      <p v-if="autoTagStatusMessage" class="ai-settings-auto-tag-status">
-        {{ autoTagStatusMessage }}
-      </p>
-    </motion.div>
+          <label class="ai-settings-toggle-row">
+            <span class="ai-settings-label">AI 自动打标签</span>
+            <span
+              class="ai-switch"
+              :class="{ 'is-on': form.autoTagEnabled, 'is-busy': autoTagChecking }"
+            >
+              <input
+                v-model="form.autoTagEnabled"
+                type="checkbox"
+                class="ai-switch-input"
+                aria-label="AI 自动打标签"
+                :disabled="autoTagChecking"
+                @change="handleAutoTagToggle"
+              />
+              <span class="ai-switch-track" aria-hidden="true">
+                <span class="ai-switch-thumb" />
+              </span>
+            </span>
+          </label>
+          <p v-if="autoTagStatusMessage" class="ai-settings-auto-tag-status">
+            {{ autoTagStatusMessage }}
+          </p>
+        </motion.div>
+
+        <motion.div
+          class="ai-settings-card ai-settings-card--auto-tag"
+          :initial="autoTagCardMotion.initial"
+          :animate="autoTagCardMotion.animate"
+          :transition="{ ...autoTagCardMotion.transition, delay: 0.04 }"
+        >
+          <label class="ai-settings-toggle-row">
+            <span class="ai-settings-label">AI 整理后自动去 AI 味</span>
+            <span class="ai-switch" :class="{ 'is-on': form.humanizeDraft }">
+              <input
+                v-model="form.humanizeDraft"
+                type="checkbox"
+                class="ai-switch-input"
+                aria-label="AI 整理后自动去 AI 味"
+                @change="handleHumanizeDraftToggle"
+              />
+              <span class="ai-switch-track" aria-hidden="true">
+                <span class="ai-switch-thumb" />
+              </span>
+            </span>
+          </label>
+          <p class="ai-settings-hint">
+            初稿生成后自动多做一轮改写：打散均匀的句子节奏、去掉排比和总结套路，降低被 AI 检测的概率。会增加一次模型调用，整理耗时略长。
+          </p>
+        </motion.div>
+      </div>
+    </div>
   </component>
 </template>
 
@@ -441,6 +449,27 @@ onMounted(hydrate)
   padding: 0;
 }
 
+.ai-settings-layout {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.ai-settings-layout--split {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 14px;
+  align-items: start;
+}
+
+.ai-settings-col,
+.ai-settings-side {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
+}
+
 .ai-settings-subtitle {
   margin: 0 0 8px;
   font-size: 16px;
@@ -477,10 +506,22 @@ onMounted(hydrate)
   border-radius: var(--radius-lg);
   background: var(--color-surface);
   box-shadow: var(--shadow-card);
+  box-sizing: border-box;
+}
+
+.ai-settings-layout--split .ai-settings-card {
+  max-width: none;
+  width: 100%;
 }
 
 .ai-settings-card--auto-tag {
-  margin-top: 14px;
+  margin-top: 0;
+}
+
+@media (max-width: 900px) {
+  .ai-settings-layout--split {
+    grid-template-columns: 1fr;
+  }
 }
 
 .ai-settings-toggle-row {

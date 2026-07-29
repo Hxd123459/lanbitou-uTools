@@ -20,16 +20,19 @@
       :pending-auto-tag-setup="pendingAutoTagSetup"
       embedded
       @auto-tag-enabled="emit('auto-tag-enabled')"
+    >
+      <template #side>
+        <ProfilePanel :active="active" embedded />
+      </template>
+    </AiSettingsPanel>
+    <SedimentTemplatesPanel
+      :active="active"
+      :highlight-add-card="highlightTemplateAdd"
     />
-    <ProfilePanel :active="active" />
     <DataBackupPanel
       :active="active"
       @imported="emit('imported')"
       @error="emit('error', $event)"
-    />
-    <SedimentTemplatesPanel
-      :active="active"
-      :highlight-add-card="highlightTemplateAdd"
     />
   </motion.section>
 </template>
