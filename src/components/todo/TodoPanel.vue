@@ -35,13 +35,13 @@
       @sync="handleSync"
       @open-pending-sync="openPendingSyncPreview"
       @add-todo="handleAddTodo"
-      @toggle-todo="handleToggleTodo"
       @delete-todo="handleDeleteTodo"
       @open-source="handleOpenSource"
       @open-tag="handleOpenTag"
       @open-sediment-folder="handleOpenSedimentFolder"
       @update-todo-title="handleUpdateTodoTitle"
       @enqueue-selected="handleEnqueueSelected"
+      @run-todo="handleRunTodo"
       @generate-selected="openGenerateModal"
       @cancel-run="cancelActive"
       @accept-todo="handleAcceptTodo"
@@ -337,6 +337,15 @@ const handleEnqueueSelected = async () => {
   }
 }
 
+const handleRunTodo = async (todo) => {
+  try {
+    if (!todo || todo.done) return
+    await enqueue([todo])
+  } catch (error) {
+    notifyError(error)
+  }
+}
+
 const loadTags = async () => {
   try {
     const list = await fetchAllTags()
@@ -502,7 +511,6 @@ const handleAddTodo = async (title) => {
     notifyError(error)
   } finally {
     actionBusy.value = false
-    await detailViewRef.value?.focusInput?.()
   }
 }
 

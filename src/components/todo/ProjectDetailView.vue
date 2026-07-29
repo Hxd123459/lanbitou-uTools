@@ -8,10 +8,28 @@
             class="project-detail-crumb"
             title="返回事情列表"
             @click="emit('back')"
-          >事情</button><span class="project-detail-crumb-sep">/</span><span class="project-detail-title-text">{{ project?.name || '详情' }}</span>
+          >事情</button><span class="project-detail-crumb-sep">/</span><span class="project-detail-title-text">{{ project?.name || '详情' }}</span><button
+            v-if="primaryTag"
+            type="button"
+            class="project-detail-title-tag"
+            :title="`查看标签「${primaryTag.name}」下的碎片`"
+            @click="emit('open-tag', primaryTag)"
+          >#{{ primaryTag.name }}</button>
         </h2>
       </div>
       <div class="project-detail-header-actions">
+        <AppButton
+          type="button"
+          class="btn btn-primary project-detail-add-icon-btn"
+          aria-label="新增待办"
+          title="新增待办"
+          :disabled="busy"
+          @click="startAdd"
+        >
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M12 5v14M5 12h14" />
+          </svg>
+        </AppButton>
         <AppButton type="button" class="btn btn-icon-text" :disabled="busy" @click="emit('edit', project)">
           编辑
         </AppButton>
@@ -53,9 +71,9 @@
           <motion.button
             type="button"
             class="switcher-btn"
-            :class="{ 'is-active': isListTabActive }"
+            :class="{ 'is-active': activeTab === 'todos' }"
             role="tab"
-            :aria-selected="isListTabActive"
+            :aria-selected="activeTab === 'todos'"
             :while-hover="presets.button.hover"
             :while-tap="presets.button.tap"
             :transition="presets.button.transition"
@@ -68,57 +86,6 @@
             </span>
             <span>列表</span>
           </motion.button>
-          <div v-if="canRunAgents" class="switcher-select-slot">
-            <AnimatePresence mode="wait" :initial="false">
-              <motion.button
-                v-if="selectMode && selectedCount > 0"
-                key="selected"
-                type="button"
-                class="switcher-btn"
-                :class="{ 'is-active': isSelectTabActive }"
-                role="tab"
-                :aria-selected="isSelectTabActive"
-                :initial="selectSlotMotion.initial"
-                :animate="selectSlotMotion.animate"
-                :exit="selectSlotMotion.exit"
-                :transition="selectSlotMotion.transition"
-                :while-hover="presets.button.hover"
-                :while-tap="presets.button.tap"
-                @click="setTab('select')"
-              >
-                <span class="switcher-icon" aria-hidden="true">
-                  <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M20 6 9 17l-5-5" />
-                  </svg>
-                </span>
-                <span>已选 {{ selectedCount }}</span>
-              </motion.button>
-              <motion.button
-                v-else
-                key="select"
-                type="button"
-                class="switcher-btn"
-                :class="{ 'is-active': isSelectTabActive }"
-                role="tab"
-                :aria-selected="isSelectTabActive"
-                :initial="selectSlotMotion.initial"
-                :animate="selectSlotMotion.animate"
-                :exit="selectSlotMotion.exit"
-                :transition="selectSlotMotion.transition"
-                :while-hover="presets.button.hover"
-                :while-tap="presets.button.tap"
-                @click="setTab('select')"
-              >
-                <span class="switcher-icon" aria-hidden="true">
-                  <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-                    <rect x="3" y="3" width="18" height="18" rx="3" />
-                    <path d="m9 12 2 2 4-4" />
-                  </svg>
-                </span>
-                <span>多选</span>
-              </motion.button>
-            </AnimatePresence>
-          </div>
           <motion.button
             type="button"
             class="switcher-btn"
@@ -212,95 +179,71 @@
               </span>
             </div>
           </div>
-
-          <div v-if="projectTags.length" class="project-detail-info-tags">
-            <button
-              v-for="tag in projectTags"
-              :key="tag.id"
-              type="button"
-              class="note-tag"
-              :title="`查看标签「${tag.name}」下的碎片`"
-              @click="emit('open-tag', tag)"
-            >
-              #{{ tag.name }}
-            </button>
-          </div>
-        </section>
-
-        <section class="project-profile-block">
-          <h3 class="project-profile-heading">为什么做</h3>
-          <p class="project-profile-body" :class="{ 'is-muted': !project?.purpose }">
-            {{ project?.purpose || '还没写初衷。点右上角编辑补上。' }}
-          </p>
-        </section>
-
-        <section class="project-profile-block project-profile-block--pair">
-          <div>
-            <h3 class="project-profile-heading">怎样算值了</h3>
-            <p class="project-profile-body" :class="{ 'is-muted': !project?.successLooksLike }">
-              {{ project?.successLooksLike || '未填写' }}
-            </p>
-          </div>
-          <div>
-            <h3 class="project-profile-heading">明确不做</h3>
-            <p class="project-profile-body" :class="{ 'is-muted': !project?.outOfScope }">
-              {{ project?.outOfScope || '未填写' }}
-            </p>
-          </div>
         </section>
       </div>
     </div>
 
     <div v-show="activeTab === 'todos'" class="project-detail-pane project-detail-pane--todos">
-      <p class="project-detail-summary" aria-label="任务统计">
-        <strong>{{ stats.total }}</strong> 项
-        <span class="project-detail-summary-sep">·</span>
-        完成 <strong class="is-done">{{ stats.done }}</strong>
-        <span class="project-detail-summary-sep">·</span>
-        未完成 <strong class="is-pending">{{ stats.pending }}</strong>
-      </p>
+      <div class="project-detail-status-filters" role="tablist" aria-label="按状态筛选">
+        <button
+          v-for="opt in statusFilterOptions"
+          :key="opt.key"
+          type="button"
+          class="project-detail-status-filter"
+          :class="[`is-${opt.key}`, { 'is-active': statusFilter === opt.key }]"
+          role="tab"
+          :aria-selected="statusFilter === opt.key"
+          @click="statusFilter = opt.key"
+        >
+          <span class="project-detail-status-filter-label">{{ opt.label }}</span>
+          <span class="project-detail-status-filter-count">{{ statusCounts[opt.key] || 0 }}</span>
+        </button>
+      </div>
 
       <p v-if="!canRunAgents" class="project-detail-path-hint">
         编辑事情并关联本地项目路径后，可排队让 Cursor 执行待办
       </p>
 
-      <form class="project-detail-composer" @submit.prevent="handleAdd">
+      <form v-if="adding" class="project-detail-composer" @submit.prevent="handleAdd">
         <input
           ref="inputRef"
           v-model="draftTitle"
           class="project-detail-input"
           type="text"
           maxlength="240"
-          placeholder="添加待办，回车确认"
+          placeholder="输入待办标题，回车确认"
           :disabled="busy"
+          @keydown.esc.prevent="cancelAdd"
         />
         <AppButton class="btn btn-primary project-detail-add-btn" type="submit" :disabled="busy || !canAdd">
           添加
         </AppButton>
+        <AppButton class="btn btn-icon-text" type="button" :disabled="busy" @click="cancelAdd">
+          取消
+        </AppButton>
       </form>
 
       <p v-if="loading && !todos.length" class="project-detail-state">加载中…</p>
-      <p v-else-if="!todos.length" class="project-detail-state">暂无待办，可手动添加或同步提取</p>
+      <p v-else-if="!todos.length" class="project-detail-state">暂无待办，可点右上角 + 添加或同步提取</p>
+      <p v-else-if="!filteredTodos.length" class="project-detail-state">该状态下暂无待办</p>
 
       <ul
         v-else
         class="project-detail-list"
-        :class="{ 'is-selecting': selectMode && selectedCount > 0 }"
+        :class="{ 'is-selecting': selectedCount > 0 }"
         role="list"
       >
         <TodoItemRow
-          v-for="todo in todos"
+          v-for="todo in filteredTodos"
           :key="todo.id"
           :todo="todo"
           :busy="busy"
-          :select-mode="selectMode"
           :selected="selectedIds.has(String(todo.id))"
+          :can-run-agents="canRunAgents"
           :run-detail="runDetails?.[String(todo.id)] || null"
           :load-diff="loadDiff"
-          @toggle="emit('toggle-todo', $event)"
           @delete="emit('delete-todo', $event)"
           @open-source="emit('open-source', $event)"
-          @open-tag="emit('open-tag', $event)"
           @update-title="emit('update-todo-title', $event)"
           @select-change="onSelectChange"
           @accept="emit('accept-todo', $event)"
@@ -310,12 +253,13 @@
           @load-run="emit('load-run', $event)"
           @continue="emit('continue-todo', $event)"
           @checklist-change="emit('checklist-change', $event)"
+          @run="emit('run-todo', $event)"
         />
       </ul>
 
       <AnimatePresence :initial="false">
         <div
-          v-if="selectMode && selectedCount > 0"
+          v-if="selectedCount > 0"
           key="todo-bulk-bar-wrap"
           class="project-detail-bulk-bar-wrap"
         >
@@ -441,7 +385,6 @@ const emit = defineEmits([
   'sync',
   'open-pending-sync',
   'add-todo',
-  'toggle-todo',
   'delete-todo',
   'open-source',
   'open-tag',
@@ -457,41 +400,55 @@ const emit = defineEmits([
   'load-run',
   'continue-todo',
   'checklist-change',
+  'run-todo',
 ])
 
 const { presets } = useMotionPresets()
 
 const draftTitle = ref('')
 const inputRef = ref(null)
+const adding = ref(false)
 const selectedIds = ref(new Set())
-const selectMode = ref(false)
 const activeTab = ref('todos')
+const statusFilter = ref('all')
 const sedimentFolderName = ref('')
 
 const canAdd = computed(() => String(draftTitle.value || '').trim().length > 0)
 const canRunAgents = computed(() => Boolean(props.project?.localPath))
 const selectedCount = computed(() => selectedIds.value.size)
-const isSelectTabActive = computed(() => selectMode.value && activeTab.value === 'todos')
-const isListTabActive = computed(() => !selectMode.value && activeTab.value === 'todos')
 
 const runningPulse = { opacity: [1, 0.72, 1] }
 const runningTransition = { duration: 1.4, repeat: Infinity, ease: 'easeInOut' }
 
-const selectSlotMotion = computed(() => ({
-  initial: { opacity: 0, x: 10, filter: 'blur(3px)' },
-  animate: { opacity: 1, x: 0, filter: 'blur(0px)' },
-  exit: { opacity: 0, x: -10, filter: 'blur(3px)' },
-  transition: presets.value.fast,
-}))
+const statusFilterOptions = [
+  { key: 'all', label: '全部' },
+  { key: 'idle', label: '未完成' },
+  { key: 'running', label: '执行中' },
+  { key: 'pending_review', label: '待验收' },
+  { key: 'done', label: '已完成' },
+]
 
-const stats = computed(() => {
+const todoStatusKey = (todo) => {
+  if (todo?.done) return 'done'
+  if (todo?.runStatus === 'pending_review') return 'pending_review'
+  if (todo?.runStatus === 'running' || todo?.runStatus === 'queued') return 'running'
+  return 'idle'
+}
+
+const statusCounts = computed(() => {
   const list = Array.isArray(props.todos) ? props.todos : []
-  const done = list.filter((item) => item.done).length
-  return {
-    total: list.length,
-    done,
-    pending: list.length - done,
-  }
+  const counts = { all: list.length, idle: 0, running: 0, pending_review: 0, done: 0 }
+  list.forEach((todo) => {
+    const key = todoStatusKey(todo)
+    counts[key] = (counts[key] || 0) + 1
+  })
+  return counts
+})
+
+const filteredTodos = computed(() => {
+  const list = Array.isArray(props.todos) ? props.todos : []
+  if (statusFilter.value === 'all') return list
+  return list.filter((todo) => todoStatusKey(todo) === statusFilter.value)
 })
 
 const dateRangeText = computed(() => {
@@ -509,15 +466,13 @@ const lastSyncedText = computed(() => {
   return raw.length > 16 ? raw.slice(0, 16) : raw
 })
 
-const projectTags = computed(() => {
+const primaryTag = computed(() => {
   const ids = Array.isArray(props.project?.tagIds) ? props.project.tagIds : []
-  return ids
-    .map((id) => {
-      const name = props.tagNameById[String(id)]
-      if (!name) return null
-      return { id: String(id), name }
-    })
-    .filter(Boolean)
+  const id = ids.length ? String(ids[0]) : ''
+  if (!id) return null
+  const name = props.tagNameById[id]
+  if (!name) return null
+  return { id, name }
 })
 
 watch(
@@ -543,33 +498,34 @@ const focusInput = async () => {
   inputRef.value?.focus?.()
 }
 
+const startAdd = async () => {
+  activeTab.value = 'todos'
+  adding.value = true
+  draftTitle.value = ''
+  await focusInput()
+}
+
+const cancelAdd = () => {
+  adding.value = false
+  draftTitle.value = ''
+}
+
 const handleAdd = async () => {
   const title = String(draftTitle.value || '').trim()
   if (!title) return
   emit('add-todo', title)
   draftTitle.value = ''
-  await focusInput()
-}
-
-const exitSelectMode = () => {
-  selectMode.value = false
-  clearSelection()
+  adding.value = false
 }
 
 const setTab = (tab) => {
-  if (tab === 'select') {
-    activeTab.value = 'todos'
-    selectMode.value = true
-    return
-  }
   if (tab === 'todos') {
     activeTab.value = 'todos'
-    exitSelectMode()
     return
   }
   if (tab === 'detail') {
     activeTab.value = 'detail'
-    exitSelectMode()
+    cancelAdd()
   }
 }
 
@@ -594,12 +550,13 @@ watch(
   () => props.project?.id,
   () => {
     selectedIds.value = new Set()
-    selectMode.value = false
     activeTab.value = 'todos'
+    statusFilter.value = 'all'
+    cancelAdd()
   },
 )
 
-defineExpose({ focusInput, getSelectedTodos, clearSelection })
+defineExpose({ focusInput: startAdd, getSelectedTodos, clearSelection })
 </script>
 
 <style scoped>
@@ -666,6 +623,28 @@ defineExpose({ focusInput, getSelectedTodos, clearSelection })
   white-space: nowrap;
 }
 
+.project-detail-title-tag {
+  flex: 0 0 auto;
+  margin-left: 8px;
+  padding: 2px 8px;
+  border: 0;
+  border-radius: 999px;
+  background: rgba(24, 24, 27, 0.08);
+  color: var(--color-secondary-text);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.5;
+  letter-spacing: 0.2px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.project-detail-title-tag:hover {
+  background: rgba(37, 99, 235, 0.12);
+  color: var(--color-accent);
+}
+
 .project-detail-switcher {
   flex: 0 0 auto;
   display: flex;
@@ -692,14 +671,7 @@ defineExpose({ focusInput, getSelectedTodos, clearSelection })
   gap: 6px;
   flex: 0 1 auto;
   min-width: 0;
-  align-self: center;
-}
-
-.switcher-select-slot {
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-  min-height: 28px;
+  align-self: flex-start;
 }
 
 .switcher-status-area {
@@ -750,9 +722,11 @@ defineExpose({ focusInput, getSelectedTodos, clearSelection })
 .project-detail-pane {
   display: flex;
   flex-direction: column;
+  align-items: stretch;
   gap: 14px;
   min-height: 0;
   flex: 1 1 auto;
+  text-align: left;
 }
 
 .project-detail-pane--todos {
@@ -788,7 +762,10 @@ defineExpose({ focusInput, getSelectedTodos, clearSelection })
   display: flex;
   flex-direction: column;
   gap: 20px;
-  max-width: 680px;
+  width: 100%;
+  max-width: none;
+  align-self: stretch;
+  text-align: left;
 }
 
 .project-profile-hero {
@@ -898,29 +875,66 @@ defineExpose({ focusInput, getSelectedTodos, clearSelection })
   gap: 8px;
 }
 
-.project-detail-summary {
-  margin: 0;
-  font-size: 12px;
+.project-detail-status-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  text-align: left;
+}
+
+.project-detail-status-filter {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 10px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background: rgba(24, 24, 27, 0.05);
   color: var(--color-secondary-text);
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.project-detail-status-filter-count {
+  min-width: 16px;
   font-variant-numeric: tabular-nums;
+  opacity: 0.75;
 }
 
-.project-detail-summary strong {
-  font-weight: 650;
+.project-detail-status-filter.is-idle {
+  background: rgba(100, 116, 139, 0.1);
+  color: #64748b;
+}
+
+.project-detail-status-filter.is-running {
+  background: rgba(37, 99, 235, 0.1);
+  color: #2563eb;
+}
+
+.project-detail-status-filter.is-pending_review {
+  background: rgba(245, 158, 11, 0.12);
+  color: #b45309;
+}
+
+.project-detail-status-filter.is-done {
+  background: rgba(22, 163, 74, 0.1);
+  color: #16a34a;
+}
+
+.project-detail-status-filter.is-active {
+  border-color: currentColor;
+  font-weight: 600;
+  box-shadow: 0 0 0 1px rgba(24, 24, 27, 0.04);
+}
+
+.project-detail-status-filter.is-all.is-active {
+  border-color: rgba(24, 24, 27, 0.28);
   color: var(--color-primary);
-}
-
-.project-detail-summary strong.is-done {
-  color: var(--color-success);
-}
-
-.project-detail-summary strong.is-pending {
-  color: var(--color-accent);
-}
-
-.project-detail-summary-sep {
-  margin: 0 4px;
-  color: rgba(24, 24, 27, 0.28);
+  background: rgba(24, 24, 27, 0.08);
 }
 
 .note-tag {
@@ -946,7 +960,14 @@ button.note-tag:hover {
 .project-detail-header-actions {
   display: flex;
   flex-wrap: wrap;
+  align-items: center;
   gap: 8px;
+}
+
+.project-detail-add-icon-btn {
+  width: 30px;
+  min-width: 30px;
+  padding: 0;
 }
 
 .project-detail-path-hint {
@@ -1124,7 +1145,7 @@ button.note-tag:hover {
 
 .project-detail-state {
   margin: 20px 0;
-  text-align: center;
+  text-align: left;
   font-size: 13px;
   color: var(--color-secondary-text);
 }

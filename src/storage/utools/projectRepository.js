@@ -143,7 +143,7 @@ export async function createProject({
 
   const normalizedTags = normalizeTagIds(tagIds)
   if (Array.isArray(tagIds) && tagIds.filter(Boolean).length > MAX_TAGS_PER_PROJECT) {
-    throw new Error(`一件事情最多绑定 ${MAX_TAGS_PER_PROJECT} 个标签`)
+    throw new Error('一件事情只能绑定 1 个标签')
   }
 
   const now = formatDateTime()
@@ -187,7 +187,7 @@ export async function updateProject(id, patch = {}) {
   }
   if (patch.tagIds != null) {
     if (Array.isArray(patch.tagIds) && patch.tagIds.filter(Boolean).length > MAX_TAGS_PER_PROJECT) {
-      throw new Error(`一件事情最多绑定 ${MAX_TAGS_PER_PROJECT} 个标签`)
+      throw new Error('一件事情只能绑定 1 个标签')
     }
     doc.tagIds = normalizeTagIds(patch.tagIds)
   }

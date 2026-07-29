@@ -277,13 +277,11 @@ const dateRangeOf = (project) => {
 
 const tagsOf = (project) => {
   const ids = Array.isArray(project.tagIds) ? project.tagIds : []
-  return ids
-    .map((id) => {
-      const name = props.tagNameById[String(id)]
-      if (!name) return null
-      return { id: String(id), name }
-    })
-    .filter(Boolean)
+  const firstId = ids.length ? String(ids[0]) : ''
+  if (!firstId) return []
+  const name = props.tagNameById[firstId]
+  if (!name) return []
+  return [{ id: firstId, name }]
 }
 
 const startDelete = (project) => {

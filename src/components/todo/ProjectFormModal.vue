@@ -97,45 +97,9 @@
             </p>
           </div>
 
-          <label class="project-form-modal-field">
-            <span class="project-form-modal-label">为什么做 / 初衷</span>
-            <textarea
-              v-model="purpose"
-              class="project-form-modal-textarea"
-              rows="2"
-              maxlength="2000"
-              placeholder="这件事要解决什么问题？"
-              :disabled="saving"
-            />
-          </label>
-
-          <label class="project-form-modal-field">
-            <span class="project-form-modal-label">怎样算值了</span>
-            <textarea
-              v-model="successLooksLike"
-              class="project-form-modal-textarea"
-              rows="2"
-              maxlength="2000"
-              placeholder="成功时用户能感知到什么？"
-              :disabled="saving"
-            />
-          </label>
-
-          <label class="project-form-modal-field">
-            <span class="project-form-modal-label">明确不做</span>
-            <textarea
-              v-model="outOfScope"
-              class="project-form-modal-textarea"
-              rows="2"
-              maxlength="2000"
-              placeholder="本期刻意不做的范围"
-              :disabled="saving"
-            />
-          </label>
-
           <div class="project-form-modal-field">
-            <span class="project-form-modal-label">同步标签（最多 {{ MAX_TAGS_PER_PROJECT }} 个）</span>
-            <p class="project-form-modal-hint">绑定标签后，可从对应碎片自动提取待办</p>
+            <span class="project-form-modal-label">同步标签（仅 1 个）</span>
+            <p class="project-form-modal-hint">一件事情只绑定一个标签，可从对应碎片自动提取待办</p>
             <p v-if="loadingTags" class="project-form-modal-hint">加载标签中…</p>
             <div v-else-if="!tags.length" class="project-form-modal-hint">暂无标签，可先去碎片里打标</div>
             <div v-else class="project-form-tag-list" role="group" aria-label="选择同步标签">
@@ -177,7 +141,6 @@ import DateRangePicker from '../common/DateRangePicker.vue'
 import { fetchAllTags } from '../../api/note'
 import { pickDirectory } from '../../api/agentBridge'
 import { formatDateTime } from '../../storage/utools/utils'
-import { MAX_TAGS_PER_PROJECT } from '../../constants/todoLimits'
 
 const props = defineProps({
   visible: { type: Boolean, default: false },
@@ -192,9 +155,6 @@ const startAt = ref('')
 const endAt = ref('')
 const localPath = ref('')
 const sedimentFolderId = ref('')
-const purpose = ref('')
-const successLooksLike = ref('')
-const outOfScope = ref('')
 const selectedTagIds = ref([])
 const tags = ref([])
 const loadingTags = ref(false)
@@ -216,22 +176,16 @@ const pickLocalPath = async () => {
 const isTagDisabled = (tagId) => {
   const id = String(tagId)
   if (selectedTagIds.value.includes(id)) return false
-  return selectedTagIds.value.length >= MAX_TAGS_PER_PROJECT
+  return selectedTagIds.value.length >= 1
 }
 
 const toggleTag = (tagId) => {
   const id = String(tagId)
-  const set = new Set(selectedTagIds.value)
-  if (set.has(id)) {
-    set.delete(id)
+  if (selectedTagIds.value.includes(id)) {
+    selectedTagIds.value = []
   } else {
-    if (set.size >= MAX_TAGS_PER_PROJECT) {
-      errorText.value = `一件事情最多绑定 ${MAX_TAGS_PER_PROJECT} 个标签`
-      return
-    }
-    set.add(id)
+    selectedTagIds.value = [id]
   }
-  selectedTagIds.value = [...set]
   errorText.value = ''
 }
 
@@ -253,11 +207,8 @@ const resetForm = () => {
   endAt.value = props.project?.endAt || ''
   localPath.value = props.project?.localPath || ''
   sedimentFolderId.value = props.project?.sedimentFolderId || ''
-  purpose.value = props.project?.purpose || ''
-  successLooksLike.value = props.project?.successLooksLike || ''
-  outOfScope.value = props.project?.outOfScope || ''
   selectedTagIds.value = Array.isArray(props.project?.tagIds)
-    ? props.project.tagIds.map(String)
+    ? props.project.tagIds.map(String).slice(0, 1)
     : []
   errorText.value = ''
 }
@@ -272,8 +223,8 @@ const handleSubmit = () => {
     errorText.value = '结束时间不能早于开始时间'
     return
   }
-  if (selectedTagIds.value.length > MAX_TAGS_PER_PROJECT) {
-    errorText.value = `一件事情最多绑定 ${MAX_TAGS_PER_PROJECT} 个标签`
+  if (selectedTagIds.value.length > 1) {
+    errorText.value = '一件事情只能绑定 1 个标签'
     return
   }
   emit('submit', {
@@ -282,9 +233,6 @@ const handleSubmit = () => {
     startAt: startAt.value || null,
     endAt: endAt.value || null,
     localPath: String(localPath.value || '').trim() || null,
-    purpose: String(purpose.value || '').trim(),
-    successLooksLike: String(successLooksLike.value || '').trim(),
-    outOfScope: String(outOfScope.value || '').trim(),
   })
 }
 
