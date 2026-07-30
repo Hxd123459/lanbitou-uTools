@@ -35,3 +35,8 @@ export async function restoreProject(id) {
   if (!isUtoolsMode()) notSupported()
   return utoolsProject.restoreProject(id)
 }
+
+export async function reorderProjects(orderedIds) {
+  if (!isUtoolsMode()) notSupported()
+  return utoolsProject.reorderProjects(orderedIds)
+}

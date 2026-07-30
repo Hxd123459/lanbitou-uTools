@@ -13,6 +13,7 @@
       @delete="handleDeleteProject"
       @toggle-archive="handleToggleArchive"
       @open-tag="handleOpenTag"
+      @reorder="handleReorderProjects"
     />
 
     <ProjectDetailView
@@ -51,6 +52,7 @@
       @load-run="loadRunForTodo"
       @continue-todo="({ todo, feedback }) => continueTodo(todo, feedback)"
       @checklist-change="handleChecklistChange"
+      @reorder-todos="handleReorderTodos"
     />
 
     <ProjectFormModal
@@ -95,6 +97,7 @@ import {
   createProject,
   deleteProject,
   fetchProjects,
+  reorderProjects,
   updateProject,
 } from '../../api/project'
 import {
@@ -104,6 +107,7 @@ import {
   fetchSourceHashesByProject,
   fetchTodoCountsByProject,
   fetchTodosByProject,
+  reorderTodos,
   softDeleteTodosByProject,
   toggleTodoDone,
   updateTodo,
@@ -210,6 +214,7 @@ const {
   cancelActive,
   loadRunForTodo,
   loadDiffForTodo,
+  preloadRunsForProject,
 } = useTodoRunQueue({
   getProject: () => currentProject.value,
   getTodos: () => todos.value,
@@ -412,6 +417,7 @@ const loadTodos = async () => {
       }
       return todo
     })
+    void preloadRunsForProject(currentProjectId.value)
   } catch (error) {
     todos.value = []
     notifyError(error)
@@ -487,6 +493,48 @@ const handleToggleArchive = async (project) => {
     notifyError(error)
   } finally {
     actionBusy.value = false
+  }
+}
+
+const handleReorderProjects = async (orderedIds) => {
+  const ids = Array.isArray(orderedIds) ? orderedIds : []
+  if (!ids.length) return
+
+  const prev = [...projects.value]
+  const visibleSet = new Set(ids)
+  const queue = [...ids]
+  const fullIds = []
+  for (const item of prev) {
+    if (visibleSet.has(item.id)) fullIds.push(queue.shift())
+    else fullIds.push(item.id)
+  }
+  while (queue.length) fullIds.push(queue.shift())
+
+  const map = new Map(prev.map((item) => [item.id, item]))
+  projects.value = fullIds.map((id) => map.get(id)).filter(Boolean)
+
+  try {
+    await reorderProjects(fullIds)
+    await loadProjects()
+  } catch (error) {
+    notifyError(error)
+    await loadProjects()
+  }
+}
+
+const handleReorderTodos = async (orderedIds) => {
+  const ids = Array.isArray(orderedIds) ? orderedIds : []
+  if (!ids.length) return
+
+  const map = new Map(todos.value.map((item) => [item.id, item]))
+  todos.value = ids.map((id) => map.get(id)).filter(Boolean)
+
+  try {
+    await reorderTodos(ids)
+    await loadTodos()
+  } catch (error) {
+    notifyError(error)
+    await loadTodos()
   }
 }
 

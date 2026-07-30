@@ -29,10 +29,12 @@
           </button>
         </h2>
         <p class="project-detail-meta">
-          <span>{{ dateRangeText }}</span>
-          <span class="project-detail-meta-sep" aria-hidden="true">·</span>
-          <span :class="{ 'is-muted': !lastSyncedText }">
-            最近同步 {{ lastSyncedText || '尚未同步' }}
+          <span class="project-detail-meta-item">
+            <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <rect x="3" y="5" width="18" height="16" rx="2" />
+              <path d="M8 3v4M16 3v4M3 10h18" />
+            </svg>
+            {{ dateRangeText }}
           </span>
         </p>
       </div>
@@ -50,13 +52,20 @@
             <path d="M12 5v14M5 12h14" />
           </svg>
         </AppButton>
+        <span
+          v-if="hasTag"
+          class="project-detail-last-sync"
+          aria-hidden="true"
+        >
+          上一次同步时间：{{ lastSyncedText || '尚未同步' }}
+        </span>
         <AppButton type="button" class="btn btn-icon-text" :disabled="busy" @click="emit('edit', project)">
           编辑
         </AppButton>
         <AppButton
           v-if="hasTag"
           type="button"
-          class="btn btn-primary"
+          class="btn btn-primary project-detail-sync-btn"
           :disabled="busy || syncing || pendingSyncCount > 0"
           :title="
             pendingSyncCount > 0
@@ -87,26 +96,60 @@
     </div>
 
     <div class="project-detail-toolbar">
-      <div class="project-detail-scope" role="tablist" aria-label="按状态筛选">
-        <button
-          v-for="opt in statusFilterOptions"
-          :key="opt.key"
-          type="button"
-          class="project-detail-scope-btn"
-          :class="{ 'is-active': statusFilter === opt.key }"
-          role="tab"
-          :aria-selected="statusFilter === opt.key"
-          @click="statusFilter = opt.key"
+      <div class="project-detail-links">
+        <AppTooltip
+          class="project-detail-icon-tip"
+          :class="{ 'is-muted': !project?.sedimentFolderId }"
+          :text="`沉淀文件夹：${sedimentFolderName || (project?.sedimentFolderId ? '已关联' : '保存事情后自动创建')}`"
         >
-          <motion.span
-            v-if="statusFilter === opt.key"
-            layout-id="todoStatusScope"
-            class="project-detail-scope-active-bg"
-            :transition="presets.layoutSpring"
-          />
-          <span class="project-detail-scope-label">{{ opt.label }}</span>
-          <span class="project-detail-scope-count">{{ statusCounts[opt.key] || 0 }}</span>
-        </button>
+          <button
+            v-if="project?.sedimentFolderId"
+            type="button"
+            class="project-detail-icon-btn"
+            aria-label="沉淀文件夹"
+            @click="emit('open-sediment-folder')"
+          >
+            <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z" />
+            </svg>
+          </button>
+          <span
+            v-else
+            class="project-detail-icon-btn is-static"
+            aria-label="沉淀文件夹"
+          >
+            <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z" />
+            </svg>
+          </span>
+        </AppTooltip>
+
+        <AppTooltip
+          class="project-detail-icon-tip"
+          :class="{ 'is-muted': !project?.localPath }"
+          :text="`代码地址：${project?.localPath || '未关联'}`"
+        >
+          <span class="project-detail-icon-btn is-static" aria-label="代码仓库">
+            <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M9 19c-4.3 1.4-4.3-2.5-6-3m12 5v-3.5c0-1 .1-1.4-.5-2 2.8-.3 5.5-1.4 5.5-6a4.6 4.6 0 0 0-1.3-3.2 4.2 4.2 0 0 0-.1-3.2s-1.1-.3-3.5 1.3a12 12 0 0 0-6 0C6.5 2.8 5.4 3.1 5.4 3.1a4.2 4.2 0 0 0-.1 3.2A4.6 4.6 0 0 0 4 9.5c0 4.6 2.7 5.7 5.5 6-.6.6-.6 1.2-.5 2V21" />
+            </svg>
+          </span>
+        </AppTooltip>
+
+        <AppTooltip
+          class="project-detail-icon-tip"
+          :class="{ 'is-muted': !branchLabel }"
+          :text="`当前分支：${branchTooltip}`"
+        >
+          <span class="project-detail-icon-btn is-static" aria-label="当前分支">
+            <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M6 3v12" />
+              <circle cx="18" cy="6" r="3" />
+              <circle cx="6" cy="18" r="3" />
+              <path d="M18 9a9 9 0 0 1-9 9" />
+            </svg>
+          </span>
+        </AppTooltip>
       </div>
 
       <div class="project-detail-toolbar-right">
@@ -143,40 +186,26 @@
           </span>
         </div>
 
-        <div class="project-detail-links">
+        <div class="project-detail-scope" role="tablist" aria-label="按状态筛选">
           <button
-            v-if="project?.sedimentFolderId"
+            v-for="opt in statusFilterOptions"
+            :key="opt.key"
             type="button"
-            class="project-detail-link"
-            title="打开沉淀文件夹"
-            @click="emit('open-sediment-folder')"
+            class="project-detail-scope-btn"
+            :class="{ 'is-active': statusFilter === opt.key }"
+            role="tab"
+            :aria-selected="statusFilter === opt.key"
+            @click="statusFilter = opt.key"
           >
-            <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-              <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z" />
-            </svg>
-            <span>{{ sedimentFolderName || '沉淀文件夹' }}</span>
+            <motion.span
+              v-if="statusFilter === opt.key"
+              layout-id="todoStatusScope"
+              class="project-detail-scope-active-bg"
+              :transition="presets.layoutSpring"
+            />
+            <span class="project-detail-scope-label">{{ opt.label }}</span>
+            <span class="project-detail-scope-count">{{ statusCounts[opt.key] || 0 }}</span>
           </button>
-          <span
-            v-else
-            class="project-detail-link is-muted"
-            title="保存事情后自动创建"
-          >
-            <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-              <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z" />
-            </svg>
-            <span>沉淀文件夹</span>
-          </span>
-
-          <span
-            class="project-detail-link"
-            :class="{ 'is-muted': !project?.localPath }"
-            :title="project?.localPath || '未关联项目仓库'"
-          >
-            <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-              <path d="M9 19c-4.3 1.4-4.3-2.5-6-3m12 5v-3.5c0-1 .1-1.4-.5-2 2.8-.3 5.5-1.4 5.5-6a4.6 4.6 0 0 0-1.3-3.2 4.2 4.2 0 0 0-.1-3.2s-1.1-.3-3.5 1.3a12 12 0 0 0-6 0C6.5 2.8 5.4 3.1 5.4 3.1a4.2 4.2 0 0 0-.1 3.2A4.6 4.6 0 0 0 4 9.5c0 4.6 2.7 5.7 5.5 6-.6.6-.6 1.2-.5 2V21" />
-            </svg>
-            <span>{{ projectPathLabel }}</span>
-          </span>
         </div>
       </div>
     </div>
@@ -204,14 +233,25 @@
         该状态下暂无待办
       </p>
 
-      <ul
+      <VueDraggable
         v-else
+        v-model="sortableTodos"
+        item-key="id"
+        tag="ul"
         class="project-detail-list"
         :class="{ 'is-selecting': selectedCount > 0 }"
         role="list"
+        :animation="180"
+        :disabled="busy || sortSaving || statusFilter !== 'all' || selectedCount > 0"
+        handle=".todo-sort-handle"
+        filter=".todo-item-check, .todo-item-actions, .todo-continue-box, input, textarea"
+        :prevent-on-filter="false"
+        ghost-class="todo-sort-ghost"
+        chosen-class="todo-sort-chosen"
+        @end="onTodoSortEnd"
       >
         <TodoItemRow
-          v-for="todo in filteredTodos"
+          v-for="todo in sortableTodos"
           :key="todo.id"
           :todo="todo"
           :busy="busy"
@@ -219,6 +259,7 @@
           :can-run-agents="canRunAgents"
           :run-detail="runDetails?.[String(todo.id)] || null"
           :load-diff="loadDiff"
+          :sortable="statusFilter === 'all' && selectedCount === 0"
           @delete="emit('delete-todo', $event)"
           @open-source="emit('open-source', $event)"
           @update-title="emit('update-todo-title', $event)"
@@ -232,7 +273,7 @@
           @checklist-change="emit('checklist-change', $event)"
           @run="emit('run-todo', $event)"
         />
-      </ul>
+      </VueDraggable>
 
       <AnimatePresence :initial="false">
         <div
@@ -336,10 +377,13 @@
 <script setup>
 import { computed, ref, watch } from 'vue'
 import { AnimatePresence, motion } from 'motion-v'
+import { VueDraggable } from 'vue-draggable-plus'
 import AppButton from '../motion/AppButton.vue'
+import AppTooltip from '../common/AppTooltip.vue'
 import TodoItemRow from './TodoItemRow.vue'
 import { useMotionPresets } from '../../composables/useMotionPresets'
 import { fetchStructFolder } from '../../api/structFolder'
+import { agentGitStatus, isAgentBridgeAvailable } from '../../api/agentBridge'
 
 const props = defineProps({
   project: { type: Object, default: null },
@@ -378,6 +422,7 @@ const emit = defineEmits([
   'continue-todo',
   'checklist-change',
   'run-todo',
+  'reorder-todos',
 ])
 
 const { presets } = useMotionPresets()
@@ -385,6 +430,10 @@ const { presets } = useMotionPresets()
 const selectedIds = ref(new Set())
 const statusFilter = ref('all')
 const sedimentFolderName = ref('')
+const gitBranch = ref('')
+const gitBranchLoading = ref(false)
+const sortSaving = ref(false)
+const sortableTodos = ref([])
 
 const canRunAgents = computed(() => Boolean(props.project?.localPath))
 const selectedCount = computed(() => selectedIds.value.size)
@@ -399,11 +448,11 @@ const emptyTodosHint = computed(() => {
   return '暂无待办，可点右上角 + 添加'
 })
 
-const projectPathLabel = computed(() => {
-  const path = String(props.project?.localPath || '').trim()
-  if (!path) return '未关联仓库'
-  const parts = path.replace(/\\/g, '/').split('/').filter(Boolean)
-  return parts[parts.length - 1] || path
+const branchLabel = computed(() => String(gitBranch.value || '').trim())
+const branchTooltip = computed(() => {
+  if (!props.project?.localPath) return '未关联代码仓库'
+  if (gitBranchLoading.value) return '读取中…'
+  return branchLabel.value || '无法读取分支'
 })
 
 const runningPulse = { opacity: [1, 0.72, 1] }
@@ -440,6 +489,15 @@ const filteredTodos = computed(() => {
   return list.filter((todo) => todoStatusKey(todo) === statusFilter.value)
 })
 
+watch(
+  filteredTodos,
+  (list) => {
+    sortSaving.value = false
+    sortableTodos.value = [...list]
+  },
+  { immediate: true },
+)
+
 const dateRangeText = computed(() => {
   const start = String(props.project?.startAt || '').slice(0, 10)
   const end = String(props.project?.endAt || '').slice(0, 10)
@@ -464,6 +522,21 @@ const primaryTag = computed(() => {
   return { id, name }
 })
 
+const loadGitBranch = async (localPath) => {
+  const cwd = String(localPath || '').trim()
+  gitBranch.value = ''
+  if (!cwd || !isAgentBridgeAvailable()) return
+  gitBranchLoading.value = true
+  try {
+    const result = await agentGitStatus({ cwd })
+    gitBranch.value = String(result?.branch || '').trim()
+  } catch {
+    gitBranch.value = ''
+  } finally {
+    gitBranchLoading.value = false
+  }
+}
+
 watch(
   () => props.project?.sedimentFolderId,
   async (folderId) => {
@@ -478,6 +551,14 @@ watch(
     } catch {
       sedimentFolderName.value = props.project?.name || '沉淀文件夹'
     }
+  },
+  { immediate: true },
+)
+
+watch(
+  () => props.project?.localPath,
+  (path) => {
+    void loadGitBranch(path)
   },
   { immediate: true },
 )
@@ -497,6 +578,14 @@ const getSelectedTodos = () => {
 
 const clearSelection = () => {
   selectedIds.value = new Set()
+}
+
+const onTodoSortEnd = (evt) => {
+  if (evt.oldIndex === evt.newIndex || evt.oldIndex == null || evt.newIndex == null) return
+  if (statusFilter.value !== 'all') return
+  const orderedIds = sortableTodos.value.map((item) => item.id)
+  sortSaving.value = true
+  emit('reorder-todos', orderedIds)
 }
 
 watch(
@@ -634,12 +723,15 @@ defineExpose({ getSelectedTodos, clearSelection })
   line-height: 1.4;
 }
 
-.project-detail-meta-sep {
-  color: #a1a1aa;
+.project-detail-meta-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
 }
 
-.project-detail-meta .is-muted {
-  color: rgba(24, 24, 27, 0.42);
+.project-detail-meta-item svg {
+  flex: 0 0 auto;
+  color: #a1a1aa;
 }
 
 .project-detail-header-actions {
@@ -647,6 +739,24 @@ defineExpose({ getSelectedTodos, clearSelection })
   flex-wrap: wrap;
   align-items: center;
   gap: 8px;
+}
+
+.project-detail-header-actions:has(.project-detail-sync-btn:hover) .project-detail-last-sync,
+.project-detail-header-actions:has(.project-detail-sync-btn:focus-visible) .project-detail-last-sync {
+  opacity: 1;
+  transform: translateX(0);
+  pointer-events: auto;
+}
+
+.project-detail-last-sync {
+  margin-right: 2px;
+  font-size: 12px;
+  color: var(--color-secondary-text);
+  white-space: nowrap;
+  opacity: 0;
+  transform: translateX(4px);
+  pointer-events: none;
+  transition: opacity 0.18s ease, transform 0.18s ease;
 }
 
 .project-detail-add-icon-btn {
@@ -679,6 +789,52 @@ defineExpose({ getSelectedTodos, clearSelection })
   gap: 10px 14px;
   min-height: 36px;
   flex-wrap: wrap;
+}
+
+.project-detail-links {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  flex: 0 0 auto;
+}
+
+.project-detail-links :deep(.project-detail-icon-tip) {
+  display: inline-flex;
+  align-items: center;
+}
+
+.project-detail-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--color-secondary-text);
+  cursor: pointer;
+}
+
+.project-detail-icon-btn.is-static {
+  cursor: default;
+}
+
+.project-detail-links :deep(.project-detail-icon-tip:hover) .project-detail-icon-btn,
+.project-detail-icon-btn:hover {
+  color: var(--color-text);
+  background: rgba(24, 24, 27, 0.06);
+}
+
+button.project-detail-icon-btn:hover {
+  color: var(--color-accent);
+  background: rgba(37, 99, 235, 0.06);
+}
+
+.project-detail-links :deep(.project-detail-icon-tip.is-muted) .project-detail-icon-btn {
+  color: rgba(24, 24, 27, 0.35);
 }
 
 .project-detail-scope {
@@ -748,54 +904,6 @@ defineExpose({ getSelectedTodos, clearSelection })
   align-items: center;
   min-width: 0;
   overflow: hidden;
-}
-
-.project-detail-links {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  min-width: 0;
-  flex: 0 1 auto;
-}
-
-.project-detail-link {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  max-width: 160px;
-  min-height: 28px;
-  padding: 0 8px;
-  border: 0;
-  border-radius: 6px;
-  background: transparent;
-  color: var(--color-secondary-text);
-  font: inherit;
-  font-size: 12px;
-  line-height: 1.3;
-  cursor: default;
-}
-
-button.project-detail-link {
-  cursor: pointer;
-}
-
-button.project-detail-link:hover {
-  color: var(--color-accent);
-  background: rgba(37, 99, 235, 0.06);
-}
-
-.project-detail-link.is-muted {
-  color: rgba(24, 24, 27, 0.42);
-}
-
-.project-detail-link > span {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.project-detail-link svg {
-  flex: 0 0 auto;
 }
 
 .project-detail-pane {
@@ -984,6 +1092,14 @@ button.project-detail-link:hover {
 
 .project-detail-list.is-selecting {
   padding-bottom: 92px;
+}
+
+.todo-sort-ghost {
+  opacity: 0.4;
+}
+
+.todo-sort-chosen {
+  box-shadow: var(--shadow-float);
 }
 
 @media (max-width: 720px) {

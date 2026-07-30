@@ -51,6 +51,11 @@ export async function softDeleteTodosByProject(projectId) {
   return utoolsTodo.softDeleteTodosByProject(projectId)
 }
 
+export async function reorderTodos(orderedIds) {
+  if (!isUtoolsMode()) notSupported()
+  return utoolsTodo.reorderTodos(orderedIds)
+}
+
 export async function fetchTodosBySourceNoteIds(noteIds, options = {}) {
   if (!isUtoolsMode()) return []
   return utoolsTodo.listTodosBySourceNoteIds(noteIds, options)

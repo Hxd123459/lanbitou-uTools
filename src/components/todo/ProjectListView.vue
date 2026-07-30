@@ -6,34 +6,49 @@
         <p class="project-list-desc">围绕一件事收集待办，可绑定标签自动同步</p>
       </div>
       <div class="project-list-header-actions">
-        <AppButton
+        <button
           type="button"
-          class="btn btn-icon-text project-list-filter"
+          class="project-list-action-btn"
           :class="{ 'is-active': showArchived }"
           @click="showArchived = !showArchived"
         >
           {{ showArchived ? '隐藏已归档' : '显示已归档' }}
-        </AppButton>
-        <AppButton
+        </button>
+        <button
           type="button"
-          class="btn btn-primary"
+          class="project-list-action-btn is-accent"
           :disabled="!canCreate"
           :title="canCreate ? undefined : `最多 ${MAX_PROJECTS} 件事情`"
           @click="emit('create')"
         >
           新建事情
-        </AppButton>
+        </button>
       </div>
     </header>
 
     <p v-if="loading" class="project-list-state">加载中…</p>
-    <p v-else-if="!visibleProjects.length" class="project-list-state">
+    <p v-else-if="!sortableProjects.length" class="project-list-state">
       {{ showArchived ? '暂无事情' : '还没有进行中的事情，点右上角新建' }}
     </p>
 
-    <ul v-else class="project-list" role="list">
-      <motion.li
-        v-for="project in visibleProjects"
+    <VueDraggable
+      v-else
+      v-model="sortableProjects"
+      item-key="id"
+      tag="ul"
+      class="project-list"
+      role="list"
+      :animation="180"
+      :disabled="busy || sortSaving || deletingId != null"
+      handle=".project-sort-handle"
+      filter=".project-card-actions, .project-delete-confirm, .note-tag, input, textarea"
+      :prevent-on-filter="false"
+      ghost-class="project-sort-ghost"
+      chosen-class="project-sort-chosen"
+      @end="onSortEnd"
+    >
+      <li
+        v-for="project in sortableProjects"
         :key="project.id"
         class="project-card"
         :class="{
@@ -41,11 +56,24 @@
           'is-overdue': isOverdue(project),
           'is-deleting': deletingId === project.id,
         }"
-        layout
-        :initial="presets.reveal.initial"
-        :animate="presets.reveal.animate"
       >
         <div class="project-card-meta">
+          <button
+            type="button"
+            class="project-sort-handle"
+            title="拖拽排序"
+            aria-label="拖拽排序"
+            @click.stop
+          >
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true">
+              <circle cx="9" cy="7" r="1.4" />
+              <circle cx="15" cy="7" r="1.4" />
+              <circle cx="9" cy="12" r="1.4" />
+              <circle cx="15" cy="12" r="1.4" />
+              <circle cx="9" cy="17" r="1.4" />
+              <circle cx="15" cy="17" r="1.4" />
+            </svg>
+          </button>
           <div class="project-card-meta-left">
             <button type="button" class="project-card-name" @click="emit('open', project)">
               {{ project.name }}
@@ -197,15 +225,15 @@
             </span>
           </div>
         </button>
-      </motion.li>
-    </ul>
+      </li>
+    </VueDraggable>
   </section>
 </template>
 
 <script setup>
 import { computed, ref, watch } from 'vue'
 import { motion } from 'motion-v'
-import AppButton from '../motion/AppButton.vue'
+import { VueDraggable } from 'vue-draggable-plus'
 import { useMotionPresets } from '../../composables/useMotionPresets'
 import { MAX_PROJECTS } from '../../constants/todoLimits'
 import { formatDateTime } from '../../storage/utools/utils'
@@ -218,20 +246,51 @@ const props = defineProps({
   busy: { type: Boolean, default: false },
 })
 
-const emit = defineEmits(['create', 'open', 'edit', 'delete', 'toggle-archive', 'open-tag'])
+const emit = defineEmits(['create', 'open', 'edit', 'delete', 'toggle-archive', 'open-tag', 'reorder'])
 
 const { presets } = useMotionPresets()
 const showArchived = ref(false)
 const deletingId = ref(null)
 const deleteSaving = ref(false)
+const sortSaving = ref(false)
+const sortableProjects = ref([])
 
 const canCreate = computed(() => (props.projects || []).length < MAX_PROJECTS)
 
-const visibleProjects = computed(() => {
+const syncSortableProjects = () => {
   const list = Array.isArray(props.projects) ? props.projects : []
-  if (showArchived.value) return list
-  return list.filter((item) => item.status !== 'archived')
+  sortableProjects.value = showArchived.value
+    ? [...list]
+    : list.filter((item) => item.status !== 'archived')
+}
+
+syncSortableProjects()
+
+watch(
+  () => props.projects,
+  () => {
+    sortSaving.value = false
+    syncSortableProjects()
+    if (!deletingId.value) return
+    const stillThere = (props.projects || []).some((item) => item.id === deletingId.value)
+    if (!stillThere) {
+      deletingId.value = null
+      deleteSaving.value = false
+    }
+  },
+  { deep: true },
+)
+
+watch(showArchived, () => {
+  syncSortableProjects()
 })
+
+const onSortEnd = (evt) => {
+  if (evt.oldIndex === evt.newIndex || evt.oldIndex == null || evt.newIndex == null) return
+  const orderedIds = sortableProjects.value.map((item) => item.id)
+  sortSaving.value = true
+  emit('reorder', orderedIds)
+}
 
 const emptyStats = { total: 0, done: 0, pending: 0 }
 
@@ -300,19 +359,6 @@ const confirmDelete = (project) => {
 }
 
 watch(
-  () => props.projects,
-  () => {
-    if (!deletingId.value) return
-    const stillThere = (props.projects || []).some((item) => item.id === deletingId.value)
-    if (!stillThere) {
-      deletingId.value = null
-      deleteSaving.value = false
-    }
-  },
-  { deep: true },
-)
-
-watch(
   () => props.busy,
   (busy, wasBusy) => {
     if (wasBusy && !busy && deletingId.value) {
@@ -354,12 +400,45 @@ watch(
 .project-list-header-actions {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  align-items: center;
+  gap: 4px;
   justify-content: flex-end;
 }
 
-.project-list-filter.is-active {
+.project-list-action-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 28px;
+  padding: 4px 10px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--color-secondary-text);
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.project-list-action-btn:hover:not(:disabled) {
+  color: var(--color-text);
+  background: rgba(24, 24, 27, 0.06);
+}
+
+.project-list-action-btn.is-active {
   color: var(--color-accent);
+  font-weight: 600;
+}
+
+.project-list-action-btn.is-accent {
+  color: var(--color-primary);
+  font-weight: 600;
+}
+
+.project-list-action-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
 }
 
 .project-list-state {
@@ -388,6 +467,39 @@ watch(
   border-radius: var(--radius-md);
   background: var(--color-surface);
   box-shadow: var(--shadow-card);
+}
+
+.project-sort-ghost {
+  opacity: 0.45;
+}
+
+.project-sort-chosen {
+  box-shadow: var(--shadow-float);
+}
+
+.project-sort-handle {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 26px;
+  margin-right: 2px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: #a1a1aa;
+  cursor: grab;
+}
+
+.project-sort-handle:hover {
+  color: var(--color-secondary-text);
+  background: rgba(24, 24, 27, 0.06);
+}
+
+.project-sort-handle:active {
+  cursor: grabbing;
 }
 
 .project-card.is-archived {
@@ -457,7 +569,7 @@ watch(
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 10px;
+  gap: 8px;
 }
 
 .project-card-meta-left {
@@ -465,6 +577,7 @@ watch(
   align-items: center;
   gap: 8px;
   min-width: 0;
+  flex: 1 1 auto;
   flex-wrap: wrap;
 }
 
@@ -612,28 +725,26 @@ button.note-tag:hover {
 }
 
 .icon-btn {
-  width: 30px;
-  height: 30px;
+  width: 26px;
+  height: 26px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border: 1px solid var(--color-border);
-  border-radius: 8px;
-  background: var(--color-bg);
+  border: 1px solid transparent;
+  border-radius: 7px;
+  background: transparent;
   color: var(--color-secondary-text);
   cursor: pointer;
   padding: 0;
 }
 
 .icon-btn:hover {
-  border-color: var(--btn-icon-border-hover);
-  background: var(--btn-icon-bg-hover);
-  color: var(--btn-icon-color-hover);
+  background: rgba(24, 24, 27, 0.06);
+  color: var(--color-text);
 }
 
 .icon-btn-danger:hover {
-  border-color: rgba(220, 38, 38, 0.35);
-  background: rgba(220, 38, 38, 0.06);
+  background: rgba(220, 38, 38, 0.08);
   color: var(--color-error);
 }
 

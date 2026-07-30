@@ -9,6 +9,24 @@
     }"
   >
     <button
+      v-if="sortable"
+      type="button"
+      class="todo-sort-handle"
+      title="拖拽排序"
+      aria-label="拖拽排序"
+      :disabled="busy || editing"
+      @click.stop
+    >
+      <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true">
+        <circle cx="9" cy="7" r="1.4" />
+        <circle cx="15" cy="7" r="1.4" />
+        <circle cx="9" cy="12" r="1.4" />
+        <circle cx="15" cy="12" r="1.4" />
+        <circle cx="9" cy="17" r="1.4" />
+        <circle cx="15" cy="17" r="1.4" />
+      </svg>
+    </button>
+    <button
       type="button"
       class="todo-item-check"
       :class="{ 'is-checked': selected }"
@@ -58,6 +76,23 @@
           <span v-if="todo.runStatus === 'running'" class="todo-run-dot" aria-hidden="true" />
           {{ statusText }}
         </motion.span>
+      </div>
+
+      <div v-if="metricsVisible" class="todo-item-metrics" aria-label="执行指标">
+        <span v-if="tokenLabel" class="todo-metric" title="Token 消耗">
+          <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M13 2 3 14h7l-1 8 10-12h-7l1-8z" />
+          </svg>
+          <strong>{{ tokenLabel }}</strong>
+          <span class="todo-metric-unit">tokens</span>
+        </span>
+        <span v-if="durationLabel" class="todo-metric" title="执行耗时">
+          <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <circle cx="12" cy="12" r="9" />
+            <path d="M12 7v5l3 2" />
+          </svg>
+          <strong>{{ durationLabel }}</strong>
+        </span>
       </div>
 
       <div v-if="todo.doneWhen || todo.sourceExcerpt" class="todo-item-meta">
@@ -226,7 +261,7 @@
 </template>
 
 <script setup>
-import { computed, nextTick, ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { motion } from 'motion-v'
 import TodoRunReviewPanel from './TodoRunReviewPanel.vue'
 
@@ -254,6 +289,10 @@ const props = defineProps({
   loadDiff: {
     type: Function,
     default: null,
+  },
+  sortable: {
+    type: Boolean,
+    default: false,
   },
 })
 
@@ -313,6 +352,93 @@ const statusText = computed(() => {
   if (props.todo?.runStatus === 'pending_review') return '待验收'
   if (props.todo?.runStatus === 'running' || props.todo?.runStatus === 'queued') return '执行中'
   return '未完成'
+})
+
+const nowTick = ref(Date.now())
+let tickTimer = null
+
+const parseDateTime = (value) => {
+  const text = String(value || '').trim()
+  if (!text) return NaN
+  const normalized = text.includes('T') ? text : text.replace(' ', 'T')
+  const ms = Date.parse(normalized)
+  if (Number.isFinite(ms)) return ms
+  return Date.parse(text.replace(/-/g, '/'))
+}
+
+const formatTokenCount = (n) => {
+  const num = Number(n) || 0
+  if (num >= 10000) return `${(num / 1000).toFixed(num >= 100000 ? 0 : 1)}k`
+  return String(num)
+}
+
+const formatDurationMs = (ms) => {
+  const total = Math.max(0, Math.round(Number(ms) || 0))
+  const sec = Math.floor(total / 1000)
+  if (sec < 60) return `${sec}s`
+  const min = Math.floor(sec / 60)
+  const rem = sec % 60
+  if (min < 60) return rem ? `${min}分${rem}秒` : `${min}分`
+  const hour = Math.floor(min / 60)
+  const remMin = min % 60
+  return remMin ? `${hour}小时${remMin}分` : `${hour}小时`
+}
+
+const tokenLabel = computed(() => {
+  const usage = props.runDetail?.usage
+  if (!usage) return ''
+  const input = Number(usage.inputTokens) || 0
+  const output = Number(usage.outputTokens) || 0
+  const total = Number(usage.totalTokens) || input + output
+  if (!total && !input && !output) return ''
+  return formatTokenCount(total || input + output)
+})
+
+const durationLabel = computed(() => {
+  const startedAt = props.runDetail?.startedAt
+  if (!startedAt) return ''
+  const startMs = parseDateTime(startedAt)
+  if (!Number.isFinite(startMs)) return ''
+
+  const finishedAt = props.runDetail?.finishedAt
+  const isRunning =
+    props.todo?.runStatus === 'running' || props.todo?.runStatus === 'queued'
+  const endMs = finishedAt && !isRunning
+    ? parseDateTime(finishedAt)
+    : nowTick.value
+  if (!Number.isFinite(endMs) || endMs < startMs) return ''
+  return formatDurationMs(endMs - startMs)
+})
+
+const metricsVisible = computed(() => Boolean(tokenLabel.value || durationLabel.value))
+
+const syncTickTimer = () => {
+  const isRunning =
+    props.todo?.runStatus === 'running' || props.todo?.runStatus === 'queued'
+  if (isRunning && props.runDetail?.startedAt) {
+    if (!tickTimer) {
+      tickTimer = window.setInterval(() => {
+        nowTick.value = Date.now()
+      }, 1000)
+    }
+    return
+  }
+  if (tickTimer) {
+    clearInterval(tickTimer)
+    tickTimer = null
+  }
+}
+
+onMounted(syncTickTimer)
+watch(
+  () => [props.todo?.runStatus, props.runDetail?.startedAt, props.runDetail?.finishedAt],
+  () => {
+    nowTick.value = Date.now()
+    syncTickTimer()
+  },
+)
+onBeforeUnmount(() => {
+  if (tickTimer) clearInterval(tickTimer)
 })
 
 const onChecklistChange = (list) => {
@@ -407,30 +533,63 @@ const toggleExpand = () => {
 }
 
 .todo-item-row.is-selected {
-  border-color: rgba(37, 99, 235, 0.35);
-  background: rgba(37, 99, 235, 0.04);
+  background: rgba(24, 24, 27, 0.04);
+  border-color: rgba(24, 24, 27, 0.22);
+}
+
+.todo-sort-handle {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  margin-top: 2px;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: #a1a1aa;
+  cursor: grab;
+}
+
+.todo-sort-handle:hover:not(:disabled) {
+  color: var(--color-secondary-text);
+  background: rgba(24, 24, 27, 0.06);
+}
+
+.todo-sort-handle:active:not(:disabled) {
+  cursor: grabbing;
+}
+
+.todo-sort-handle:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
 }
 
 .todo-item-check {
   flex: 0 0 auto;
-  width: 22px;
-  height: 22px;
-  margin-top: 1px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border: 1.5px solid rgba(37, 99, 235, 0.35);
-  border-radius: 6px;
-  background: transparent;
-  color: transparent;
+  width: 18px;
+  height: 18px;
+  margin-top: 2px;
+  display: grid;
+  place-items: center;
+  border: 1.5px solid var(--color-border);
+  border-radius: 4px;
+  background: var(--color-surface);
+  color: #ffffff;
   cursor: pointer;
   padding: 0;
+  box-sizing: border-box;
+  transition:
+    background-color 0.18s ease,
+    border-color 0.18s ease;
 }
 
 .todo-item-check.is-checked {
-  background: rgba(37, 99, 235, 0.12);
-  border-color: rgba(37, 99, 235, 0.55);
-  color: var(--color-accent);
+  border-color: #18181b;
+  background: #18181b;
+  color: #ffffff;
 }
 
 .todo-item-check-icon {
@@ -462,6 +621,43 @@ const toggleExpand = () => {
   color: var(--color-text);
   word-break: break-word;
   cursor: text;
+}
+
+.todo-item-metrics {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.todo-metric {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 22px;
+  padding: 0 8px;
+  border-radius: 999px;
+  background: rgba(24, 24, 27, 0.06);
+  color: var(--color-primary);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.2;
+}
+
+.todo-metric svg {
+  flex: 0 0 auto;
+  color: var(--color-secondary-text);
+}
+
+.todo-metric strong {
+  font-weight: 700;
+  letter-spacing: 0.2px;
+}
+
+.todo-metric-unit {
+  color: var(--color-secondary-text);
+  font-weight: 500;
 }
 
 .todo-item-row.is-done .todo-item-title {
@@ -645,6 +841,18 @@ const toggleExpand = () => {
   gap: 2px;
   flex: 0 0 auto;
   margin-top: -2px;
+  opacity: 0;
+  transform: translateY(-1px);
+  pointer-events: none;
+  transition: opacity 0.15s ease, transform 0.15s ease;
+}
+
+.todo-item-row:hover .todo-item-corner-actions,
+.todo-item-row:focus-within .todo-item-corner-actions,
+.todo-item-row.is-editing .todo-item-corner-actions {
+  opacity: 1;
+  transform: translateY(0);
+  pointer-events: auto;
 }
 
 .icon-btn {

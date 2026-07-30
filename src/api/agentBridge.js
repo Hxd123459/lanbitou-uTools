@@ -131,6 +131,10 @@ export async function agentGitBaseline({ cwd } = {}) {
   return agentBridgeRequest('POST', '/git/baseline', { cwd })
 }
 
+export async function agentGitStatus({ cwd } = {}) {
+  return agentBridgeRequest('POST', '/git/status', { cwd })
+}
+
 export async function agentArchive(payload = {}) {
   return agentBridgeRequest('POST', '/archive', payload)
 }

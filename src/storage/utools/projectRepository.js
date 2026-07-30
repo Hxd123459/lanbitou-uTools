@@ -81,6 +81,7 @@ function toProject(doc) {
     outOfScope: String(doc.outOfScope || ''),
     decisions: normalizeDecisions(doc.decisions),
     lastSyncedAt: doc.lastSyncedAt || null,
+    sortOrder: Number.isFinite(Number(doc.sortOrder)) ? Number(doc.sortOrder) : null,
     createTime: doc.createTime || '',
     updateTime: doc.updateTime || '',
     deletedAt: doc.deletedAt || null,
@@ -106,12 +107,23 @@ async function loadAllProjectDocs({ includeDeleted = false } = {}) {
     .filter((doc) => doc?.id && (includeDeleted || !doc.deletedAt))
 }
 
+function compareProjects(a, b) {
+  const ao = a?.sortOrder
+  const bo = b?.sortOrder
+  if (ao != null && bo != null && ao !== bo) return ao - bo
+  if (ao != null && bo == null) return -1
+  if (ao == null && bo != null) return 1
+  return String(b?.updateTime || b?.createTime || '').localeCompare(
+    String(a?.updateTime || a?.createTime || ''),
+  )
+}
+
 export async function listProjects({ includeArchived = false, includeDeleted = false } = {}) {
   const docs = await loadAllProjectDocs({ includeDeleted })
   return docs
     .map(toProject)
     .filter((item) => item && (includeArchived || item.status !== 'archived'))
-    .sort((a, b) => String(b.updateTime || b.createTime || '').localeCompare(String(a.updateTime || a.createTime || '')))
+    .sort(compareProjects)
 }
 
 export async function getProject(id) {
@@ -153,6 +165,11 @@ export async function createProject({
     throw new Error('结束时间不能早于开始时间')
   }
 
+  const existingOrders = existing
+    .map((doc) => Number(doc.sortOrder))
+    .filter((n) => Number.isFinite(n))
+  const nextSortOrder = existingOrders.length ? Math.min(...existingOrders) - 1 : 0
+
   const doc = {
     id: createId(),
     name: trimmed,
@@ -168,6 +185,7 @@ export async function createProject({
     outOfScope: String(outOfScope || '').slice(0, 2000),
     decisions: normalizeDecisions(decisions),
     lastSyncedAt: null,
+    sortOrder: nextSortOrder,
     createTime: now,
     updateTime: now,
     deletedAt: null,
@@ -224,6 +242,10 @@ export async function updateProject(id, patch = {}) {
   if (Object.prototype.hasOwnProperty.call(patch, 'decisions')) {
     doc.decisions = normalizeDecisions(patch.decisions)
   }
+  if (Object.prototype.hasOwnProperty.call(patch, 'sortOrder')) {
+    const n = Number(patch.sortOrder)
+    doc.sortOrder = Number.isFinite(n) ? n : 0
+  }
 
   const start = normalizeProjectDate(doc.startAt) || normalizeProjectDate(doc.createTime)
   const end = normalizeProjectDate(doc.endAt)
@@ -252,4 +274,24 @@ export async function restoreProject(id) {
   doc.updateTime = formatDateTime()
   await saveProjectDoc(doc)
   return true
+}
+
+/** @param {string[]} orderedIds */
+export async function reorderProjects(orderedIds = []) {
+  const ids = (Array.isArray(orderedIds) ? orderedIds : [])
+    .map((id) => String(id ?? '').trim())
+    .filter(Boolean)
+  if (!ids.length) return []
+
+  const now = formatDateTime()
+  const updated = []
+  for (let index = 0; index < ids.length; index += 1) {
+    const doc = await getProjectDoc(ids[index])
+    if (!doc || doc.deletedAt) continue
+    doc.sortOrder = index
+    doc.updateTime = now
+    await saveProjectDoc(doc)
+    updated.push(toProject(doc))
+  }
+  return updated
 }

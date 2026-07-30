@@ -45,6 +45,7 @@ function toTodo(doc) {
     sourceHash: doc.sourceHash || null,
     runStatus: normalizeTodoRunStatus(doc.runStatus),
     lastRunId: doc.lastRunId ? String(doc.lastRunId) : null,
+    sortOrder: Number.isFinite(Number(doc.sortOrder)) ? Number(doc.sortOrder) : null,
     createTime: doc.createTime || '',
     updateTime: doc.updateTime || '',
     deletedAt: doc.deletedAt || null,
@@ -76,6 +77,15 @@ function stripNoteDoc(doc) {
   return rest
 }
 
+function compareTodos(a, b) {
+  const ao = a?.sortOrder
+  const bo = b?.sortOrder
+  if (ao != null && bo != null && ao !== bo) return ao - bo
+  if (ao != null && bo == null) return -1
+  if (ao == null && bo != null) return 1
+  return String(b?.createTime || '').localeCompare(String(a?.createTime || ''))
+}
+
 export async function listTodosByProject(projectId, { includeDeleted = false } = {}) {
   const pid = String(projectId ?? '').trim()
   if (!pid) return []
@@ -84,7 +94,7 @@ export async function listTodosByProject(projectId, { includeDeleted = false } =
     .filter((doc) => String(doc.projectId) === pid)
     .map(toTodo)
     .filter(Boolean)
-    .sort((a, b) => String(b.createTime || '').localeCompare(String(a.createTime || '')))
+    .sort(compareTodos)
 }
 
 /** @returns {Record<string, { total: number, done: number, pending: number }>} */
@@ -149,6 +159,12 @@ export async function createTodo({
     sourceHash ||
     (noteId ? buildTodoSourceHash(noteId, trimmed) : null)
 
+  const existing = await listTodosByProject(pid)
+  const existingOrders = existing
+    .map((item) => Number(item.sortOrder))
+    .filter((n) => Number.isFinite(n))
+  const nextSortOrder = existingOrders.length ? Math.min(...existingOrders) - 1 : 0
+
   const now = formatDateTime()
   const doc = {
     id: createId(),
@@ -166,6 +182,7 @@ export async function createTodo({
     sourceHash: hash,
     runStatus: TODO_RUN_STATUS.IDLE,
     lastRunId: null,
+    sortOrder: nextSortOrder,
     createTime: now,
     updateTime: now,
     deletedAt: null,
@@ -201,6 +218,10 @@ export async function updateTodo(id, patch = {}) {
   }
   if (Object.prototype.hasOwnProperty.call(patch, 'sourceExcerpt')) {
     doc.sourceExcerpt = String(patch.sourceExcerpt ?? '').trim()
+  }
+  if (Object.prototype.hasOwnProperty.call(patch, 'sortOrder')) {
+    const n = Number(patch.sortOrder)
+    doc.sortOrder = Number.isFinite(n) ? n : 0
   }
 
   doc.updateTime = formatDateTime()
@@ -249,6 +270,26 @@ export async function softDeleteTodosByProject(projectId) {
     count += 1
   }
   return count
+}
+
+/** @param {string[]} orderedIds */
+export async function reorderTodos(orderedIds = []) {
+  const ids = (Array.isArray(orderedIds) ? orderedIds : [])
+    .map((id) => String(id ?? '').trim())
+    .filter(Boolean)
+  if (!ids.length) return []
+
+  const now = formatDateTime()
+  const updated = []
+  for (let index = 0; index < ids.length; index += 1) {
+    const doc = await getTodoDoc(ids[index])
+    if (!doc || doc.deletedAt) continue
+    doc.sortOrder = index
+    doc.updateTime = now
+    await saveTodoDoc(doc)
+    updated.push(toTodo(doc))
+  }
+  return updated
 }
 
 /**

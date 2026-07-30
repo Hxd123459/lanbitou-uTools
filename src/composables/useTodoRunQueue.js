@@ -13,6 +13,7 @@ import { createNoteInFolder } from '../api/structFolder'
 import {
   createTodoRun,
   fetchTodoRun,
+  fetchTodoRunsByProject,
   fetchTodoRunsByTodo,
   updateTodoRun,
 } from '../api/todoRun'
@@ -517,6 +518,31 @@ export function useTodoRunQueue({
     return detail
   }
 
+  /** 预加载事情下各待办最近一次执行指标（token / 耗时） */
+  const preloadRunsForProject = async (projectId) => {
+    const pid = String(projectId || '').trim()
+    if (!pid) return
+    try {
+      const runs = await fetchTodoRunsByProject(pid, { limit: 200 })
+      const latestByTodo = new Map()
+      for (const run of runs || []) {
+        const tid = String(run?.todoId || '').trim()
+        if (!tid || latestByTodo.has(tid)) continue
+        latestByTodo.set(tid, run)
+      }
+      if (!latestByTodo.size) return
+      const next = { ...runByTodoId.value }
+      for (const [tid, run] of latestByTodo.entries()) {
+        const prev = next[tid]
+        if (prev?.history?.length) continue
+        next[tid] = { ...run, history: prev?.history || [run] }
+      }
+      runByTodoId.value = next
+    } catch {
+      /* ignore preload errors */
+    }
+  }
+
   const loadDiffForTodo = async (todo, file = null) => {
     const project = getProject?.()
     if (!project?.localPath) throw new Error('未关联本地项目路径')
@@ -546,6 +572,7 @@ export function useTodoRunQueue({
     dismissFailed,
     cancelActive,
     loadRunForTodo,
+    preloadRunsForProject,
     loadDiffForTodo,
     syncArchiveMeta: () => syncArchiveMeta(getProject?.()),
     statusLabel: TODO_RUN_STATUS_LABEL,
