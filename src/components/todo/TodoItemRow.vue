@@ -6,8 +6,13 @@
       'is-editing': editing,
       'is-selected': selected,
       'is-expanded': expanded,
+      'is-executing': isExecuting,
+      'is-queued': isQueued,
     }"
   >
+    <span v-if="isExecuting" class="todo-run-ring" aria-hidden="true">
+      <span class="todo-run-ring-spin" />
+    </span>
     <button
       v-if="sortable"
       type="button"
@@ -67,15 +72,13 @@
       />
       <div v-else class="todo-item-title-row">
         <p class="todo-item-title" @dblclick="startEdit">{{ todo.title }}</p>
-        <motion.span
+        <span
+          v-if="statusText"
           class="todo-status-text"
           :class="`is-${statusKey}`"
-          :animate="todo.runStatus === 'running' ? runningPulse : undefined"
-          :transition="todo.runStatus === 'running' ? runningTransition : undefined"
         >
-          <span v-if="todo.runStatus === 'running'" class="todo-run-dot" aria-hidden="true" />
           {{ statusText }}
-        </motion.span>
+        </span>
       </div>
 
       <div v-if="metricsVisible" class="todo-item-metrics" aria-label="执行指标">
@@ -122,7 +125,6 @@
           v-model="continueFeedback"
           class="todo-continue-input"
           rows="2"
-          maxlength="800"
           placeholder="哪里不满意？例如：样式再紧凑一点…"
           :disabled="busy"
           @keydown.enter.exact.prevent="submitContinue"
@@ -262,7 +264,11 @@
 
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { motion } from 'motion-v'
+import {
+  formatDurationMs,
+  formatTokenCount,
+  getTodoMetrics,
+} from '../../utils/todoRunMetrics'
 import TodoRunReviewPanel from './TodoRunReviewPanel.vue'
 
 const props = defineProps({
@@ -340,6 +346,9 @@ const canRun = computed(
     props.todo?.runStatus !== 'pending_review',
 )
 
+const isExecuting = computed(() => props.todo?.runStatus === 'running')
+const isQueued = computed(() => props.todo?.runStatus === 'queued')
+
 const statusKey = computed(() => {
   if (props.todo?.done) return 'done'
   if (props.todo?.runStatus === 'pending_review') return 'pending_review'
@@ -347,75 +356,34 @@ const statusKey = computed(() => {
   return 'idle'
 })
 
+/** 进行中 / 排队中不挂文字状态，靠左侧色条与旋转环区分 */
 const statusText = computed(() => {
-  if (props.todo?.done) return '已完成'
+  if (props.todo?.done) return '已验收'
   if (props.todo?.runStatus === 'pending_review') return '待验收'
-  if (props.todo?.runStatus === 'running' || props.todo?.runStatus === 'queued') return '执行中'
+  if (props.todo?.runStatus === 'running' || props.todo?.runStatus === 'queued') return ''
   return '未完成'
 })
 
 const nowTick = ref(Date.now())
 let tickTimer = null
 
-const parseDateTime = (value) => {
-  const text = String(value || '').trim()
-  if (!text) return NaN
-  const normalized = text.includes('T') ? text : text.replace(' ', 'T')
-  const ms = Date.parse(normalized)
-  if (Number.isFinite(ms)) return ms
-  return Date.parse(text.replace(/-/g, '/'))
-}
-
-const formatTokenCount = (n) => {
-  const num = Number(n) || 0
-  if (num >= 10000) return `${(num / 1000).toFixed(num >= 100000 ? 0 : 1)}k`
-  return String(num)
-}
-
-const formatDurationMs = (ms) => {
-  const total = Math.max(0, Math.round(Number(ms) || 0))
-  const sec = Math.floor(total / 1000)
-  if (sec < 60) return `${sec}s`
-  const min = Math.floor(sec / 60)
-  const rem = sec % 60
-  if (min < 60) return rem ? `${min}分${rem}秒` : `${min}分`
-  const hour = Math.floor(min / 60)
-  const remMin = min % 60
-  return remMin ? `${hour}小时${remMin}分` : `${hour}小时`
-}
+const todoMetrics = computed(() => getTodoMetrics(props.todo, props.runDetail, nowTick.value))
 
 const tokenLabel = computed(() => {
-  const usage = props.runDetail?.usage
-  if (!usage) return ''
-  const input = Number(usage.inputTokens) || 0
-  const output = Number(usage.outputTokens) || 0
-  const total = Number(usage.totalTokens) || input + output
-  if (!total && !input && !output) return ''
-  return formatTokenCount(total || input + output)
+  const total = todoMetrics.value.totalTokens
+  if (!total) return ''
+  return formatTokenCount(total)
 })
 
 const durationLabel = computed(() => {
-  const startedAt = props.runDetail?.startedAt
-  if (!startedAt) return ''
-  const startMs = parseDateTime(startedAt)
-  if (!Number.isFinite(startMs)) return ''
-
-  const finishedAt = props.runDetail?.finishedAt
-  const isRunning =
-    props.todo?.runStatus === 'running' || props.todo?.runStatus === 'queued'
-  const endMs = finishedAt && !isRunning
-    ? parseDateTime(finishedAt)
-    : nowTick.value
-  if (!Number.isFinite(endMs) || endMs < startMs) return ''
-  return formatDurationMs(endMs - startMs)
+  const total = todoMetrics.value.totalDurationMs
+  return total > 0 ? formatDurationMs(total) : ''
 })
 
 const metricsVisible = computed(() => Boolean(tokenLabel.value || durationLabel.value))
 
 const syncTickTimer = () => {
-  const isRunning =
-    props.todo?.runStatus === 'running' || props.todo?.runStatus === 'queued'
-  if (isRunning && props.runDetail?.startedAt) {
+  if (props.todo?.runStatus === 'running' && props.runDetail?.startedAt) {
     if (!tickTimer) {
       tickTimer = window.setInterval(() => {
         nowTick.value = Date.now()
@@ -479,9 +447,6 @@ const submitContinue = () => {
   closeContinue()
 }
 
-const runningPulse = { opacity: [1, 0.72, 1] }
-const runningTransition = { duration: 1.4, repeat: Infinity, ease: 'easeInOut' }
-
 const startEdit = async () => {
   if (props.busy) return
   editing.value = true
@@ -519,6 +484,8 @@ const toggleExpand = () => {
 
 <style scoped>
 .todo-item-row {
+  position: relative;
+  isolation: isolate;
   display: flex;
   align-items: flex-start;
   gap: 10px;
@@ -528,6 +495,11 @@ const toggleExpand = () => {
   background: var(--color-surface);
 }
 
+.todo-item-row > *:not(.todo-run-ring) {
+  position: relative;
+  z-index: 1;
+}
+
 .todo-item-row.is-done {
   opacity: 0.72;
 }
@@ -535,6 +507,57 @@ const toggleExpand = () => {
 .todo-item-row.is-selected {
   background: rgba(24, 24, 27, 0.04);
   border-color: rgba(24, 24, 27, 0.22);
+}
+
+.todo-item-row.is-executing {
+  border-color: rgba(37, 99, 235, 0.28);
+  background: linear-gradient(90deg, rgba(37, 99, 235, 0.06) 0%, var(--color-surface) 28%);
+  box-shadow: inset 3px 0 0 #2563eb;
+}
+
+.todo-item-row.is-queued {
+  border-color: rgba(100, 116, 139, 0.28);
+  background: linear-gradient(90deg, rgba(100, 116, 139, 0.07) 0%, var(--color-surface) 28%);
+  box-shadow: inset 3px 0 0 #94a3b8;
+}
+
+.todo-run-ring {
+  position: absolute;
+  inset: -2px;
+  z-index: 0;
+  border-radius: calc(var(--radius-md, 10px) + 2px);
+  padding: 2px;
+  overflow: hidden;
+  pointer-events: none;
+  -webkit-mask:
+    linear-gradient(#fff 0 0) content-box,
+    linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+}
+
+.todo-run-ring-spin {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 220%;
+  height: 220%;
+  translate: -50% -50%;
+  background: conic-gradient(
+    from 0deg,
+    transparent 0deg 342deg,
+    rgba(37, 99, 235, 0.12) 348deg,
+    #2563eb 354deg,
+    #93c5fd 358deg,
+    transparent 360deg
+  );
+  animation: todo-run-border-spin 3.6s linear infinite;
+}
+
+@keyframes todo-run-border-spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .todo-sort-handle {
@@ -686,11 +709,6 @@ const toggleExpand = () => {
   color: #64748b;
 }
 
-.todo-status-text.is-running {
-  background: rgba(37, 99, 235, 0.12);
-  color: #2563eb;
-}
-
 .todo-status-text.is-pending_review {
   background: rgba(245, 158, 11, 0.16);
   color: #b45309;
@@ -699,13 +717,6 @@ const toggleExpand = () => {
 .todo-status-text.is-done {
   background: rgba(22, 163, 74, 0.12);
   color: #15803d;
-}
-
-.todo-run-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: currentColor;
 }
 
 .todo-item-edit-input {

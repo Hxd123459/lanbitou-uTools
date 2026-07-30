@@ -14,6 +14,7 @@
       @toggle-archive="handleToggleArchive"
       @open-tag="handleOpenTag"
       @reorder="handleReorderProjects"
+      @toast="notifyToast"
     />
 
     <ProjectDetailView
@@ -53,6 +54,7 @@
       @continue-todo="({ todo, feedback }) => continueTodo(todo, feedback)"
       @checklist-change="handleChecklistChange"
       @reorder-todos="handleReorderTodos"
+      @toast="notifyToast"
     />
 
     <ProjectFormModal
@@ -196,9 +198,13 @@ const notifyToast = (text) => {
 
 const patchTodoLocal = (updated) => {
   if (!updated?.id) return
-  const index = todos.value.findIndex((item) => item.id === updated.id)
-  if (index >= 0) todos.value[index] = updated
-  else todos.value = [updated, ...todos.value]
+  const list = todos.value
+  const index = list.findIndex((item) => item.id === updated.id)
+  if (index >= 0) {
+    todos.value = list.map((item, i) => (i === index ? updated : item))
+  } else {
+    todos.value = [updated, ...list]
+  }
 }
 
 const {
@@ -798,14 +804,17 @@ const handleSync = async () => {
   const projectIdAtStart = project.id
   syncing.value = true
   syncPhase.value = '正在拉取碎片…'
-  notifyToast('开始同步（后台提取中，可先去别处）')
   try {
     const notes = await fetchNotesForTodoSync({
       tagIds: project.tagIds,
       since: project.lastSyncedAt || null,
     })
     if (!notes.length) {
-      notifyToast('暂无新碎片（可检查标签绑定，或清空同步时间后重试）')
+      notifyToast(
+        project.lastSyncedAt
+          ? '暂无新增碎片，没有待同步待办'
+          : '暂无碎片可同步',
+      )
       return
     }
 

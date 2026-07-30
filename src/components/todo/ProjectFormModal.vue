@@ -56,17 +56,38 @@
           </div>
 
           <div class="project-form-modal-field">
-            <span class="project-form-modal-label">本地项目路径</span>
-            <p class="project-form-modal-hint">关联后可用 Cursor 结合代码提取/执行待办</p>
+            <div class="project-form-modal-label-row">
+              <span class="project-form-modal-label">项目路径</span>
+              <AppTooltip
+                :text="
+                  isEdit
+                    ? '创建后不可修改；关联后可用 Cursor 结合代码提取/执行待办'
+                    : '关联后可用 Cursor 结合代码提取/执行待办'
+                "
+              >
+                <button
+                  type="button"
+                  class="project-form-help-btn"
+                  aria-label="项目路径说明"
+                  tabindex="-1"
+                >
+                  <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <circle cx="12" cy="12" r="9" />
+                    <path d="M12 10v6M12 7h.01" />
+                  </svg>
+                </button>
+              </AppTooltip>
+            </div>
             <div class="project-form-path-row">
               <input
                 v-model="localPath"
                 class="project-form-modal-input"
                 type="text"
                 placeholder="例如：C:\workspace\codes\my-app"
-                :disabled="saving"
+                :disabled="saving || isEdit"
               />
               <AppButton
+                v-if="!isEdit"
                 type="button"
                 class="btn btn-icon-text project-form-path-btn"
                 :disabled="saving"
@@ -75,7 +96,7 @@
                 选择
               </AppButton>
               <AppButton
-                v-if="localPath"
+                v-if="!isEdit && localPath"
                 type="button"
                 class="btn btn-icon-text project-form-path-btn"
                 :disabled="saving"
@@ -84,17 +105,6 @@
                 清除
               </AppButton>
             </div>
-          </div>
-
-          <div class="project-form-modal-field">
-            <span class="project-form-modal-label">沉淀文件夹</span>
-            <p class="project-form-modal-hint">
-              {{
-                sedimentFolderId
-                  ? `已关联沉淀文件夹（保存后与事情同名同步）`
-                  : '保存时会在沉淀根目录自动创建同名文件夹，专门收纳这件事的产出'
-              }}
-            </p>
           </div>
 
           <div class="project-form-modal-field">
@@ -137,6 +147,7 @@
 import { computed, nextTick, ref, watch } from 'vue'
 import { AnimatePresence, motion } from 'motion-v'
 import AppButton from '../motion/AppButton.vue'
+import AppTooltip from '../common/AppTooltip.vue'
 import DateRangePicker from '../common/DateRangePicker.vue'
 import { fetchAllTags } from '../../api/note'
 import { pickDirectory } from '../../api/agentBridge'
@@ -154,7 +165,6 @@ const name = ref('')
 const startAt = ref('')
 const endAt = ref('')
 const localPath = ref('')
-const sedimentFolderId = ref('')
 const selectedTagIds = ref([])
 const tags = ref([])
 const loadingTags = ref(false)
@@ -206,7 +216,6 @@ const resetForm = () => {
   startAt.value = props.project?.startAt || formatDateTime().slice(0, 10)
   endAt.value = props.project?.endAt || ''
   localPath.value = props.project?.localPath || ''
-  sedimentFolderId.value = props.project?.sedimentFolderId || ''
   selectedTagIds.value = Array.isArray(props.project?.tagIds)
     ? props.project.tagIds.map(String).slice(0, 1)
     : []
@@ -232,7 +241,10 @@ const handleSubmit = () => {
     tagIds: [...selectedTagIds.value],
     startAt: startAt.value || null,
     endAt: endAt.value || null,
-    localPath: String(localPath.value || '').trim() || null,
+    // 编辑时不允许改路径，仍回传原值避免被清空
+    localPath: isEdit.value
+      ? (props.project?.localPath || null)
+      : (String(localPath.value || '').trim() || null),
   })
 }
 
@@ -298,6 +310,36 @@ watch(
   color: var(--color-primary);
 }
 
+.project-form-modal-label-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: 6px;
+}
+
+.project-form-modal-label-row .project-form-modal-label {
+  margin-bottom: 0;
+}
+
+.project-form-help-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--color-secondary-text);
+  cursor: help;
+}
+
+.project-form-help-btn:hover {
+  color: var(--color-primary);
+  background: rgba(24, 24, 27, 0.06);
+}
+
 .project-form-modal-hint {
   margin: 0 0 8px;
   font-size: 12px;
@@ -314,6 +356,12 @@ watch(
   font-family: inherit;
   font-size: 13px;
   box-sizing: border-box;
+}
+
+.project-form-modal-input:disabled {
+  opacity: 0.72;
+  cursor: not-allowed;
+  background: rgba(24, 24, 27, 0.04);
 }
 
 .project-form-modal-textarea {

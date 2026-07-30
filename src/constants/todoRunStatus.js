@@ -9,7 +9,7 @@ export const TODO_RUN_STATUS = {
 export const TODO_RUN_STATUS_LABEL = {
   idle: '',
   queued: '排队中',
-  running: '执行中',
+  running: '进行中',
   pending_review: '待验收',
   failed: '失败',
 }

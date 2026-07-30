@@ -8,6 +8,7 @@
     "build": "vite build",
     "build:utools": "vite build",
     "preview": "vite preview",
+    "test": "node --test src/utils/todoRunMetrics.test.js",
     "postinstall": "npm install --prefix bridge --omit=dev"
   },
   "dependencies": {

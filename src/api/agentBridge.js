@@ -10,6 +10,11 @@ export function isAgentBridgeAvailable() {
   return Boolean(isUtoolsMode() && getAgentService())
 }
 
+export function getAgentBridgePort() {
+  const svc = getAgentService()
+  return Number(svc?.port) || 39281
+}
+
 function cursorHeaders(extra = {}) {
   const settings = loadAiSettings()
   const apiKey = String(settings.cursorApiKey || settings.apiKey || '').trim()
@@ -22,6 +27,47 @@ export async function ensureAgentBridge() {
   const svc = getAgentService()
   if (!svc) throw new Error('Agent 桥不可用（需在 uTools 中运行）')
   return svc.ensureStarted()
+}
+
+export async function getAgentBridgeStatus() {
+  const svc = getAgentService()
+  if (!svc?.getStatus) {
+    return {
+      ok: false,
+      online: false,
+      port: getAgentBridgePort(),
+      host: '127.0.0.1',
+      launcher: null,
+      service: null,
+      providers: [],
+      unavailable: true,
+    }
+  }
+  try {
+    return await svc.getStatus()
+  } catch {
+    return {
+      ok: false,
+      online: false,
+      port: getAgentBridgePort(),
+      host: '127.0.0.1',
+      launcher: null,
+      service: null,
+      providers: [],
+    }
+  }
+}
+
+export async function startAgentBridgeResident() {
+  const svc = getAgentService()
+  if (!svc?.startResident) throw new Error('当前环境不支持启动 Agent 桥')
+  return svc.startResident()
+}
+
+export function openAgentBridgeFolder() {
+  const svc = getAgentService()
+  if (!svc?.openBridgeFolder) return false
+  return svc.openBridgeFolder()
 }
 
 export async function pickDirectory() {
@@ -69,16 +115,14 @@ export async function agentBridgeRequest(method, urlPath, body = undefined, head
 
 export async function agentHealth() {
   try {
-    const svc = getAgentService()
-    if (!svc) return false
-    return Boolean(await svc.healthCheck())
+    const status = await getAgentBridgeStatus()
+    return Boolean(status.online)
   } catch {
     return false
   }
 }
 
 export async function agentExtract({ cwd, notes, provider = 'cursor', model } = {}) {
-  // Cursor Agent.prompt 可能数分钟，单独放宽超时
   return agentBridgeRequest(
     'POST',
     '/extract',

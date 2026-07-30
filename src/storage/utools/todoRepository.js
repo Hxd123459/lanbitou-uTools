@@ -295,7 +295,7 @@ export async function reorderTodos(orderedIds = []) {
 /**
  * 增量拉取可用于待办同步的碎片。
  * since 为空时取各标签下最近 FIRST_SYNC_NOTE_LIMIT 条，避免首次灌爆。
- * 增量时按 createTime / updateTime 较新者判断，旧碎片改写内容也会纳入。
+ * 增量时仅纳入 createTime 晚于 since 的新增碎片。
  */
 export async function listNotesForTodoSync({ tagIds = [], since = null } = {}) {
   const tags = [...new Set((Array.isArray(tagIds) ? tagIds : []).map((id) => String(id).trim()).filter(Boolean))]
@@ -305,21 +305,20 @@ export async function listNotesForTodoSync({ tagIds = [], since = null } = {}) {
   const sinceText = since ? String(since).trim() : ''
   const docs = await dbAllDocs(NOTE_PREFIX)
 
-  const noteActivityTime = (doc) => {
-    const createTime = String(doc?.createTime || '')
-    const updateTime = String(doc?.updateTime || '')
-    return updateTime > createTime ? updateTime : createTime
-  }
+  const noteCreateTime = (doc) => String(doc?.createTime || '').trim()
 
   const notes = (docs || [])
     .map(stripNoteDoc)
     .filter((doc) => {
       if (!doc?.id || doc.deletedAt || doc.archivedAt) return false
       if (!doc.tagId || !tagSet.has(String(doc.tagId))) return false
-      if (sinceText && noteActivityTime(doc) <= sinceText) return false
+      const created = noteCreateTime(doc)
+      if (!created) return false
+      // 有同步起点时：只看新增碎片，不把旧碎片改写算进来
+      if (sinceText && created <= sinceText) return false
       return true
     })
-    .sort((a, b) => noteActivityTime(b).localeCompare(noteActivityTime(a)))
+    .sort((a, b) => noteCreateTime(b).localeCompare(noteCreateTime(a)))
 
   const limited = sinceText ? notes : notes.slice(0, FIRST_SYNC_NOTE_LIMIT)
 

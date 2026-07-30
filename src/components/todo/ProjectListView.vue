@@ -6,23 +6,24 @@
         <p class="project-list-desc">围绕一件事收集待办，可绑定标签自动同步</p>
       </div>
       <div class="project-list-header-actions">
-        <button
+        <AgentBridgeStatus @toast="emit('toast', $event)" />
+        <AppButton
           type="button"
-          class="project-list-action-btn"
+          class="btn btn-icon-text"
           :class="{ 'is-active': showArchived }"
           @click="showArchived = !showArchived"
         >
           {{ showArchived ? '隐藏已归档' : '显示已归档' }}
-        </button>
-        <button
+        </AppButton>
+        <AppButton
           type="button"
-          class="project-list-action-btn is-accent"
+          class="btn btn-primary"
           :disabled="!canCreate"
           :title="canCreate ? undefined : `最多 ${MAX_PROJECTS} 件事情`"
           @click="emit('create')"
         >
           新建事情
-        </button>
+        </AppButton>
       </div>
     </header>
 
@@ -234,6 +235,8 @@
 import { computed, ref, watch } from 'vue'
 import { motion } from 'motion-v'
 import { VueDraggable } from 'vue-draggable-plus'
+import AppButton from '../motion/AppButton.vue'
+import AgentBridgeStatus from './AgentBridgeStatus.vue'
 import { useMotionPresets } from '../../composables/useMotionPresets'
 import { MAX_PROJECTS } from '../../constants/todoLimits'
 import { formatDateTime } from '../../storage/utools/utils'
@@ -246,7 +249,16 @@ const props = defineProps({
   busy: { type: Boolean, default: false },
 })
 
-const emit = defineEmits(['create', 'open', 'edit', 'delete', 'toggle-archive', 'open-tag', 'reorder'])
+const emit = defineEmits([
+  'create',
+  'open',
+  'edit',
+  'delete',
+  'toggle-archive',
+  'open-tag',
+  'reorder',
+  'toast',
+])
 
 const { presets } = useMotionPresets()
 const showArchived = ref(false)
@@ -401,44 +413,8 @@ watch(
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 4px;
+  gap: 8px;
   justify-content: flex-end;
-}
-
-.project-list-action-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 28px;
-  padding: 4px 10px;
-  border: 0;
-  border-radius: 6px;
-  background: transparent;
-  color: var(--color-secondary-text);
-  font-family: inherit;
-  font-size: 13px;
-  font-weight: 500;
-  cursor: pointer;
-}
-
-.project-list-action-btn:hover:not(:disabled) {
-  color: var(--color-text);
-  background: rgba(24, 24, 27, 0.06);
-}
-
-.project-list-action-btn.is-active {
-  color: var(--color-accent);
-  font-weight: 600;
-}
-
-.project-list-action-btn.is-accent {
-  color: var(--color-primary);
-  font-weight: 600;
-}
-
-.project-list-action-btn:disabled {
-  opacity: 0.45;
-  cursor: not-allowed;
 }
 
 .project-list-state {

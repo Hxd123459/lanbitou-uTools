@@ -14,9 +14,18 @@ function syncReducedMotion() {
 }
 
 export function useMotionPresets() {
+  if (typeof window !== 'undefined') {
+    if (!mediaQuery) {
+      mediaQuery = window.matchMedia('(prefers-reduced-motion: reduce)')
+    }
+    syncReducedMotion()
+  }
+
   onMounted(() => {
     if (typeof window === 'undefined') return
-    mediaQuery = window.matchMedia('(prefers-reduced-motion: reduce)')
+    if (!mediaQuery) {
+      mediaQuery = window.matchMedia('(prefers-reduced-motion: reduce)')
+    }
     syncReducedMotion()
     mediaQuery.addEventListener('change', syncReducedMotion)
   })

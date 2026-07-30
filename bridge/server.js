@@ -1,4 +1,4 @@
-import './winHideConsole.js'
+import { isWindowsHideConsolePatched } from './winHideConsole.js'
 import http from 'node:http'
 import fs from 'node:fs'
 import path from 'node:path'
@@ -378,6 +378,9 @@ const server = http.createServer(async (req, res) => {
         service: 'lanbitou-agent-bridge',
         providers: Object.keys(providers),
         launcher: LAUNCHER,
+        port: PORT,
+        host: HOST,
+        childHidePatched: isWindowsHideConsolePatched(),
       })
       return
     }

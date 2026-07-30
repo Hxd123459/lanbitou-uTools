@@ -180,17 +180,39 @@ export function useTodoRunQueue({
     if (!todoId || !run) return
     const key = String(todoId)
     const prev = runByTodoId.value[key]
+    const history = Array.isArray(run.history)
+      ? run.history
+      : Array.isArray(prev?.history)
+        ? prev.history.map((item) => (item?.id === run.id ? { ...item, ...run } : item))
+        : undefined
     runByTodoId.value = {
       ...runByTodoId.value,
       [key]: {
         ...run,
-        history: Array.isArray(run.history)
-          ? run.history
-          : Array.isArray(prev?.history)
-            ? prev.history
-            : undefined,
+        history,
       },
     }
+  }
+
+  const refreshRunHistory = async (todoId, preferredRun = null) => {
+    const key = String(todoId || '').trim()
+    if (!key) return null
+    let runs = await fetchTodoRunsByTodo(key, { limit: 50 })
+    if (!runs.length && preferredRun?.id) runs = [preferredRun]
+    if (!runs.length) return null
+    const latest =
+      (preferredRun?.id && runs.find((item) => item.id === preferredRun.id)) ||
+      runs[0]
+    const detail = {
+      ...latest,
+      ...preferredRun,
+      id: latest.id,
+      history: runs.map((item) =>
+        preferredRun?.id === item.id ? { ...item, ...preferredRun } : item,
+      ),
+    }
+    setRunCache(key, detail)
+    return detail
   }
 
   const applyTodoPatch = async (todoId, patch) => {
@@ -333,14 +355,30 @@ export function useTodoRunQueue({
         branchName,
       })
       activeRunId.value = runDoc.id
-      setRunCache(todoId, runDoc)
+      const prevDetail = runByTodoId.value[String(todoId)]
+      const prevHistory = Array.isArray(prevDetail?.history)
+        ? prevDetail.history
+        : prevDetail?.id
+          ? [prevDetail]
+          : []
+      setRunCache(todoId, {
+        ...runDoc,
+        history: [runDoc, ...prevHistory.filter((item) => item?.id !== runDoc.id)],
+      })
       await applyTodoPatch(todoId, {
         runStatus: TODO_RUN_STATUS.RUNNING,
         lastRunId: runDoc.id,
       })
-      await updateTodoRun(runDoc.id, {
+      const startedRun = await updateTodoRun(runDoc.id, {
         startedAt: formatDateTime(),
         status: 'running',
+      })
+      setRunCache(todoId, {
+        ...startedRun,
+        history: [
+          startedRun,
+          ...prevHistory.filter((item) => item?.id !== startedRun.id),
+        ],
       })
 
       const started = await agentStartRun({
@@ -357,18 +395,18 @@ export function useTodoRunQueue({
 
       const agentId = started.run.agentId || (isResume ? startOpts.agentId : null)
       const baseRef = started.run.baseRef || started.baseline?.baseRef || null
-      await updateTodoRun(runDoc.id, {
+      const linkedRun = await updateTodoRun(runDoc.id, {
         bridgeRunId,
         agentId,
         baseRef,
         branchName: started.run.branchName || branchName,
       })
       setRunCache(todoId, {
-        ...runDoc,
-        bridgeRunId,
-        agentId,
-        baseRef,
-        branchName: started.run.branchName || branchName,
+        ...linkedRun,
+        history: [
+          linkedRun,
+          ...prevHistory.filter((item) => item?.id !== linkedRun.id),
+        ],
       })
 
       await pollUntilDone(todoId, runDoc.id, bridgeRunId)
@@ -417,10 +455,11 @@ export function useTodoRunQueue({
           const status = String(remote.status || '')
           if (status === 'finished' || status === 'error' || status === 'cancelled') {
             clearPoll()
-            await updateTodoRun(runId, {
+            const finished = await updateTodoRun(runId, {
               finishedAt: formatDateTime(),
               status,
             })
+            await refreshRunHistory(todoId, finished)
             if (status === 'finished') {
               await applyTodoPatch(todoId, {
                 runStatus: TODO_RUN_STATUS.PENDING_REVIEW,
@@ -502,40 +541,41 @@ export function useTodoRunQueue({
 
   const loadRunForTodo = async (todo) => {
     if (!todo?.id) return null
-    const todoId = String(todo.id)
-    const cached = runByTodoId.value[todoId]
-    if (cached?.history?.length) return cached
-
-    let runs = await fetchTodoRunsByTodo(todoId, { limit: 50 })
-    if (!runs.length && todo.lastRunId) {
-      const single = await fetchTodoRun(todo.lastRunId)
-      if (single) runs = [single]
-    }
-    if (!runs.length) return null
-
-    const detail = { ...runs[0], history: runs }
-    setRunCache(todoId, detail)
-    return detail
+    return refreshRunHistory(todo.id)
   }
 
-  /** 预加载事情下各待办最近一次执行指标（token / 耗时） */
+  /** 预加载事情下各待办执行指标（含 history，供统计图按日汇总） */
   const preloadRunsForProject = async (projectId) => {
     const pid = String(projectId || '').trim()
     if (!pid) return
     try {
       const runs = await fetchTodoRunsByProject(pid, { limit: 200 })
-      const latestByTodo = new Map()
+      const runsByTodo = new Map()
       for (const run of runs || []) {
         const tid = String(run?.todoId || '').trim()
-        if (!tid || latestByTodo.has(tid)) continue
-        latestByTodo.set(tid, run)
+        if (!tid) continue
+        if (!runsByTodo.has(tid)) runsByTodo.set(tid, [])
+        runsByTodo.get(tid).push(run)
       }
-      if (!latestByTodo.size) return
+      if (!runsByTodo.size) return
+
       const next = { ...runByTodoId.value }
-      for (const [tid, run] of latestByTodo.entries()) {
+      for (const [tid, todoRuns] of runsByTodo.entries()) {
         const prev = next[tid]
-        if (prev?.history?.length) continue
-        next[tid] = { ...run, history: prev?.history || [run] }
+        if (Array.isArray(prev?.history) && prev.history.length > todoRuns.length) continue
+
+        const latest = todoRuns[0]
+        const mergedLatest =
+          prev?.id === latest.id
+            ? { ...latest, ...prev, id: latest.id, history: undefined }
+            : latest
+
+        next[tid] = {
+          ...mergedLatest,
+          history: todoRuns.map((item) =>
+            item.id === mergedLatest.id ? { ...item, ...mergedLatest } : item,
+          ),
+        }
       }
       runByTodoId.value = next
     } catch {

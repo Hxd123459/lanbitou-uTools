@@ -39,8 +39,23 @@
         </p>
       </div>
       <div class="project-detail-header-actions">
+        <span
+          v-if="hasTag && syncing"
+          class="project-detail-last-sync is-visible"
+        >
+          {{ syncPhase || '同步中…' }}
+        </span>
+        <span
+          v-else-if="hasTag"
+          class="project-detail-last-sync"
+          aria-hidden="true"
+        >
+          上一次同步时间：{{ lastSyncedText || '尚未同步' }}
+        </span>
+        <AppButton type="button" class="btn btn-icon-text" :disabled="busy" @click="emit('edit', project)">
+          编辑
+        </AppButton>
         <AppButton
-          v-if="!hasTag"
           type="button"
           class="btn btn-primary project-detail-add-icon-btn"
           aria-label="新增待办"
@@ -52,16 +67,6 @@
             <path d="M12 5v14M5 12h14" />
           </svg>
         </AppButton>
-        <span
-          v-if="hasTag"
-          class="project-detail-last-sync"
-          aria-hidden="true"
-        >
-          上一次同步时间：{{ lastSyncedText || '尚未同步' }}
-        </span>
-        <AppButton type="button" class="btn btn-icon-text" :disabled="busy" @click="emit('edit', project)">
-          编辑
-        </AppButton>
         <AppButton
           v-if="hasTag"
           type="button"
@@ -70,7 +75,7 @@
           :title="
             pendingSyncCount > 0
               ? '请先确认上次提取结果'
-              : syncPhase || undefined
+              : undefined
           "
           @click="emit('sync')"
         >
@@ -150,37 +155,37 @@
             </svg>
           </span>
         </AppTooltip>
+
+        <AppTooltip
+          class="project-detail-icon-tip"
+          :text="showStats ? '返回待办列表' : '任务统计'"
+        >
+          <button
+            type="button"
+            class="project-detail-icon-btn"
+            :class="{ 'is-active': showStats }"
+            :aria-label="showStats ? '返回待办列表' : '任务统计'"
+            :aria-pressed="showStats"
+            @click="toggleStats"
+          >
+            <svg viewBox="0 0 1024 1024" width="15" height="15" fill="currentColor" aria-hidden="true">
+              <path d="M341.333333 938.666667H128a42.666667 42.666667 0 0 1-42.666667-42.666667V405.333333a42.666667 42.666667 0 0 1 42.666667-42.666666h213.333333V128a42.666667 42.666667 0 0 1 42.666667-42.666667h256a42.666667 42.666667 0 0 1 42.666667 42.666667v405.333333h213.333333a42.666667 42.666667 0 0 1 42.56 39.466667L938.666667 576v320a42.666667 42.666667 0 0 1-39.466667 42.56L896 938.666667H341.333333z m0-512H149.333333v448h192V426.666667z m533.333334 170.666666h-192v277.333334h192V597.333333zM618.666667 149.333333H405.333333v725.333334h213.333334V149.333333z" />
+            </svg>
+          </button>
+        </AppTooltip>
       </div>
 
       <div class="project-detail-toolbar-right">
         <div class="project-detail-status-area">
-          <motion.span
-            v-if="syncing"
-            class="project-detail-status-badge is-running"
-            :animate="runningPulse"
-            :transition="runningTransition"
-          >
-            <span class="project-detail-status-dot" aria-hidden="true" />
-            {{ syncPhase || '同步中…' }}
-          </motion.span>
+          <AgentBridgeStatus @toast="emit('toast', $event)" />
           <button
-            v-else-if="pendingSyncCount > 0"
+            v-if="!syncing && pendingSyncCount > 0"
             type="button"
             class="project-detail-status-badge is-pending-sync"
             @click="emit('open-pending-sync')"
           >
             待确认 {{ pendingSyncCount }} 条
           </button>
-          <motion.span
-            v-else-if="canRunAgents && runningTitle"
-            class="project-detail-status-badge is-running"
-            :animate="runningPulse"
-            :transition="runningTransition"
-          >
-            <span class="project-detail-status-dot" aria-hidden="true" />
-            执行中 · {{ runningTitle }}
-            <span v-if="queueLength" class="project-detail-status-queue">排队 {{ queueLength }}</span>
-          </motion.span>
           <span v-else-if="canRunAgents && queueLength" class="project-detail-status-badge">
             排队 {{ queueLength }} 条
           </span>
@@ -195,7 +200,7 @@
             :class="{ 'is-active': statusFilter === opt.key }"
             role="tab"
             :aria-selected="statusFilter === opt.key"
-            @click="statusFilter = opt.key"
+            @click="setStatusFilter(opt.key)"
           >
             <motion.span
               v-if="statusFilter === opt.key"
@@ -211,73 +216,154 @@
     </div>
 
     <div class="project-detail-pane">
-      <div
-        v-if="loading && !todos.length"
-        class="project-detail-empty"
-      >
-        <p class="project-detail-state">加载中…</p>
-      </div>
-      <div
-        v-else-if="!todos.length"
-        class="project-detail-empty"
-      >
-        <p v-if="!canRunAgents" class="project-detail-state">
-          编辑事情并关联本地项目路径后，可排队让 Cursor 执行待办
-        </p>
-        <p class="project-detail-state">{{ emptyTodosHint }}</p>
-      </div>
-      <p
-        v-else-if="!filteredTodos.length"
-        class="project-detail-state project-detail-state--inline"
-      >
-        该状态下暂无待办
-      </p>
+      <AnimatePresence mode="wait" :initial="false">
+        <motion.div
+          v-if="showStats"
+          key="project-detail-stats"
+          class="project-detail-stats"
+          aria-label="执行统计"
+          :exit="presets.fade.exit"
+          :transition="presets.fade.transition"
+        >
+          <div class="project-detail-stats-kpis">
+            <motion.article
+              v-for="(kpi, index) in statsKpis"
+              :key="kpi.key"
+              class="project-detail-stats-kpi"
+              :class="{ 'project-detail-stats-kpi--cost': kpi.key === 'cost' }"
+              :initial="presets.reveal.initial"
+              :animate="presets.reveal.animate"
+              :transition="statsStaggerTransition(index)"
+            >
+              <span class="project-detail-stats-kpi-label">{{ kpi.label }}</span>
+              <AnimatedStatValue
+                :key="`${kpi.key}-${statsAnimEpoch}`"
+                class="project-detail-stats-kpi-value"
+                :value="kpi.value"
+                :format="kpi.format"
+                from-zero
+              />
+            </motion.article>
+          </div>
 
-      <VueDraggable
-        v-else
-        v-model="sortableTodos"
-        item-key="id"
-        tag="ul"
-        class="project-detail-list"
-        :class="{ 'is-selecting': selectedCount > 0 }"
-        role="list"
-        :animation="180"
-        :disabled="busy || sortSaving || statusFilter !== 'all' || selectedCount > 0"
-        handle=".todo-sort-handle"
-        filter=".todo-item-check, .todo-item-actions, .todo-continue-box, input, textarea"
-        :prevent-on-filter="false"
-        ghost-class="todo-sort-ghost"
-        chosen-class="todo-sort-chosen"
-        @end="onTodoSortEnd"
-      >
-        <TodoItemRow
-          v-for="todo in sortableTodos"
-          :key="todo.id"
-          :todo="todo"
-          :busy="busy"
-          :selected="selectedIds.has(String(todo.id))"
-          :can-run-agents="canRunAgents"
-          :run-detail="runDetails?.[String(todo.id)] || null"
-          :load-diff="loadDiff"
-          :sortable="statusFilter === 'all' && selectedCount === 0"
-          @delete="emit('delete-todo', $event)"
-          @open-source="emit('open-source', $event)"
-          @update-title="emit('update-todo-title', $event)"
-          @select-change="onSelectChange"
-          @accept="emit('accept-todo', $event)"
-          @reject="emit('reject-todo', $event)"
-          @retry="emit('retry-todo', $event)"
-          @dismiss-failed="emit('dismiss-failed', $event)"
-          @load-run="emit('load-run', $event)"
-          @continue="emit('continue-todo', $event)"
-          @checklist-change="emit('checklist-change', $event)"
-          @run="emit('run-todo', $event)"
-        />
-      </VueDraggable>
+          <div class="project-detail-stats-charts">
+            <motion.section
+              class="project-detail-stats-card"
+              :initial="presets.reveal.initial"
+              :animate="presets.reveal.animate"
+              :transition="statsStaggerTransition(statsKpis.length)"
+            >
+              <div class="project-detail-stats-card-head">
+                <h3 class="project-detail-stats-card-title">近 15 日 Token 用量</h3>
+                <span class="project-detail-stats-card-meta">{{ tokenChartMeta }}</span>
+              </div>
+              <RunStatsBarChart
+                :key="`token-chart-${statsAnimEpoch}`"
+                :labels="chartDateLabels"
+                :values="chartTokenValues"
+                :format-value="formatChartTokens"
+              />
+            </motion.section>
+            <motion.section
+              class="project-detail-stats-card"
+              :initial="presets.reveal.initial"
+              :animate="presets.reveal.animate"
+              :transition="statsStaggerTransition(statsKpis.length + 1)"
+            >
+              <div class="project-detail-stats-card-head">
+                <h3 class="project-detail-stats-card-title">近 15 日执行时间</h3>
+                <span class="project-detail-stats-card-meta">{{ durationChartMeta }}</span>
+              </div>
+              <RunStatsBarChart
+                :key="`duration-chart-${statsAnimEpoch}`"
+                :labels="chartDateLabels"
+                :values="chartDurationValues"
+                :format-value="formatChartDuration"
+              />
+            </motion.section>
+          </div>
+
+          <p class="project-detail-stats-hint">费用按 Cursor 类模型单价估算，仅供参考</p>
+        </motion.div>
+
+        <motion.div
+          v-else
+          key="project-detail-todos"
+          class="project-detail-todos"
+          :initial="presets.fade.initial"
+          :animate="presets.fade.animate"
+          :exit="presets.fade.exit"
+          :transition="presets.fade.transition"
+        >
+          <div
+            v-if="loading && !todos.length"
+            class="project-detail-empty"
+          >
+            <p class="project-detail-state">加载中…</p>
+          </div>
+          <div
+            v-else-if="!todos.length"
+            class="project-detail-empty"
+          >
+            <p v-if="!canRunAgents" class="project-detail-state">
+              编辑事情并关联本地项目路径后，可排队让 Cursor 执行待办
+            </p>
+            <p class="project-detail-state">{{ emptyTodosHint }}</p>
+          </div>
+          <p
+            v-else-if="!filteredTodos.length"
+            class="project-detail-state project-detail-state--inline"
+          >
+            该状态下暂无待办
+          </p>
+
+          <VueDraggable
+            v-else
+            v-model="sortableTodos"
+            item-key="id"
+            tag="ul"
+            class="project-detail-list"
+            :class="{ 'is-selecting': selectedCount > 0 }"
+            role="list"
+            :animation="180"
+            :disabled="busy || sortSaving || statusFilter !== 'all' || selectedCount > 0"
+            handle=".todo-sort-handle"
+            filter=".todo-item-check, .todo-item-actions, .todo-continue-box, input, textarea"
+            :prevent-on-filter="false"
+            ghost-class="todo-sort-ghost"
+            chosen-class="todo-sort-chosen"
+            @end="onTodoSortEnd"
+          >
+            <TodoItemRow
+              v-for="todo in sortableTodos"
+              :key="todo.id"
+              :todo="todo"
+              :busy="busy"
+              :selected="selectedIds.has(String(todo.id))"
+              :can-run-agents="canRunAgents"
+              :run-detail="runDetails?.[String(todo.id)] || null"
+              :load-diff="loadDiff"
+              :sortable="statusFilter === 'all' && selectedCount === 0"
+              @delete="emit('delete-todo', $event)"
+              @open-source="emit('open-source', $event)"
+              @update-title="emit('update-todo-title', $event)"
+              @select-change="onSelectChange"
+              @accept="emit('accept-todo', $event)"
+              @reject="emit('reject-todo', $event)"
+              @retry="emit('retry-todo', $event)"
+              @dismiss-failed="emit('dismiss-failed', $event)"
+              @load-run="emit('load-run', $event)"
+              @continue="emit('continue-todo', $event)"
+              @checklist-change="emit('checklist-change', $event)"
+              @run="emit('run-todo', $event)"
+            />
+          </VueDraggable>
+        </motion.div>
+      </AnimatePresence>
 
       <AnimatePresence :initial="false">
         <div
-          v-if="selectedCount > 0"
+          v-if="!showStats && selectedCount > 0"
           key="todo-bulk-bar-wrap"
           class="project-detail-bulk-bar-wrap"
         >
@@ -300,12 +386,11 @@
               @click="emit('enqueue-selected')"
             >
               <span class="project-detail-bulk-btn-icon" aria-hidden="true">
-                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-                  <path d="M12 3c5 0 9 3.6 9 8s-4 8-9 8c-.9 0-1.8-.1-2.6-.3L3 21l1.8-4.2A7.7 7.7 0 0 1 3 11c0-4.4 4-8 9-8z" />
-                  <path d="M9.5 11h.01M14.5 11h.01" />
+                <svg viewBox="0 0 1024 1024" width="18" height="18" fill="currentColor">
+                  <path d="M161.2 839.9v-654c0-56.1 60.7-91.1 109.3-63.1l566.3 327c48.6 28 48.6 98.1 0 126.2L270.4 903c-48.5 28-109.2-7.1-109.2-63.1z" />
                 </svg>
               </span>
-              <span class="project-detail-bulk-btn-label">加入队列</span>
+              <span class="project-detail-bulk-btn-label">开始执行</span>
             </motion.button>
             <motion.button
               type="button"
@@ -375,15 +460,26 @@
 </template>
 
 <script setup>
-import { computed, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { AnimatePresence, motion } from 'motion-v'
 import { VueDraggable } from 'vue-draggable-plus'
+import AnimatedStatValue from '../motion/AnimatedStatValue.vue'
 import AppButton from '../motion/AppButton.vue'
 import AppTooltip from '../common/AppTooltip.vue'
 import TodoItemRow from './TodoItemRow.vue'
+import RunStatsBarChart from './RunStatsBarChart.vue'
+import AgentBridgeStatus from './AgentBridgeStatus.vue'
 import { useMotionPresets } from '../../composables/useMotionPresets'
 import { fetchStructFolder } from '../../api/structFolder'
 import { agentGitStatus, isAgentBridgeAvailable } from '../../api/agentBridge'
+import {
+  aggregateProjectMetricsByDay,
+  aggregateProjectTodoMetrics,
+  STATS_CHART_DAYS,
+  formatCostCny,
+  formatDurationMs,
+  formatTokenCount,
+} from '../../utils/todoRunMetrics'
 
 const props = defineProps({
   project: { type: Object, default: null },
@@ -423,11 +519,23 @@ const emit = defineEmits([
   'checklist-change',
   'run-todo',
   'reorder-todos',
+  'toast',
 ])
 
-const { presets } = useMotionPresets()
+const { presets, reduced } = useMotionPresets()
+
+const STATS_STAGGER_STEP = 0.06
+
+const statsStaggerTransition = (index) => ({
+  ...presets.value.reveal.transition,
+  delay: reduced.value ? 0 : index * STATS_STAGGER_STEP,
+})
 
 const selectedIds = ref(new Set())
+const showStats = ref(false)
+const statsAnimEpoch = ref(0)
+const nowTick = ref(Date.now())
+let statsTickTimer = null
 const statusFilter = ref('all')
 const sedimentFolderName = ref('')
 const gitBranch = ref('')
@@ -444,7 +552,7 @@ const hasTag = computed(() => {
 })
 
 const emptyTodosHint = computed(() => {
-  if (hasTag.value) return '暂无待办，可点右上角同步提取'
+  if (hasTag.value) return '暂无待办，可点右上角 + 添加或同步提取'
   return '暂无待办，可点右上角 + 添加'
 })
 
@@ -455,32 +563,102 @@ const branchTooltip = computed(() => {
   return branchLabel.value || '无法读取分支'
 })
 
-const runningPulse = { opacity: [1, 0.72, 1] }
-const runningTransition = { duration: 1.4, repeat: Infinity, ease: 'easeInOut' }
-
 const statusFilterOptions = [
   { key: 'all', label: '全部' },
   { key: 'idle', label: '未完成' },
-  { key: 'running', label: '执行中' },
   { key: 'pending_review', label: '待验收' },
-  { key: 'done', label: '已完成' },
+  { key: 'done', label: '已验收' },
 ]
 
 const todoStatusKey = (todo) => {
   if (todo?.done) return 'done'
   if (todo?.runStatus === 'pending_review') return 'pending_review'
-  if (todo?.runStatus === 'running' || todo?.runStatus === 'queued') return 'running'
+  // running / queued 归入未完成，不再单独成「执行中」筛选项
   return 'idle'
 }
 
 const statusCounts = computed(() => {
   const list = Array.isArray(props.todos) ? props.todos : []
-  const counts = { all: list.length, idle: 0, running: 0, pending_review: 0, done: 0 }
+  const counts = { all: list.length, idle: 0, pending_review: 0, done: 0 }
   list.forEach((todo) => {
     const key = todoStatusKey(todo)
     counts[key] = (counts[key] || 0) + 1
   })
   return counts
+})
+
+const hasLiveRunTodo = computed(() =>
+  (props.todos || []).some((todo) => todo.runStatus === 'running'),
+)
+
+const runMetrics = computed(() =>
+  aggregateProjectTodoMetrics(props.todos, props.runDetails, nowTick.value),
+)
+
+const formatKpiTokens = (n) => {
+  const num = Math.max(0, Math.round(Number(n) || 0))
+  return num ? `${formatTokenCount(num)} tokens` : '0'
+}
+
+const formatKpiDuration = (ms) => {
+  const total = Math.max(0, Math.round(Number(ms) || 0))
+  return total ? formatDurationMs(total) : '0秒'
+}
+
+const formatKpiCost = (n) => formatCostCny(Math.max(0, Number(n) || 0))
+
+const statsKpis = computed(() => {
+  const { totalTokens, totalDurationMs, costCny } = runMetrics.value
+  return [
+    { key: 'tokens', label: '总 Token', value: totalTokens, format: formatKpiTokens },
+    { key: 'duration', label: '总时间', value: totalDurationMs, format: formatKpiDuration },
+    { key: 'cost', label: '约合费用', value: costCny, format: formatKpiCost },
+  ]
+})
+
+const runMetricsByDay = computed(() =>
+  aggregateProjectMetricsByDay(
+    props.todos,
+    props.runDetails,
+    STATS_CHART_DAYS,
+    nowTick.value,
+  ),
+)
+
+const chartDateLabels = computed(() =>
+  runMetricsByDay.value.map((item) => item.dateKey),
+)
+
+const chartTokenValues = computed(() =>
+  runMetricsByDay.value.map((item) => item.totalTokens),
+)
+
+const chartDurationValues = computed(() =>
+  runMetricsByDay.value.map((item) => item.totalDurationMs),
+)
+
+const formatChartTokens = (value) => {
+  const n = Number(value) || 0
+  return n ? `${formatTokenCount(n)} tokens` : '0'
+}
+
+const formatChartDuration = (value) => {
+  const ms = Number(value) || 0
+  return ms ? formatDurationMs(ms) : '0秒'
+}
+
+const tokenChartMeta = computed(() => {
+  const items = runMetricsByDay.value
+  const activeDays = items.filter((item) => item.totalTokens > 0).length
+  const total = items.reduce((sum, item) => sum + item.totalTokens, 0)
+  return `活跃 ${activeDays} 天 · 累计 ${total ? formatTokenCount(total) : '0'} tokens`
+})
+
+const durationChartMeta = computed(() => {
+  const items = runMetricsByDay.value
+  const activeDays = items.filter((item) => item.totalDurationMs > 0).length
+  const totalMs = items.reduce((sum, item) => sum + item.totalDurationMs, 0)
+  return `活跃 ${activeDays} 天 · 累计 ${totalMs ? formatDurationMs(totalMs) : '0秒'}`
 })
 
 const filteredTodos = computed(() => {
@@ -580,6 +758,61 @@ const clearSelection = () => {
   selectedIds.value = new Set()
 }
 
+const setStatusFilter = (key) => {
+  if (statusFilter.value === key) return
+  statusFilter.value = key
+  clearSelection()
+}
+
+const syncStatsTickTimer = () => {
+  if (showStats.value && hasLiveRunTodo.value) {
+    if (!statsTickTimer) {
+      statsTickTimer = window.setInterval(() => {
+        nowTick.value = Date.now()
+      }, 1000)
+    }
+    return
+  }
+  if (statsTickTimer) {
+    clearInterval(statsTickTimer)
+    statsTickTimer = null
+  }
+}
+
+const refreshTodoRunDetails = () => {
+  for (const todo of props.todos || []) {
+    const tid = String(todo.id || '')
+    const detail = props.runDetails?.[tid]
+    const needsHistory =
+      (todo.lastRunId || todo.runStatus !== 'idle') &&
+      (!detail?.history || detail.history.length <= 1)
+    if (
+      needsHistory ||
+      todo.runStatus === 'running' ||
+      todo.runStatus === 'queued'
+    ) {
+      emit('load-run', todo)
+    }
+  }
+}
+
+const toggleStats = () => {
+  showStats.value = !showStats.value
+  if (showStats.value) {
+    statsAnimEpoch.value += 1
+    clearSelection()
+    nowTick.value = Date.now()
+    refreshTodoRunDetails()
+  }
+  syncStatsTickTimer()
+}
+
+watch([showStats, hasLiveRunTodo], syncStatsTickTimer)
+
+onBeforeUnmount(() => {
+  if (statsTickTimer) clearInterval(statsTickTimer)
+})
+
 const onTodoSortEnd = (evt) => {
   if (evt.oldIndex === evt.newIndex || evt.oldIndex == null || evt.newIndex == null) return
   if (statusFilter.value !== 'all') return
@@ -592,7 +825,9 @@ watch(
   () => props.project?.id,
   () => {
     selectedIds.value = new Set()
+    showStats.value = false
     statusFilter.value = 'all'
+    syncStatsTickTimer()
   },
 )
 
@@ -741,8 +976,9 @@ defineExpose({ getSelectedTodos, clearSelection })
   gap: 8px;
 }
 
-.project-detail-header-actions:has(.project-detail-sync-btn:hover) .project-detail-last-sync,
-.project-detail-header-actions:has(.project-detail-sync-btn:focus-visible) .project-detail-last-sync {
+.project-detail-header-actions:has(.project-detail-sync-btn:hover) .project-detail-last-sync:not(.is-visible),
+.project-detail-header-actions:has(.project-detail-sync-btn:focus-visible) .project-detail-last-sync:not(.is-visible),
+.project-detail-last-sync.is-visible {
   opacity: 1;
   transform: translateX(0);
   pointer-events: auto;
@@ -750,6 +986,9 @@ defineExpose({ getSelectedTodos, clearSelection })
 
 .project-detail-last-sync {
   margin-right: 2px;
+  max-width: min(280px, 42vw);
+  overflow: hidden;
+  text-overflow: ellipsis;
   font-size: 12px;
   color: var(--color-secondary-text);
   white-space: nowrap;
@@ -757,6 +996,11 @@ defineExpose({ getSelectedTodos, clearSelection })
   transform: translateX(4px);
   pointer-events: none;
   transition: opacity 0.18s ease, transform 0.18s ease;
+}
+
+.project-detail-last-sync.is-visible {
+  color: var(--color-accent);
+  font-weight: 500;
 }
 
 .project-detail-add-icon-btn {
@@ -820,6 +1064,11 @@ defineExpose({ getSelectedTodos, clearSelection })
 
 .project-detail-icon-btn.is-static {
   cursor: default;
+}
+
+.project-detail-icon-btn.is-active {
+  color: var(--color-accent);
+  background: rgba(37, 99, 235, 0.1);
 }
 
 .project-detail-links :deep(.project-detail-icon-tip:hover) .project-detail-icon-btn,
@@ -902,6 +1151,7 @@ button.project-detail-icon-btn:hover {
 .project-detail-status-area {
   display: flex;
   align-items: center;
+  gap: 8px;
   min-width: 0;
   overflow: hidden;
 }
@@ -916,6 +1166,124 @@ button.project-detail-icon-btn:hover {
   flex: 1 1 auto;
   overflow: hidden;
   text-align: left;
+}
+
+.project-detail-todos {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.project-detail-stats {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-height: 0;
+  min-width: 0;
+  padding: 8px 4px 12px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  box-sizing: border-box;
+  container-type: inline-size;
+  container-name: project-detail-stats;
+}
+
+.project-detail-stats-kpis {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  min-width: 0;
+}
+
+.project-detail-stats-kpi {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  padding: 16px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-card);
+  transition: box-shadow 200ms ease;
+}
+
+.project-detail-stats-kpi-label {
+  font-size: 12px;
+  color: var(--color-secondary-text);
+}
+
+.project-detail-stats-kpi-value {
+  font-size: 20px;
+  font-weight: 600;
+  line-height: 1.2;
+  color: var(--color-primary);
+  font-variant-numeric: tabular-nums;
+}
+
+.project-detail-stats-kpi--cost {
+  border-color: rgba(245, 158, 11, 0.22);
+  background: linear-gradient(180deg, rgba(245, 158, 11, 0.05) 0%, var(--color-surface) 100%);
+}
+
+.project-detail-stats-kpi--cost .project-detail-stats-kpi-value {
+  color: var(--color-accent);
+}
+
+.project-detail-stats-charts {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+}
+
+.project-detail-stats-card {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
+  padding: 18px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-card);
+}
+
+.project-detail-stats-card-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px 12px;
+  flex-wrap: nowrap;
+  min-width: 0;
+}
+
+.project-detail-stats-card-title {
+  margin: 0;
+  flex: 0 1 auto;
+  min-width: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-primary);
+  white-space: nowrap;
+}
+
+.project-detail-stats-card-meta {
+  flex: 0 0 auto;
+  font-size: 12px;
+  color: var(--color-secondary-text);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.project-detail-stats-hint {
+  margin: 0;
+  font-size: 12px;
+  color: var(--color-secondary-text);
+  line-height: 1.5;
 }
 
 .project-detail-empty {
@@ -1117,6 +1485,44 @@ button.project-detail-icon-btn:hover {
   .project-detail-pending-banner {
     flex-direction: column;
     align-items: stretch;
+  }
+
+  .project-detail-stats-kpis {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+}
+
+@container project-detail-stats (max-width: 760px) {
+  .project-detail-stats-kpis {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+
+  .project-detail-stats-kpi {
+    padding: 14px 16px;
+  }
+
+  .project-detail-stats-card {
+    padding: 14px;
+  }
+
+  .project-detail-stats-card-head {
+    flex-wrap: wrap;
+  }
+
+  .project-detail-stats-card-meta {
+    font-size: 11px;
+  }
+}
+
+@container project-detail-stats (max-width: 420px) {
+  .project-detail-stats-kpi-value {
+    font-size: 18px;
+  }
+
+  .project-detail-stats-card-title {
+    font-size: 13px;
   }
 }
 </style>
