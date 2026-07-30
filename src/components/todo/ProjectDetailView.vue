@@ -15,16 +15,36 @@
             :title="`查看标签「${primaryTag.name}」下的碎片`"
             @click="emit('open-tag', primaryTag)"
           >#{{ primaryTag.name }}</button>
+          <button
+            v-else-if="!hasTag"
+            type="button"
+            class="project-detail-title-tag-add"
+            title="关联同步标签"
+            :disabled="busy"
+            @click="emit('edit', project)"
+          >
+            <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M12 5v14M5 12h14" />
+            </svg>
+          </button>
         </h2>
+        <p class="project-detail-meta">
+          <span>{{ dateRangeText }}</span>
+          <span class="project-detail-meta-sep" aria-hidden="true">·</span>
+          <span :class="{ 'is-muted': !lastSyncedText }">
+            最近同步 {{ lastSyncedText || '尚未同步' }}
+          </span>
+        </p>
       </div>
       <div class="project-detail-header-actions">
         <AppButton
+          v-if="!hasTag"
           type="button"
           class="btn btn-primary project-detail-add-icon-btn"
           aria-label="新增待办"
           title="新增待办"
           :disabled="busy"
-          @click="startAdd"
+          @click="emit('open-add')"
         >
           <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <path d="M12 5v14M5 12h14" />
@@ -34,6 +54,7 @@
           编辑
         </AppButton>
         <AppButton
+          v-if="hasTag"
           type="button"
           class="btn btn-primary"
           :disabled="busy || syncing || pendingSyncCount > 0"
@@ -65,49 +86,31 @@
       </AppButton>
     </div>
 
-    <div class="project-detail-switcher">
-      <div class="note-view-switcher">
-        <div class="switcher-tabs" role="tablist" aria-label="事情视图">
-          <motion.button
-            type="button"
-            class="switcher-btn"
-            :class="{ 'is-active': activeTab === 'todos' }"
-            role="tab"
-            :aria-selected="activeTab === 'todos'"
-            :while-hover="presets.button.hover"
-            :while-tap="presets.button.tap"
-            :transition="presets.button.transition"
-            @click="setTab('todos')"
-          >
-            <span class="switcher-icon" aria-hidden="true">
-              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01" />
-              </svg>
-            </span>
-            <span>列表</span>
-          </motion.button>
-          <motion.button
-            type="button"
-            class="switcher-btn"
-            :class="{ 'is-active': activeTab === 'detail' }"
-            role="tab"
-            :aria-selected="activeTab === 'detail'"
-            :while-hover="presets.button.hover"
-            :while-tap="presets.button.tap"
-            :transition="presets.button.transition"
-            @click="setTab('detail')"
-          >
-            <span class="switcher-icon" aria-hidden="true">
-              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-                <circle cx="12" cy="12" r="10" />
-                <path d="M12 16v-4M12 8h.01" />
-              </svg>
-            </span>
-            <span>详情</span>
-          </motion.button>
-        </div>
+    <div class="project-detail-toolbar">
+      <div class="project-detail-scope" role="tablist" aria-label="按状态筛选">
+        <button
+          v-for="opt in statusFilterOptions"
+          :key="opt.key"
+          type="button"
+          class="project-detail-scope-btn"
+          :class="{ 'is-active': statusFilter === opt.key }"
+          role="tab"
+          :aria-selected="statusFilter === opt.key"
+          @click="statusFilter = opt.key"
+        >
+          <motion.span
+            v-if="statusFilter === opt.key"
+            layout-id="todoStatusScope"
+            class="project-detail-scope-active-bg"
+            :transition="presets.layoutSpring"
+          />
+          <span class="project-detail-scope-label">{{ opt.label }}</span>
+          <span class="project-detail-scope-count">{{ statusCounts[opt.key] || 0 }}</span>
+        </button>
+      </div>
 
-        <div class="switcher-status-area">
+      <div class="project-detail-toolbar-right">
+        <div class="project-detail-status-area">
           <motion.span
             v-if="syncing"
             class="project-detail-status-badge is-running"
@@ -139,93 +142,67 @@
             排队 {{ queueLength }} 条
           </span>
         </div>
+
+        <div class="project-detail-links">
+          <button
+            v-if="project?.sedimentFolderId"
+            type="button"
+            class="project-detail-link"
+            title="打开沉淀文件夹"
+            @click="emit('open-sediment-folder')"
+          >
+            <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z" />
+            </svg>
+            <span>{{ sedimentFolderName || '沉淀文件夹' }}</span>
+          </button>
+          <span
+            v-else
+            class="project-detail-link is-muted"
+            title="保存事情后自动创建"
+          >
+            <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z" />
+            </svg>
+            <span>沉淀文件夹</span>
+          </span>
+
+          <span
+            class="project-detail-link"
+            :class="{ 'is-muted': !project?.localPath }"
+            :title="project?.localPath || '未关联项目仓库'"
+          >
+            <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M9 19c-4.3 1.4-4.3-2.5-6-3m12 5v-3.5c0-1 .1-1.4-.5-2 2.8-.3 5.5-1.4 5.5-6a4.6 4.6 0 0 0-1.3-3.2 4.2 4.2 0 0 0-.1-3.2s-1.1-.3-3.5 1.3a12 12 0 0 0-6 0C6.5 2.8 5.4 3.1 5.4 3.1a4.2 4.2 0 0 0-.1 3.2A4.6 4.6 0 0 0 4 9.5c0 4.6 2.7 5.7 5.5 6-.6.6-.6 1.2-.5 2V21" />
+            </svg>
+            <span>{{ projectPathLabel }}</span>
+          </span>
+        </div>
       </div>
     </div>
 
-    <div v-show="activeTab === 'detail'" class="project-detail-pane project-detail-pane--profile">
-      <div class="project-profile">
-        <section class="project-profile-hero">
-          <div class="project-profile-facts">
-            <div class="project-profile-fact">
-              <span class="project-profile-fact-label">起止</span>
-              <span class="project-profile-fact-value">{{ dateRangeText }}</span>
-            </div>
-            <div class="project-profile-fact">
-              <span class="project-profile-fact-label">最近同步</span>
-              <span class="project-profile-fact-value" :class="{ 'is-muted': !lastSyncedText }">
-                {{ lastSyncedText || '尚未同步' }}
-              </span>
-            </div>
-            <div class="project-profile-fact">
-              <span class="project-profile-fact-label">沉淀文件夹</span>
-              <button
-                v-if="project?.sedimentFolderId"
-                type="button"
-                class="project-profile-link"
-                @click="emit('open-sediment-folder')"
-              >
-                {{ sedimentFolderName || '打开文件夹' }}
-              </button>
-              <span v-else class="project-profile-fact-value is-muted">保存事情后自动创建</span>
-            </div>
-            <div class="project-profile-fact">
-              <span class="project-profile-fact-label">代码仓</span>
-              <span
-                class="project-profile-fact-value"
-                :class="{ 'is-muted': !project?.localPath }"
-                :title="project?.localPath || undefined"
-              >
-                {{ project?.localPath || '未关联' }}
-              </span>
-            </div>
-          </div>
-        </section>
+    <div class="project-detail-pane">
+      <div
+        v-if="loading && !todos.length"
+        class="project-detail-empty"
+      >
+        <p class="project-detail-state">加载中…</p>
       </div>
-    </div>
-
-    <div v-show="activeTab === 'todos'" class="project-detail-pane project-detail-pane--todos">
-      <div class="project-detail-status-filters" role="tablist" aria-label="按状态筛选">
-        <button
-          v-for="opt in statusFilterOptions"
-          :key="opt.key"
-          type="button"
-          class="project-detail-status-filter"
-          :class="[`is-${opt.key}`, { 'is-active': statusFilter === opt.key }]"
-          role="tab"
-          :aria-selected="statusFilter === opt.key"
-          @click="statusFilter = opt.key"
-        >
-          <span class="project-detail-status-filter-label">{{ opt.label }}</span>
-          <span class="project-detail-status-filter-count">{{ statusCounts[opt.key] || 0 }}</span>
-        </button>
+      <div
+        v-else-if="!todos.length"
+        class="project-detail-empty"
+      >
+        <p v-if="!canRunAgents" class="project-detail-state">
+          编辑事情并关联本地项目路径后，可排队让 Cursor 执行待办
+        </p>
+        <p class="project-detail-state">{{ emptyTodosHint }}</p>
       </div>
-
-      <p v-if="!canRunAgents" class="project-detail-path-hint">
-        编辑事情并关联本地项目路径后，可排队让 Cursor 执行待办
+      <p
+        v-else-if="!filteredTodos.length"
+        class="project-detail-state project-detail-state--inline"
+      >
+        该状态下暂无待办
       </p>
-
-      <form v-if="adding" class="project-detail-composer" @submit.prevent="handleAdd">
-        <input
-          ref="inputRef"
-          v-model="draftTitle"
-          class="project-detail-input"
-          type="text"
-          maxlength="240"
-          placeholder="输入待办标题，回车确认"
-          :disabled="busy"
-          @keydown.esc.prevent="cancelAdd"
-        />
-        <AppButton class="btn btn-primary project-detail-add-btn" type="submit" :disabled="busy || !canAdd">
-          添加
-        </AppButton>
-        <AppButton class="btn btn-icon-text" type="button" :disabled="busy" @click="cancelAdd">
-          取消
-        </AppButton>
-      </form>
-
-      <p v-if="loading && !todos.length" class="project-detail-state">加载中…</p>
-      <p v-else-if="!todos.length" class="project-detail-state">暂无待办，可点右上角 + 添加或同步提取</p>
-      <p v-else-if="!filteredTodos.length" class="project-detail-state">该状态下暂无待办</p>
 
       <ul
         v-else
@@ -357,7 +334,7 @@
 </template>
 
 <script setup>
-import { computed, nextTick, ref, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { AnimatePresence, motion } from 'motion-v'
 import AppButton from '../motion/AppButton.vue'
 import TodoItemRow from './TodoItemRow.vue'
@@ -384,7 +361,7 @@ const emit = defineEmits([
   'edit',
   'sync',
   'open-pending-sync',
-  'add-todo',
+  'open-add',
   'delete-todo',
   'open-source',
   'open-tag',
@@ -405,17 +382,29 @@ const emit = defineEmits([
 
 const { presets } = useMotionPresets()
 
-const draftTitle = ref('')
-const inputRef = ref(null)
-const adding = ref(false)
 const selectedIds = ref(new Set())
-const activeTab = ref('todos')
 const statusFilter = ref('all')
 const sedimentFolderName = ref('')
 
-const canAdd = computed(() => String(draftTitle.value || '').trim().length > 0)
 const canRunAgents = computed(() => Boolean(props.project?.localPath))
 const selectedCount = computed(() => selectedIds.value.size)
+
+const hasTag = computed(() => {
+  const ids = Array.isArray(props.project?.tagIds) ? props.project.tagIds : []
+  return ids.some((id) => String(id || '').trim())
+})
+
+const emptyTodosHint = computed(() => {
+  if (hasTag.value) return '暂无待办，可点右上角同步提取'
+  return '暂无待办，可点右上角 + 添加'
+})
+
+const projectPathLabel = computed(() => {
+  const path = String(props.project?.localPath || '').trim()
+  if (!path) return '未关联仓库'
+  const parts = path.replace(/\\/g, '/').split('/').filter(Boolean)
+  return parts[parts.length - 1] || path
+})
 
 const runningPulse = { opacity: [1, 0.72, 1] }
 const runningTransition = { duration: 1.4, repeat: Infinity, ease: 'easeInOut' }
@@ -457,7 +446,7 @@ const dateRangeText = computed(() => {
   if (start && end) return `${start} – ${end}`
   if (start) return `${start} 起`
   if (end) return `至 ${end}`
-  return '未设置起止时间'
+  return '未设置起止'
 })
 
 const lastSyncedText = computed(() => {
@@ -493,42 +482,6 @@ watch(
   { immediate: true },
 )
 
-const focusInput = async () => {
-  await nextTick()
-  inputRef.value?.focus?.()
-}
-
-const startAdd = async () => {
-  activeTab.value = 'todos'
-  adding.value = true
-  draftTitle.value = ''
-  await focusInput()
-}
-
-const cancelAdd = () => {
-  adding.value = false
-  draftTitle.value = ''
-}
-
-const handleAdd = async () => {
-  const title = String(draftTitle.value || '').trim()
-  if (!title) return
-  emit('add-todo', title)
-  draftTitle.value = ''
-  adding.value = false
-}
-
-const setTab = (tab) => {
-  if (tab === 'todos') {
-    activeTab.value = 'todos'
-    return
-  }
-  if (tab === 'detail') {
-    activeTab.value = 'detail'
-    cancelAdd()
-  }
-}
-
 const onSelectChange = ({ todo, selected }) => {
   const next = new Set(selectedIds.value)
   const id = String(todo.id)
@@ -550,13 +503,11 @@ watch(
   () => props.project?.id,
   () => {
     selectedIds.value = new Set()
-    activeTab.value = 'todos'
     statusFilter.value = 'all'
-    cancelAdd()
   },
 )
 
-defineExpose({ focusInput: startAdd, getSelectedTodos, clearSelection })
+defineExpose({ getSelectedTodos, clearSelection })
 </script>
 
 <style scoped>
@@ -582,9 +533,9 @@ defineExpose({ focusInput: startAdd, getSelectedTodos, clearSelection })
 }
 
 .project-detail-title {
-  margin: 0 0 8px;
+  margin: 0;
   display: flex;
-  align-items: baseline;
+  align-items: center;
   min-width: 0;
   font-size: 18px;
   font-weight: 650;
@@ -645,99 +596,63 @@ defineExpose({ focusInput: startAdd, getSelectedTodos, clearSelection })
   color: var(--color-accent);
 }
 
-.project-detail-switcher {
+.project-detail-title-tag-add {
   flex: 0 0 auto;
-  display: flex;
-  align-items: center;
-  min-height: 36px;
-  width: 100%;
-  margin-bottom: 0;
-  box-sizing: border-box;
-}
-
-.note-view-switcher {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  width: 100%;
-  min-height: 36px;
-  box-sizing: border-box;
-}
-
-.switcher-tabs {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 6px;
-  flex: 0 1 auto;
-  min-width: 0;
-  align-self: flex-start;
-}
-
-.switcher-status-area {
-  flex: 0 1 auto;
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  align-self: center;
-  margin-left: auto;
-  min-width: 0;
-  min-height: 28px;
-  overflow: hidden;
-}
-
-.switcher-btn {
-  flex: 0 0 auto;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  min-height: 28px;
-  padding: 4px 10px;
-  border: 0;
-  border-radius: 6px;
-  background: transparent;
-  color: var(--color-secondary-text);
-  font-size: 13px;
-  font-weight: 500;
-  font-family: inherit;
-  cursor: pointer;
-}
-
-.switcher-btn:hover:not(.is-active) {
-  color: var(--color-text);
-}
-
-.switcher-btn.is-active {
-  color: var(--color-accent);
-  font-weight: 600;
-}
-
-.switcher-icon {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  flex-shrink: 0;
+  width: 28px;
+  height: 22px;
+  margin-left: 8px;
+  padding: 0;
+  border: 1px dashed rgba(24, 24, 27, 0.28);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--color-secondary-text);
+  cursor: pointer;
 }
 
-.project-detail-pane {
+.project-detail-title-tag-add:hover:not(:disabled) {
+  border-color: rgba(37, 99, 235, 0.45);
+  color: var(--color-accent);
+  background: rgba(37, 99, 235, 0.06);
+}
+
+.project-detail-title-tag-add:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.project-detail-meta {
+  margin: 6px 0 0;
   display: flex;
-  flex-direction: column;
-  align-items: stretch;
-  gap: 14px;
-  min-height: 0;
-  flex: 1 1 auto;
-  text-align: left;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 6px;
+  font-size: 12px;
+  color: var(--color-secondary-text);
+  line-height: 1.4;
 }
 
-.project-detail-pane--todos {
-  position: relative;
-  overflow: hidden;
-  min-height: 0;
+.project-detail-meta-sep {
+  color: #a1a1aa;
 }
 
-.project-detail-pane--profile {
-  overflow: auto;
-  padding-bottom: 8px;
+.project-detail-meta .is-muted {
+  color: rgba(24, 24, 27, 0.42);
+}
+
+.project-detail-header-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.project-detail-add-icon-btn {
+  width: 30px;
+  min-width: 30px;
+  padding: 0;
 }
 
 .project-detail-pending-banner {
@@ -758,253 +673,165 @@ defineExpose({ focusInput: startAdd, getSelectedTodos, clearSelection })
   flex: 0 0 auto;
 }
 
-.project-profile {
+.project-detail-toolbar {
   display: flex;
-  flex-direction: column;
-  gap: 20px;
-  width: 100%;
-  max-width: none;
-  align-self: stretch;
-  text-align: left;
-}
-
-.project-profile-hero {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-  padding: 16px 18px;
-  border: 1px solid var(--color-border);
-  border-radius: 12px;
-  background: linear-gradient(180deg, rgba(37, 99, 235, 0.04), transparent);
-}
-
-.project-profile-facts {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px 20px;
-}
-
-.project-profile-fact {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  min-width: 0;
-}
-
-.project-profile-fact-label {
-  font-size: 12px;
-  color: var(--color-secondary-text);
-}
-
-.project-profile-fact-value {
-  font-size: 13px;
-  line-height: 1.45;
-  color: var(--color-primary);
-  overflow-wrap: anywhere;
-}
-
-.project-profile-fact-value.is-muted {
-  color: rgba(24, 24, 27, 0.42);
-}
-
-.project-profile-link {
-  appearance: none;
-  border: 0;
-  padding: 0;
-  background: transparent;
-  color: var(--color-accent);
-  font: inherit;
-  font-size: 13px;
-  font-weight: 600;
-  text-align: left;
-  cursor: pointer;
-  overflow-wrap: anywhere;
-}
-
-.project-profile-link:hover {
-  text-decoration: underline;
-}
-
-.project-profile-block {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.project-profile-block--pair {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 16px 24px;
-}
-
-@media (max-width: 640px) {
-  .project-profile-facts,
-  .project-profile-block--pair {
-    grid-template-columns: 1fr;
-  }
-
-  .project-detail-pending-banner {
-    flex-direction: column;
-    align-items: stretch;
-  }
-}
-
-.project-profile-heading {
-  margin: 0;
-  font-size: 13px;
-  font-weight: 650;
-  color: var(--color-secondary-text);
-}
-
-.project-profile-body {
-  margin: 0;
-  font-size: 14px;
-  line-height: 1.65;
-  color: var(--color-primary);
-  white-space: pre-wrap;
-  word-break: break-word;
-}
-
-.project-profile-body.is-muted {
-  color: rgba(24, 24, 27, 0.42);
-}
-
-.project-detail-info-tags {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.project-detail-status-filters {
-  display: flex;
-  flex-wrap: wrap;
   align-items: center;
-  gap: 8px;
-  text-align: left;
+  gap: 10px 14px;
+  min-height: 36px;
+  flex-wrap: wrap;
 }
 
-.project-detail-status-filter {
+.project-detail-scope {
   display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  height: 28px;
-  padding: 0 10px;
-  border: 1px solid transparent;
+  flex-wrap: wrap;
+  padding: 3px;
   border-radius: 999px;
   background: rgba(24, 24, 27, 0.05);
+  gap: 2px;
+}
+
+.project-detail-scope-btn {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 28px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
   color: var(--color-secondary-text);
   font-family: inherit;
   font-size: 12px;
   font-weight: 500;
   cursor: pointer;
+  z-index: 0;
 }
 
-.project-detail-status-filter-count {
-  min-width: 16px;
-  font-variant-numeric: tabular-nums;
-  opacity: 0.75;
-}
-
-.project-detail-status-filter.is-idle {
-  background: rgba(100, 116, 139, 0.1);
-  color: #64748b;
-}
-
-.project-detail-status-filter.is-running {
-  background: rgba(37, 99, 235, 0.1);
-  color: #2563eb;
-}
-
-.project-detail-status-filter.is-pending_review {
-  background: rgba(245, 158, 11, 0.12);
-  color: #b45309;
-}
-
-.project-detail-status-filter.is-done {
-  background: rgba(22, 163, 74, 0.1);
-  color: #16a34a;
-}
-
-.project-detail-status-filter.is-active {
-  border-color: currentColor;
-  font-weight: 600;
-  box-shadow: 0 0 0 1px rgba(24, 24, 27, 0.04);
-}
-
-.project-detail-status-filter.is-all.is-active {
-  border-color: rgba(24, 24, 27, 0.28);
+.project-detail-scope-btn.is-active {
   color: var(--color-primary);
-  background: rgba(24, 24, 27, 0.08);
+  font-weight: 600;
 }
 
-.note-tag {
-  display: inline-block;
-  padding: 2px 8px;
-  border: 0;
+.project-detail-scope-active-bg {
+  position: absolute;
+  inset: 0;
   border-radius: 999px;
-  background: rgba(24, 24, 27, 0.08);
+  background: var(--color-surface);
+  box-shadow: 0 1px 2px rgba(24, 24, 27, 0.08);
+  z-index: -1;
+}
+
+.project-detail-scope-label,
+.project-detail-scope-count {
+  position: relative;
+  z-index: 1;
+}
+
+.project-detail-scope-count {
+  font-variant-numeric: tabular-nums;
+  opacity: 0.72;
+}
+
+.project-detail-toolbar-right {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-left: auto;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.project-detail-status-area {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.project-detail-links {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  flex: 0 1 auto;
+}
+
+.project-detail-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 160px;
+  min-height: 28px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
   color: var(--color-secondary-text);
   font: inherit;
   font-size: 12px;
-  line-height: 1.5;
-  letter-spacing: 0.2px;
-  white-space: nowrap;
+  line-height: 1.3;
+  cursor: default;
+}
+
+button.project-detail-link {
   cursor: pointer;
 }
 
-button.note-tag:hover {
-  background: rgba(37, 99, 235, 0.12);
+button.project-detail-link:hover {
   color: var(--color-accent);
+  background: rgba(37, 99, 235, 0.06);
 }
 
-.project-detail-header-actions {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px;
+.project-detail-link.is-muted {
+  color: rgba(24, 24, 27, 0.42);
 }
 
-.project-detail-add-icon-btn {
-  width: 30px;
-  min-width: 30px;
-  padding: 0;
+.project-detail-link > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.project-detail-path-hint {
-  margin: 0;
-  font-size: 12px;
-  color: var(--color-secondary-text);
-}
-
-.project-detail-composer {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.project-detail-input {
-  flex: 1 1 auto;
-  min-width: 0;
-  height: 36px;
-  padding: 0 12px;
-  border: 1px solid var(--color-border);
-  border-radius: 10px;
-  background: var(--color-surface);
-  color: var(--color-primary);
-  font-family: inherit;
-  font-size: 13px;
-  box-sizing: border-box;
-}
-
-.project-detail-input:focus {
-  outline: none;
-  border-color: rgba(37, 99, 235, 0.45);
-  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
-}
-
-.project-detail-add-btn {
-  height: 36px;
+.project-detail-link svg {
   flex: 0 0 auto;
+}
+
+.project-detail-pane {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 14px;
+  min-height: 0;
+  flex: 1 1 auto;
+  overflow: hidden;
+  text-align: left;
+}
+
+.project-detail-empty {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 0;
+  padding: 24px 16px;
+  text-align: center;
+}
+
+.project-detail-state {
+  margin: 0;
+  font-size: 13px;
+  color: var(--color-secondary-text);
+  line-height: 1.5;
+}
+
+.project-detail-state--inline {
+  margin: 12px 0;
+  text-align: left;
 }
 
 .project-detail-status-badge {
@@ -1143,13 +970,6 @@ button.note-tag:hover {
   white-space: nowrap;
 }
 
-.project-detail-state {
-  margin: 20px 0;
-  text-align: left;
-  font-size: 13px;
-  color: var(--color-secondary-text);
-}
-
 .project-detail-list {
   list-style: none;
   margin: 0;
@@ -1171,8 +991,16 @@ button.note-tag:hover {
     flex-direction: column;
   }
 
-  .project-detail-info-grid {
-    grid-template-columns: 1fr;
+  .project-detail-toolbar-right {
+    margin-left: 0;
+    width: 100%;
+    justify-content: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .project-detail-pending-banner {
+    flex-direction: column;
+    align-items: stretch;
   }
 }
 </style>

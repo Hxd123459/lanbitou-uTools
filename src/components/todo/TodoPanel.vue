@@ -34,7 +34,7 @@
       @edit="openEditModal"
       @sync="handleSync"
       @open-pending-sync="openPendingSyncPreview"
-      @add-todo="handleAddTodo"
+      @open-add="openAddModal"
       @delete-todo="handleDeleteTodo"
       @open-source="handleOpenSource"
       @open-tag="handleOpenTag"
@@ -59,6 +59,13 @@
       :saving="formSaving"
       @close="closeFormModal"
       @submit="handleFormSubmit"
+    />
+
+    <TodoAddModal
+      :visible="addVisible"
+      :saving="addSaving"
+      @close="closeAddModal"
+      @submit="handleAddTodo"
     />
 
     <TodoGenerateModal
@@ -127,6 +134,7 @@ import {
 import ProjectListView from './ProjectListView.vue'
 import ProjectDetailView from './ProjectDetailView.vue'
 import ProjectFormModal from './ProjectFormModal.vue'
+import TodoAddModal from './TodoAddModal.vue'
 import TodoGenerateModal from './TodoGenerateModal.vue'
 import TodoSyncPreviewModal from './TodoSyncPreviewModal.vue'
 
@@ -149,6 +157,8 @@ const tagNameById = ref({})
 const formVisible = ref(false)
 const formSaving = ref(false)
 const editingProject = ref(null)
+const addVisible = ref(false)
+const addSaving = ref(false)
 
 const syncing = ref(false)
 const syncPhase = ref('')
@@ -496,8 +506,19 @@ const handleDeleteProject = async (project) => {
   }
 }
 
+const openAddModal = () => {
+  if (!currentProjectId.value) return
+  addVisible.value = true
+}
+
+const closeAddModal = () => {
+  if (addSaving.value) return
+  addVisible.value = false
+}
+
 const handleAddTodo = async (title) => {
   if (!currentProjectId.value) return
+  addSaving.value = true
   actionBusy.value = true
   try {
     const created = await createTodo({
@@ -507,9 +528,11 @@ const handleAddTodo = async (title) => {
     })
     todos.value = [created, ...todos.value]
     await loadTodoCounts()
+    addVisible.value = false
   } catch (error) {
     notifyError(error)
   } finally {
+    addSaving.value = false
     actionBusy.value = false
   }
 }
