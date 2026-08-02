@@ -40,5 +40,6 @@ export function setupUtools() {
 
   window.utools.onPluginOut(() => {
     window.__utoolsEnterAction = null
+    window.dispatchEvent(new Event('lanbitou:plugin-out'))
   })
 }

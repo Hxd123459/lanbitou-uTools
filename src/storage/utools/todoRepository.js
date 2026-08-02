@@ -1,5 +1,9 @@
 import { NOTE_PREFIX, TODO_PREFIX } from './constants'
-import { normalizeTodoRunStatus, TODO_RUN_STATUS } from '../../constants/todoRunStatus'
+import {
+  isOrphanRunStatus,
+  normalizeTodoRunStatus,
+  TODO_RUN_STATUS,
+} from '../../constants/todoRunStatus'
 import { dbAllDocs, dbGet, dbPut } from './dbClient'
 import { createId, formatDateTime } from './utils'
 
@@ -125,6 +129,23 @@ export async function listTodosBySourceNoteIds(noteIds = [], { projectId = null 
     })
     .map(toTodo)
     .filter(Boolean)
+}
+
+/** 启动时将中断的 running/queued 待办批量重置为 idle */
+export async function resetOrphanRunTodos() {
+  const docs = await loadAllTodoDocs()
+  const stale = docs.filter((doc) => isOrphanRunStatus(doc.runStatus))
+  if (!stale.length) return []
+
+  const now = formatDateTime()
+  const updated = []
+  for (const doc of stale) {
+    doc.runStatus = TODO_RUN_STATUS.IDLE
+    doc.updateTime = now
+    await saveTodoDoc(doc)
+    updated.push(toTodo(doc))
+  }
+  return updated
 }
 
 export async function listSourceHashesByProject(projectId) {

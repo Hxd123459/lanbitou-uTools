@@ -8,7 +8,7 @@
     "build": "vite build",
     "build:utools": "vite build",
     "preview": "vite preview",
-    "test": "node --test src/utils/todoRunMetrics.test.js",
+    "test": "node --test --experimental-test-module-mocks src/utils/todoRunMetrics.test.js src/utils/todoRunTerminal.test.js src/utils/todoSort.test.js src/utils/todoRunQueueEnqueue.test.js src/utils/todoRunQueueCancel.test.js src/utils/todoRunQueueFeedback.test.js src/utils/todoRunHistory.test.js src/constants/todoRunStatus.test.js src/ai/todoCopyUserContent.test.js src/ai/todoCopyFallback.test.js src/ai/todoCopyGenerateService.test.js src/backup/format.test.js src/storage/utools/globalSearchRepository.test.js",
     "postinstall": "npm install --prefix bridge --omit=dev"
   },
   "dependencies": {

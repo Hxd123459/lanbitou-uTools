@@ -36,6 +36,7 @@
       ref="globalSearchModalRef"
       :visible="globalSearchVisible"
       @close="globalSearchVisible = false"
+      @open-todo="(payload) => emit('open-todo', payload)"
     />
 
     <nav class="sidebar-nav" aria-label="菜单">
@@ -210,7 +211,7 @@ defineProps({
   },
 })
 
-const emit = defineEmits(['tab-change'])
+const emit = defineEmits(['tab-change', 'open-todo'])
 
 const globalSearchVisible = ref(false)
 const globalSearchModalRef = ref(null)

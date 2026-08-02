@@ -5,6 +5,7 @@
         ref="sidePanelRef"
         :active-tab="activeTab"
         @tab-change="onTabChange"
+        @open-todo="handleGlobalSearchOpenTodo"
       />
     </template>
 
@@ -972,6 +973,18 @@ const handleTodoOpenSedimentFolder = async (payload) => {
   activeTab.value = 'sediment'
   await nextTick()
   await sedimentPanelRef.value?.openFolderById?.(folderId)
+}
+
+const handleGlobalSearchOpenTodo = async (payload) => {
+  const projectId = String(payload?.projectId || '').trim()
+  const todoId = String(payload?.todoId || '').trim()
+  if (!projectId || !todoId) return
+  activeTab.value = 'todo'
+  await nextTick()
+  const ok = await todoPanelRef.value?.openTodoAt?.({ projectId, todoId })
+  if (ok === false) {
+    openToast('未找到对应待办', 'error', { duration: 1600 })
+  }
 }
 
 const clearNoteSelection = () => {

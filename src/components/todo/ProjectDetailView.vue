@@ -168,7 +168,29 @@
             :aria-pressed="showStats"
             @click="toggleStats"
           >
-            <svg viewBox="0 0 1024 1024" width="15" height="15" fill="currentColor" aria-hidden="true">
+            <svg
+              v-if="showStats"
+              viewBox="0 0 24 24"
+              width="15"
+              height="15"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.8"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+            >
+              <path d="M19 12H5" />
+              <path d="M12 19l-7-7 7-7" />
+            </svg>
+            <svg
+              v-else
+              viewBox="0 0 1024 1024"
+              width="15"
+              height="15"
+              fill="currentColor"
+              aria-hidden="true"
+            >
               <path d="M341.333333 938.666667H128a42.666667 42.666667 0 0 1-42.666667-42.666667V405.333333a42.666667 42.666667 0 0 1 42.666667-42.666666h213.333333V128a42.666667 42.666667 0 0 1 42.666667-42.666667h256a42.666667 42.666667 0 0 1 42.666667 42.666667v405.333333h213.333333a42.666667 42.666667 0 0 1 42.56 39.466667L938.666667 576v320a42.666667 42.666667 0 0 1-39.466667 42.56L896 938.666667H341.333333z m0-512H149.333333v448h192V426.666667z m533.333334 170.666666h-192v277.333334h192V597.333333zM618.666667 149.333333H405.333333v725.333334h213.333334V149.333333z" />
             </svg>
           </button>
@@ -176,7 +198,7 @@
       </div>
 
       <div class="project-detail-toolbar-right">
-        <div class="project-detail-status-area">
+        <div v-if="!showStats" class="project-detail-status-area">
           <AgentBridgeStatus @toast="emit('toast', $event)" />
           <button
             v-if="!syncing && pendingSyncCount > 0"
@@ -186,12 +208,9 @@
           >
             待确认 {{ pendingSyncCount }} 条
           </button>
-          <span v-else-if="canRunAgents && queueLength" class="project-detail-status-badge">
-            排队 {{ queueLength }} 条
-          </span>
         </div>
 
-        <div class="project-detail-scope" role="tablist" aria-label="按状态筛选">
+        <div v-if="!showStats" class="project-detail-scope" role="tablist" aria-label="按状态筛选">
           <button
             v-for="opt in statusFilterOptions"
             :key="opt.key"
@@ -319,11 +338,12 @@
 
           <VueDraggable
             v-else
+            ref="todoListRef"
             v-model="sortableTodos"
             item-key="id"
             tag="ul"
             class="project-detail-list"
-            :class="{ 'is-selecting': selectedCount > 0 }"
+            :class="{ 'has-bottom-bar': hasBottomBar }"
             role="list"
             :animation="180"
             :disabled="busy || sortSaving || statusFilter !== 'all' || selectedCount > 0"
@@ -340,8 +360,10 @@
               :todo="todo"
               :busy="busy"
               :selected="selectedIds.has(String(todo.id))"
+              :highlighted="highlightedTodoId === String(todo.id)"
               :can-run-agents="canRunAgents"
               :run-detail="runDetails?.[String(todo.id)] || null"
+              :is-continue-queued="continueQueuedTodoIds.has(String(todo.id))"
               :load-diff="loadDiff"
               :sortable="statusFilter === 'all' && selectedCount === 0"
               @delete="emit('delete-todo', $event)"
@@ -352,6 +374,7 @@
               @reject="emit('reject-todo', $event)"
               @retry="emit('retry-todo', $event)"
               @dismiss-failed="emit('dismiss-failed', $event)"
+              @stop="emit('stop-todo', $event)"
               @load-run="emit('load-run', $event)"
               @continue="emit('continue-todo', $event)"
               @checklist-change="emit('checklist-change', $event)"
@@ -365,7 +388,7 @@
         <div
           v-if="!showStats && selectedCount > 0"
           key="todo-bulk-bar-wrap"
-          class="project-detail-bulk-bar-wrap"
+          class="project-detail-bottom-bar-wrap"
         >
           <motion.div
             class="project-detail-bulk-bar"
@@ -434,24 +457,46 @@
                 </span>
                 <span class="project-detail-bulk-btn-label">清空已选</span>
               </motion.button>
-              <motion.button
-                v-if="runningTitle"
-                type="button"
-                class="project-detail-bulk-btn project-detail-bulk-btn--clear"
-                :disabled="busy"
-                :while-hover="presets.button.hover"
-                :while-tap="presets.button.tap"
-                :transition="presets.button.transition"
-                @click="emit('cancel-run')"
-              >
-                <span class="project-detail-bulk-btn-icon" aria-hidden="true">
-                  <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-                    <rect x="6" y="6" width="12" height="12" rx="1" />
-                  </svg>
-                </span>
-                <span class="project-detail-bulk-btn-label">取消当前</span>
-              </motion.button>
             </div>
+          </motion.div>
+        </div>
+        <div
+          v-else-if="showRunControlBar"
+          key="todo-run-bar-wrap"
+          class="project-detail-bottom-bar-wrap"
+        >
+          <motion.div
+            class="project-detail-run-bar"
+            role="toolbar"
+            aria-label="执行控制"
+            :initial="presets.reveal.initial"
+            :animate="presets.reveal.animate"
+            :exit="presets.reveal.exit"
+            :transition="presets.reveal.transition"
+          >
+            <button
+              v-if="runningTitle"
+              type="button"
+              class="project-detail-status-badge is-stop-run"
+              :title="`正在执行：${runningTitle}`"
+              :disabled="busy"
+              @click="emit('cancel-run')"
+            >
+              停止当前任务
+            </button>
+            <button
+              v-if="queueLength > 0"
+              type="button"
+              class="project-detail-status-badge is-stop-run is-stop-all"
+              :title="runningTitle ? `停止当前任务及排队中的 ${queueLength} 条` : `停止排队中的 ${queueLength} 条`"
+              :disabled="busy"
+              @click="emit('cancel-all')"
+            >
+              停止全部
+            </button>
+            <span v-if="queueLength > 0" class="project-detail-status-badge">
+              排队 {{ queueLength }} 条
+            </span>
           </motion.div>
         </div>
       </AnimatePresence>
@@ -460,7 +505,7 @@
 </template>
 
 <script setup>
-import { computed, onBeforeUnmount, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { AnimatePresence, motion } from 'motion-v'
 import { VueDraggable } from 'vue-draggable-plus'
 import AnimatedStatValue from '../motion/AnimatedStatValue.vue'
@@ -480,6 +525,7 @@ import {
   formatDurationMs,
   formatTokenCount,
 } from '../../utils/todoRunMetrics'
+import { pinRunningTodosFirst } from '../../utils/todoSort'
 
 const props = defineProps({
   project: { type: Object, default: null },
@@ -492,7 +538,9 @@ const props = defineProps({
   pendingSyncCount: { type: Number, default: 0 },
   queueLength: { type: Number, default: 0 },
   runningTitle: { type: String, default: '' },
+  runControlActive: { type: Boolean, default: false },
   runDetails: { type: Object, default: () => ({}) },
+  continueQueuedTodoIds: { type: Object, default: () => new Set() },
   loadDiff: { type: Function, default: null },
 })
 
@@ -510,10 +558,13 @@ const emit = defineEmits([
   'enqueue-selected',
   'generate-selected',
   'cancel-run',
+  'cancel-all',
   'accept-todo',
   'reject-todo',
   'retry-todo',
   'dismiss-failed',
+  'cancel-queued-todo',
+  'stop-todo',
   'load-run',
   'continue-todo',
   'checklist-change',
@@ -542,9 +593,23 @@ const gitBranch = ref('')
 const gitBranchLoading = ref(false)
 const sortSaving = ref(false)
 const sortableTodos = ref([])
+const todoListRef = ref(null)
+const highlightedTodoId = ref('')
+let highlightTimer = null
 
 const canRunAgents = computed(() => Boolean(props.project?.localPath))
 const selectedCount = computed(() => selectedIds.value.size)
+
+const showRunControlBar = computed(() =>
+  !showStats.value &&
+  selectedCount.value === 0 &&
+  canRunAgents.value &&
+  props.runControlActive,
+)
+
+const hasBottomBar = computed(() =>
+  !showStats.value && (selectedCount.value > 0 || showRunControlBar.value),
+)
 
 const hasTag = computed(() => {
   const ids = Array.isArray(props.project?.tagIds) ? props.project.tagIds : []
@@ -663,8 +728,11 @@ const durationChartMeta = computed(() => {
 
 const filteredTodos = computed(() => {
   const list = Array.isArray(props.todos) ? props.todos : []
-  if (statusFilter.value === 'all') return list
-  return list.filter((todo) => todoStatusKey(todo) === statusFilter.value)
+  const filtered =
+    statusFilter.value === 'all'
+      ? list
+      : list.filter((todo) => todoStatusKey(todo) === statusFilter.value)
+  return pinRunningTodosFirst(filtered)
 })
 
 watch(
@@ -674,6 +742,66 @@ watch(
     sortableTodos.value = [...list]
   },
   { immediate: true },
+)
+
+const resolveTodoListEl = () => {
+  const node = todoListRef.value
+  if (!node) return null
+  if (node instanceof HTMLElement) return node
+  const el = node.$el
+  return el instanceof HTMLElement ? el : null
+}
+
+const clearTodoHighlight = () => {
+  highlightedTodoId.value = ''
+  if (highlightTimer) {
+    window.clearTimeout(highlightTimer)
+    highlightTimer = null
+  }
+}
+
+const scrollToTodo = async (todoId) => {
+  const id = String(todoId || '').trim()
+  if (!id) return false
+
+  const todo = (props.todos || []).find((item) => String(item.id) === id)
+  if (!todo) return false
+
+  if (showStats.value) showStats.value = false
+
+  const key = todoStatusKey(todo)
+  if (statusFilter.value !== 'all' && key !== statusFilter.value) {
+    statusFilter.value = 'all'
+    await nextTick()
+  }
+
+  const listEl = resolveTodoListEl()
+  const row = listEl?.querySelector?.(`[data-todo-id="${id}"]`)
+  if (!row) return false
+
+  row.scrollIntoView({ block: 'center', behavior: 'smooth' })
+  clearTodoHighlight()
+  highlightedTodoId.value = id
+  highlightTimer = window.setTimeout(clearTodoHighlight, 2400)
+  return true
+}
+
+const scrollTodoListToTopIfNeeded = () => {
+  if (showStats.value) return
+  const el = resolveTodoListEl()
+  if (!el || el.scrollTop <= 0) return
+  el.scrollTo({ top: 0, behavior: 'smooth' })
+}
+
+watch(
+  () => {
+    const running = (props.todos || []).find((todo) => todo.runStatus === 'running')
+    return running ? String(running.id) : ''
+  },
+  (runningId, prevRunningId) => {
+    if (!runningId || runningId === prevRunningId) return
+    nextTick(scrollTodoListToTopIfNeeded)
+  },
 )
 
 const dateRangeText = computed(() => {
@@ -811,11 +939,13 @@ watch([showStats, hasLiveRunTodo], syncStatsTickTimer)
 
 onBeforeUnmount(() => {
   if (statsTickTimer) clearInterval(statsTickTimer)
+  clearTodoHighlight()
 })
 
 const onTodoSortEnd = (evt) => {
   if (evt.oldIndex === evt.newIndex || evt.oldIndex == null || evt.newIndex == null) return
   if (statusFilter.value !== 'all') return
+  sortableTodos.value = pinRunningTodosFirst(sortableTodos.value)
   const orderedIds = sortableTodos.value.map((item) => item.id)
   sortSaving.value = true
   emit('reorder-todos', orderedIds)
@@ -827,11 +957,12 @@ watch(
     selectedIds.value = new Set()
     showStats.value = false
     statusFilter.value = 'all'
+    clearTodoHighlight()
     syncStatsTickTimer()
   },
 )
 
-defineExpose({ getSelectedTodos, clearSelection })
+defineExpose({ getSelectedTodos, clearSelection, scrollToTodo })
 </script>
 
 <style scoped>
@@ -1345,6 +1476,30 @@ button.project-detail-icon-btn:hover {
   background: rgba(180, 83, 9, 0.16);
 }
 
+.project-detail-status-badge.is-stop-run {
+  border: 0;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  background: rgba(220, 38, 38, 0.1);
+  color: #dc2626;
+}
+
+.project-detail-status-badge.is-stop-run:hover:not(:disabled) {
+  background: rgba(220, 38, 38, 0.16);
+}
+
+.project-detail-status-badge.is-stop-run:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.project-detail-status-badge.is-stop-all {
+  background: rgba(220, 38, 38, 0.06);
+  color: #b91c1c;
+}
+
 .project-detail-status-dot {
   width: 6px;
   height: 6px;
@@ -1358,7 +1513,7 @@ button.project-detail-icon-btn:hover {
   font-weight: 500;
 }
 
-.project-detail-bulk-bar-wrap {
+.project-detail-bottom-bar-wrap {
   position: absolute;
   left: 0;
   right: 0;
@@ -1371,8 +1526,23 @@ button.project-detail-icon-btn:hover {
   pointer-events: none;
 }
 
-.project-detail-bulk-bar-wrap > * {
+.project-detail-bottom-bar-wrap > * {
   pointer-events: auto;
+}
+
+.project-detail-run-bar {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  width: fit-content;
+  max-width: calc(100vw - 48px);
+  padding: 8px 12px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-float);
+  box-sizing: border-box;
 }
 
 .project-detail-bulk-bar {
@@ -1458,7 +1628,7 @@ button.project-detail-icon-btn:hover {
   overflow: auto;
 }
 
-.project-detail-list.is-selecting {
+.project-detail-list.has-bottom-bar {
   padding-bottom: 92px;
 }
 

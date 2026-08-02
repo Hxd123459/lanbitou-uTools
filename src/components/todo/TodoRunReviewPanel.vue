@@ -1,10 +1,35 @@
 <template>
   <div class="todo-run-review">
-    <p v-if="prevSummary" class="todo-run-summary is-muted">上一轮：{{ prevSummary }}</p>
+    <div v-if="historyRounds.length" class="todo-run-history">
+      <p class="todo-run-section-title">执行轮次</p>
+      <ul class="todo-run-history-list">
+        <li
+          v-for="round in historyRounds"
+          :key="round.id"
+          class="todo-run-history-item"
+          :class="{ 'is-current': round.isCurrent }"
+        >
+          <div class="todo-run-history-head">
+            <span class="todo-run-history-round">第 {{ round.roundNumber }} 轮</span>
+            <span class="todo-run-history-status" :class="`is-${round.status}`">
+              {{ round.statusLabel }}
+            </span>
+          </div>
+          <p v-if="round.summary" class="todo-run-history-summary">{{ round.summary }}</p>
+          <p v-else-if="round.error" class="todo-run-history-error">{{ round.error }}</p>
+          <p v-else class="todo-run-history-summary is-muted">暂无摘要</p>
+          <p v-if="round.feedback" class="todo-run-history-feedback">
+            反馈：{{ round.feedback }}
+          </p>
+        </li>
+      </ul>
+    </div>
 
-    <p v-if="runDetail?.summary" class="todo-run-summary">{{ runDetail.summary }}</p>
-    <p v-else-if="runDetail?.error" class="todo-run-error">{{ runDetail.error }}</p>
-    <p v-else class="todo-run-summary is-muted">暂无摘要</p>
+    <template v-else>
+      <p v-if="runDetail?.summary" class="todo-run-summary">{{ runDetail.summary }}</p>
+      <p v-else-if="runDetail?.error" class="todo-run-error">{{ runDetail.error }}</p>
+      <p v-else class="todo-run-summary is-muted">暂无摘要</p>
+    </template>
 
     <p v-if="usageLabel" class="todo-run-usage">{{ usageLabel }}</p>
     <p v-if="runDetail?.branchName || runDetail?.baseRef" class="todo-run-meta">
@@ -73,6 +98,7 @@
 <script setup>
 import { computed, ref, watch } from 'vue'
 import { revealInFolder } from '../../api/agentBridge'
+import { buildRunHistoryRounds } from '../../utils/todoRunHistory'
 
 const props = defineProps({
   todo: { type: Object, required: true },
@@ -102,12 +128,7 @@ const usageLabel = computed(() => {
   return `Token：输入 ${input} / 输出 ${output} / 合计 ${total}`
 })
 
-const prevSummary = computed(() => {
-  const history = props.runDetail?.history
-  if (!Array.isArray(history) || history.length < 2) return ''
-  const prev = history[1]
-  return String(prev?.summary || '').trim().slice(0, 240)
-})
+const historyRounds = computed(() => buildRunHistoryRounds(props.runDetail))
 
 const allChecked = computed(
   () => checklist.value.length > 0 && checklist.value.every((item) => item.checked),
@@ -248,6 +269,90 @@ defineExpose({
   display: flex;
   align-items: center;
   gap: 8px;
+}
+
+.todo-run-history-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.todo-run-history-item {
+  padding: 8px;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  background: rgba(24, 24, 27, 0.02);
+}
+
+.todo-run-history-item.is-current {
+  border-color: rgba(37, 99, 235, 0.35);
+  background: rgba(37, 99, 235, 0.04);
+}
+
+.todo-run-history-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.todo-run-history-round {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--color-primary);
+}
+
+.todo-run-history-status {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: rgba(100, 116, 139, 0.12);
+  color: #64748b;
+}
+
+.todo-run-history-status.is-finished {
+  background: rgba(22, 163, 74, 0.12);
+  color: #15803d;
+}
+
+.todo-run-history-status.is-running {
+  background: rgba(37, 99, 235, 0.12);
+  color: #2563eb;
+}
+
+.todo-run-history-status.is-error {
+  background: rgba(220, 38, 38, 0.12);
+  color: #b91c1c;
+}
+
+.todo-run-history-summary,
+.todo-run-history-error,
+.todo-run-history-feedback {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--color-secondary-text);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.todo-run-history-summary.is-muted {
+  color: rgba(24, 24, 27, 0.4);
+}
+
+.todo-run-history-error {
+  color: var(--color-error);
+}
+
+.todo-run-history-feedback {
+  margin-top: 4px;
+  font-size: 11px;
+  color: rgba(24, 24, 27, 0.55);
 }
 
 .todo-run-suggest {

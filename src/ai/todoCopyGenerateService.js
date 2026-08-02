@@ -1,60 +1,11 @@
 import { isUtoolsMode } from '../storage/env'
 import { loadAiSettings, getResolvedBaseUrl, getResolvedModel } from '../storage/utools/aiSettings'
 import { isSedimentDraftAiAvailable } from './sedimentDraftService'
+import { buildUserContent } from './todoCopyUserContent'
+import { fallbackGenerate } from './todoCopyFallback'
+import { TEMPLATES } from './todoCopyTemplates'
 
 const MAX_TOKENS = 2048
-
-const TEMPLATES = {
-  daily: {
-    label: '日报',
-    system: `你是工程师日报助手。根据待办列表写一份简洁中文日报 Markdown。
-要求包含：今日完成 / 风险或阻塞（如有）/ 明日计划（可空）。语气客观，适合粘贴到飞书/钉钉。不要寒暄。`,
-  },
-  release: {
-    label: '版本说明',
-    system: `你是产品版本说明助手。根据已完成待办写中文 Changelog Markdown。
-分类：### 新功能 / ### 体验优化 / ### 修复。面向用户，避免内部实现细节。不要寒暄。`,
-  },
-  retro: {
-    label: '短复盘',
-    system: `你是独立开发者复盘助手。根据待办写一段短复盘 Markdown：做得好的 / 踩坑 / 下次改进。不超过 250 字。不要寒暄。`,
-  },
-}
-
-function fallbackGenerate(template, project, todos) {
-  const title = project?.name || '事情'
-  const lines = todos.map((t) => `- ${t.title}${t.done ? '' : '（未完成）'}`)
-  if (template === 'daily') {
-    return [`# 日报 · ${title}`, '', '## 今日完成', '', ...lines, ''].join('\n')
-  }
-  if (template === 'release') {
-    return [`# 版本说明 · ${title}`, '', '### 更新', '', ...lines, ''].join('\n')
-  }
-  return [`# 复盘 · ${title}`, '', ...lines, ''].join('\n')
-}
-
-function buildUserContent(project, todos, runsById = {}) {
-  const blocks = todos.map((todo, i) => {
-    const run = runsById[String(todo.id)] || null
-    return [
-      `${i + 1}. ${todo.title}`,
-      todo.done ? '状态: 已完成' : '状态: 未完成',
-      run?.summary ? `摘要: ${String(run.summary).slice(0, 400)}` : '',
-      run?.reviewNote ? `验收备注: ${run.reviewNote}` : '',
-    ]
-      .filter(Boolean)
-      .join('\n')
-  })
-  return [
-    `事情：${project?.name || ''}`,
-    project?.purpose ? `初衷：${project.purpose}` : '',
-    '',
-    '待办：',
-    blocks.join('\n\n'),
-  ]
-    .filter(Boolean)
-    .join('\n')
-}
 
 async function requestUtools(systemPrompt, userContent, model) {
   if (typeof window === 'undefined' || typeof window.utools?.ai !== 'function') {
@@ -119,6 +70,7 @@ async function requestAnthropic({ baseUrl, apiKey, model, systemPrompt, userCont
   return String(block?.text || '').trim()
 }
 
+export { TEMPLATES } from './todoCopyTemplates'
 export function listCopyTemplates() {
   return Object.entries(TEMPLATES).map(([id, conf]) => ({ id, label: conf.label }))
 }

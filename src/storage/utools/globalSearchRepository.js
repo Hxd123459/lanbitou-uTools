@@ -1,11 +1,11 @@
-import { isImageMimeType } from '../../constants/uploadLimits'
-import { LB_ATT_SCHEME } from '../../utils/attachmentMarkdown'
-import { extractMatchSnippets, plainTextForSnippet } from '../../utils/searchHighlight'
-import { imagesToBlocks, getAttachmentBlobUrl } from './attachment'
-import { NOTE_PREFIX, STRUCT_NOTE_PREFIX } from './constants'
-import { dbAllDocs, dbGetAttachmentType } from './dbClient'
-import { listTagDocs } from './tagRepository'
-import { datePartFromDateTime } from './utils'
+import { isImageMimeType } from '../../constants/uploadLimits.js'
+import { LB_ATT_SCHEME } from '../../utils/attachmentMarkdown.js'
+import { extractMatchSnippets, plainTextForSnippet } from '../../utils/searchHighlight.js'
+import { imagesToBlocks, getAttachmentBlobUrl } from './attachment.js'
+import { NOTE_PREFIX, PROJECT_PREFIX, STRUCT_NOTE_PREFIX, TODO_PREFIX } from './constants.js'
+import { dbAllDocs, dbGetAttachmentType } from './dbClient.js'
+import { listTagDocs } from './tagRepository.js'
+import { datePartFromDateTime } from './utils.js'
 
 const DEFAULT_PAGE_SIZE = 30
 
@@ -246,6 +246,38 @@ function toFragmentResult(doc, tagNameById) {
   }
 }
 
+function matchesTodoTag(todo, project, tagId) {
+  if (!tagId) return true
+  if (String(todo?.sourceTagId ?? '') === String(tagId)) return true
+  const tagIds = Array.isArray(project?.tagIds) ? project.tagIds : []
+  return tagIds.some((id) => String(id) === String(tagId))
+}
+
+function toTodoResult(todo, project, keywords = []) {
+  const raw = [todo.title, todo.sourceExcerpt, todo.sourceNoteTitle, todo.doneWhen]
+    .filter(Boolean)
+    .join('\n')
+  let snippets = buildSnippets(raw, keywords)
+  if (!snippets.length && todo.title) {
+    snippets = buildSnippets(todo.title, keywords)
+  }
+  return {
+    id: todo.id,
+    type: 'todo',
+    todoId: todo.id,
+    projectId: todo.projectId || '',
+    projectName: project?.name || '未命名',
+    title: todo.title || '无标题',
+    doneWhen: String(todo.doneWhen || '').trim(),
+    snippets,
+    attachments: [],
+    tagName: todo.sourceTagName || '',
+    tagId: todo.sourceTagId || null,
+    createTime: todo.createTime || '',
+    _sourceDoc: todo,
+  }
+}
+
 function toSedimentResult(doc, tagNameById, keywords = []) {
   const tagName = (doc.tagId && tagNameById.get(String(doc.tagId))) || ''
   const content = doc.content || ''
@@ -269,7 +301,7 @@ function toSedimentResult(doc, tagNameById, keywords = []) {
 
 function hydrateResultAttachments(item, noteById) {
   const doc = item?._sourceDoc
-  if (!doc) {
+  if (!doc || item?.type === 'todo') {
     const { _sourceDoc, ...rest } = item || {}
     return { ...rest, attachments: Array.isArray(item?.attachments) ? item.attachments : [] }
   }
@@ -305,7 +337,7 @@ export async function globalSearch({
   tagId = null,
   dateFrom = null,
   dateTo = null,
-  scopes = ['fragment', 'sediment'],
+  scopes = ['fragment', 'sediment', 'todo'],
   page = 1,
   pageSize = DEFAULT_PAGE_SIZE,
 } = {}) {
@@ -316,6 +348,7 @@ export async function globalSearch({
   if (!scopeSet.size) {
     scopeSet.add('fragment')
     scopeSet.add('sediment')
+    scopeSet.add('todo')
   }
 
   const tags = await listTagDocs()
@@ -374,6 +407,39 @@ export async function globalSearch({
         ])
         if (!matchesKeywords(haystack, keywordList)) return
         results.push(toSedimentResult(doc, tagNameById, keywordList))
+      })
+  }
+
+  if (scopeSet.has('todo')) {
+    const [todoDocs, projectDocs] = await Promise.all([
+      dbAllDocs(TODO_PREFIX),
+      dbAllDocs(PROJECT_PREFIX),
+    ])
+    const projectById = new Map()
+    ;(projectDocs || [])
+      .map(stripDoc)
+      .filter((doc) => doc?.id && !doc.deletedAt)
+      .forEach((doc) => {
+        projectById.set(String(doc.id), doc)
+      })
+
+    ;(todoDocs || [])
+      .map(stripDoc)
+      .filter((doc) => doc?.id && !doc.deletedAt)
+      .forEach((doc) => {
+        const project = projectById.get(String(doc.projectId || ''))
+        if (!project) return
+        if (!matchesTodoTag(doc, project, tagId)) return
+        if (!matchesDateRange(doc.createTime, dateFrom, dateTo)) return
+        const haystack = buildHaystack([
+          doc.title,
+          doc.sourceExcerpt,
+          doc.sourceNoteTitle,
+          doc.doneWhen,
+          project.name,
+        ])
+        if (!matchesKeywords(haystack, keywordList)) return
+        results.push(toTodoResult(doc, project, keywordList))
       })
   }
 

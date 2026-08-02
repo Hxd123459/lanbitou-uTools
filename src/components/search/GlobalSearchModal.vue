@@ -52,7 +52,13 @@
                 :aria-selected="scope === item.id"
                 @click="scope = item.id"
               >
-                {{ item.label }}
+                <motion.span
+                  v-if="scope === item.id"
+                  layout-id="globalSearchScope"
+                  class="global-search-scope-active-bg"
+                  :transition="presets.layoutSpring"
+                />
+                <span class="global-search-scope-label">{{ item.label }}</span>
               </button>
             </div>
             <span class="global-search-results-count">
@@ -122,7 +128,7 @@
 
               <!-- 沉淀：摘要 + 点击打开详情 -->
               <article
-                v-else
+                v-else-if="item.type === 'sediment'"
                 class="global-search-result is-sediment"
                 role="button"
                 tabindex="0"
@@ -172,6 +178,47 @@
                   />
                 </div>
               </article>
+
+              <!-- 待办：摘要 + 点击跳转事情详情 -->
+              <article
+                v-else-if="item.type === 'todo'"
+                class="global-search-result is-todo"
+                role="button"
+                tabindex="0"
+                @click="openTodoDetail(item)"
+                @keydown.enter.prevent="openTodoDetail(item)"
+              >
+                <div class="global-search-result-meta">
+                  <div class="global-search-result-meta-left">
+                    <span class="global-search-result-icon is-todo" title="待办" aria-hidden="true">
+                      <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M9 11l3 3L22 4" />
+                        <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
+                      </svg>
+                    </span>
+                    <span v-if="item.projectName" class="global-search-result-tag">
+                      {{ item.projectName }}
+                    </span>
+                  </div>
+                  <span v-if="item.createTime" class="global-search-result-time">
+                    {{ formatTime(item.createTime) }}
+                  </span>
+                </div>
+                <div
+                  v-if="item.title"
+                  class="global-search-result-title"
+                  v-html="highlightText(item.title)"
+                />
+                <div
+                  v-if="todoDoneWhenSummary(item)"
+                  class="global-search-result-snippets"
+                >
+                  <p
+                    class="global-search-result-snippet"
+                    v-html="highlightText(todoDoneWhenSummary(item))"
+                  />
+                </div>
+              </article>
             </template>
 
             <p v-if="loadingMore" class="global-search-state">加载更多…</p>
@@ -206,7 +253,7 @@ const props = defineProps({
   visible: { type: Boolean, default: false },
 })
 
-const emit = defineEmits(['close'])
+const emit = defineEmits(['close', 'open-todo'])
 
 const { presets, reduced } = useMotionPresets()
 
@@ -214,6 +261,7 @@ const scopeOptions = [
   { id: 'all', label: '全部' },
   { id: 'fragment', label: '碎片' },
   { id: 'sediment', label: '沉淀' },
+  { id: 'todo', label: '待办' },
 ]
 
 const scope = ref('all')
@@ -249,7 +297,8 @@ const modalMotion = computed(() => {
 const resolvedScopes = computed(() => {
   if (scope.value === 'fragment') return ['fragment']
   if (scope.value === 'sediment') return ['sediment']
-  return ['fragment', 'sediment']
+  if (scope.value === 'todo') return ['todo']
+  return ['fragment', 'sediment', 'todo']
 })
 
 const formatTime = (value) => {
@@ -267,6 +316,13 @@ const resultSnippets = (item) => {
   if (Array.isArray(item.snippets) && item.snippets.length) return item.snippets
   if (item.snippet) return [item.snippet]
   return []
+}
+
+const todoDoneWhenSummary = (item) => {
+  const doneWhen = String(item?.doneWhen || '').trim()
+  if (doneWhen) return doneWhen
+  const snippets = resultSnippets(item).filter((snippet) => snippet !== item?.title)
+  return snippets[0] || ''
 }
 
 const resultAttachments = (item) =>
@@ -315,6 +371,18 @@ const openSedimentDetail = async (item) => {
 
 const onSedimentError = (error) => {
   console.error('[烂笔头] 全局搜索打开沉淀失败', error)
+}
+
+const openTodoDetail = (item) => {
+  const projectId = String(item?.projectId || '').trim()
+  const todoId = String(item?.id || item?.todoId || '').trim()
+  if (!projectId || !todoId) return
+  emit('open-todo', {
+    projectId,
+    todoId,
+    projectName: item?.projectName || '',
+  })
+  emit('close')
 }
 
 const emitClose = () => {
@@ -442,12 +510,17 @@ defineExpose({
 
 .global-search-scope {
   display: inline-flex;
+  flex-wrap: wrap;
   padding: 3px;
   border-radius: 999px;
   background: rgba(24, 24, 27, 0.05);
+  gap: 2px;
 }
 
 .global-search-scope-btn {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
   height: 28px;
   padding: 0 12px;
   border: 0;
@@ -458,13 +531,26 @@ defineExpose({
   font-size: 12px;
   font-weight: 500;
   cursor: pointer;
-  transition: background 0.15s ease, color 0.15s ease;
+  z-index: 0;
 }
 
 .global-search-scope-btn.is-active {
-  background: var(--color-surface);
   color: var(--color-primary);
+  font-weight: 600;
+}
+
+.global-search-scope-active-bg {
+  position: absolute;
+  inset: 0;
+  border-radius: 999px;
+  background: var(--color-surface);
   box-shadow: 0 1px 2px rgba(24, 24, 27, 0.08);
+  z-index: -1;
+}
+
+.global-search-scope-label {
+  position: relative;
+  z-index: 1;
 }
 
 .global-search-results-count {
@@ -502,6 +588,10 @@ defineExpose({
 }
 
 .global-search-result.is-sediment {
+  cursor: pointer;
+}
+
+.global-search-result.is-todo {
   cursor: pointer;
 }
 
@@ -544,6 +634,10 @@ defineExpose({
   color: #7c3aed;
 }
 
+.global-search-result-icon.is-todo {
+  color: #059669;
+}
+
 .global-search-result-tag {
   display: inline-block;
   max-width: 220px;
@@ -556,6 +650,24 @@ defineExpose({
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.global-search-result-title {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.5;
+  color: var(--color-text);
+  word-break: break-word;
+}
+
+.global-search-result-title :deep(mark.note-highlight) {
+  background: rgba(37, 99, 235, 0.16);
+  color: var(--color-accent);
+  font-weight: 600;
+  border-radius: 3px;
+  padding: 0 2px;
+  margin: 0 -1px;
 }
 
 .global-search-result-full {

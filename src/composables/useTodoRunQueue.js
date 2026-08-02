@@ -1,4 +1,4 @@
-import { computed, onBeforeUnmount, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import {
   agentArchive,
   agentCancelRun,
@@ -17,12 +17,25 @@ import {
   fetchTodoRunsByTodo,
   updateTodoRun,
 } from '../api/todoRun'
-import { updateTodo } from '../api/todo'
+import { resetOrphanRunTodos, updateTodo } from '../api/todo'
 import {
+  isContinueQueuedStartOptions,
+  normalizeTodoRunStatus,
   TODO_RUN_STATUS,
   TODO_RUN_STATUS_LABEL,
 } from '../constants/todoRunStatus'
+import {
+  shouldSkipPollTick,
+  wasRunSessionCancelled,
+} from '../utils/todoRunQueueCancel'
+import { shouldPumpAfterEnqueue } from '../utils/todoRunQueueEnqueue'
+import { patchQueuedContinueFeedback } from '../utils/todoRunQueueFeedback'
 import { formatDateTime } from '../storage/utools/utils'
+import {
+  buildCancelledRunPatch,
+  isTerminalRunStatus,
+  mapTerminalRunToTodoRunStatus,
+} from '../utils/todoRunTerminal'
 
 function buildPrompt(todo) {
   const lines = [`待办：${todo.title}`]
@@ -47,6 +60,26 @@ function buildContinuePrompt(todo, feedback, prevRun) {
     lines.push(`上一轮改动文件：${prevRun.changedFiles.join('、')}`)
   }
   return lines.join('\n')
+}
+
+let orphanRunResetPromise = null
+
+async function ensureOrphanRunsReset({ patchTodoLocal, onToast } = {}) {
+  if (!orphanRunResetPromise) {
+    orphanRunResetPromise = (async () => {
+      try {
+        const updated = await resetOrphanRunTodos()
+        if (updated.length) {
+          for (const todo of updated) patchTodoLocal?.(todo)
+          onToast?.(`已将 ${updated.length} 条中断任务重置为未完成`)
+        }
+        return updated
+      } catch {
+        return []
+      }
+    })()
+  }
+  return orphanRunResetPromise
 }
 
 function branchNameForTodo(todoId) {
@@ -158,10 +191,14 @@ export function useTodoRunQueue({
   const activeRunId = ref(null)
   const runByTodoId = ref({})
   const pumping = ref(false)
-  const startOptionsByTodoId = {}
+  const startOptionsByTodoId = ref({})
   let pollTimer = null
+  let releasePoll = null
 
   const queueLength = computed(() => queueIds.value.length)
+  const runControlActive = computed(
+    () => Boolean(activeTodoId.value) || queueIds.value.length > 0,
+  )
   const runningTitle = computed(() => {
     const id = activeTodoId.value
     if (!id) return ''
@@ -169,11 +206,38 @@ export function useTodoRunQueue({
     return todo?.title || ''
   })
 
+  const continueQueuedTodoIds = computed(() => {
+    const ids = new Set()
+    for (const [id, opts] of Object.entries(startOptionsByTodoId.value)) {
+      if (isContinueQueuedStartOptions(opts)) ids.add(id)
+    }
+    return ids
+  })
+
   const clearPoll = () => {
     if (pollTimer) {
       clearInterval(pollTimer)
       pollTimer = null
     }
+  }
+
+  const endPoll = () => {
+    clearPoll()
+    if (releasePoll) {
+      const release = releasePoll
+      releasePoll = null
+      release()
+    }
+  }
+
+  const finalizeCancelledRun = async (todoId, runId, { notify = true } = {}) => {
+    const run = await fetchTodoRun(runId)
+    if (run?.finishedAt) return run
+    const finished = await updateTodoRun(runId, buildCancelledRunPatch(formatDateTime()))
+    await refreshRunHistory(todoId, finished)
+    await applyTodoPatch(todoId, { runStatus: TODO_RUN_STATUS.IDLE })
+    if (notify) onToast?.('已取消执行')
+    return finished
   }
 
   const setRunCache = (todoId, run) => {
@@ -262,7 +326,7 @@ export function useTodoRunQueue({
         continue
       }
       const opts = optionsById[id] || optionsById[todo.id] || {}
-      startOptionsByTodoId[id] = opts
+      startOptionsByTodoId.value = { ...startOptionsByTodoId.value, [id]: opts }
       nextQueue.push(todo.id)
       await applyTodoPatch(todo.id, {
         done: false,
@@ -272,8 +336,14 @@ export function useTodoRunQueue({
     }
     queueIds.value = nextQueue
     if (added) {
-      onToast?.(`已加入队列 ${added} 条`)
-      void pump()
+      onToast?.(
+        activeTodoId.value
+          ? `已加入排队 ${added} 条，当前任务执行中`
+          : `已加入队列 ${added} 条`,
+      )
+      if (shouldPumpAfterEnqueue(activeTodoId.value)) {
+        void pump()
+      }
     }
     return added
   }
@@ -306,6 +376,18 @@ export function useTodoRunQueue({
     })
   }
 
+  const updateQueuedContinueFeedback = (todo, feedback = '') => {
+    if (!todo?.id) return false
+    const id = String(todo.id)
+    if (normalizeTodoRunStatus(todo.runStatus) !== TODO_RUN_STATUS.QUEUED) return false
+    if (activeTodoId.value && String(activeTodoId.value) === id) return false
+    const next = patchQueuedContinueFeedback(startOptionsByTodoId.value, id, feedback)
+    if (!next) return false
+    startOptionsByTodoId.value = next
+    onToast?.('已更新继续改反馈')
+    return true
+  }
+
   const pump = async () => {
     if (pumping.value) return
     pumping.value = true
@@ -322,23 +404,29 @@ export function useTodoRunQueue({
     }
   }
 
+  const wasRunCancelled = (todoId) =>
+    wasRunSessionCancelled(activeTodoId.value, todoId)
+
   const startOne = async (todoId) => {
+    activeTodoId.value = todoId
+    clearPoll()
+
     const project = getProject?.()
     const todo = (getTodos?.() || []).find((item) => item.id === todoId)
-    const startOpts = startOptionsByTodoId[String(todoId)] || {}
-    delete startOptionsByTodoId[String(todoId)]
+    const startOpts = startOptionsByTodoId.value[String(todoId)] || {}
+    const nextStartOptions = { ...startOptionsByTodoId.value }
+    delete nextStartOptions[String(todoId)]
+    startOptionsByTodoId.value = nextStartOptions
 
     if (!project?.localPath || !todo) {
       await applyTodoPatch(todoId, { runStatus: TODO_RUN_STATUS.FAILED }).catch(() => {})
       return
     }
 
-    activeTodoId.value = todoId
-    clearPoll()
-
     try {
       await ensureAgentBridge()
       await syncArchiveMeta(project)
+      if (wasRunCancelled(todoId)) return
 
       const isResume = startOpts.mode === 'resume' && startOpts.agentId
       const prompt = isResume || startOpts.feedback
@@ -355,6 +443,7 @@ export function useTodoRunQueue({
         branchName,
       })
       activeRunId.value = runDoc.id
+      if (wasRunCancelled(todoId)) return
       const prevDetail = runByTodoId.value[String(todoId)]
       const prevHistory = Array.isArray(prevDetail?.history)
         ? prevDetail.history
@@ -365,6 +454,7 @@ export function useTodoRunQueue({
         ...runDoc,
         history: [runDoc, ...prevHistory.filter((item) => item?.id !== runDoc.id)],
       })
+      if (wasRunCancelled(todoId)) return
       await applyTodoPatch(todoId, {
         runStatus: TODO_RUN_STATUS.RUNNING,
         lastRunId: runDoc.id,
@@ -373,6 +463,7 @@ export function useTodoRunQueue({
         startedAt: formatDateTime(),
         status: 'running',
       })
+      if (wasRunCancelled(todoId)) return
       setRunCache(todoId, {
         ...startedRun,
         history: [
@@ -392,6 +483,10 @@ export function useTodoRunQueue({
       })
       const bridgeRunId = started?.run?.id
       if (!bridgeRunId) throw new Error('桥未返回 run id')
+      if (wasRunCancelled(todoId)) {
+        await agentCancelRun(bridgeRunId).catch(() => {})
+        return
+      }
 
       const agentId = started.run.agentId || (isResume ? startOpts.agentId : null)
       const baseRef = started.run.baseRef || started.baseline?.baseRef || null
@@ -411,6 +506,7 @@ export function useTodoRunQueue({
 
       await pollUntilDone(todoId, runDoc.id, bridgeRunId)
     } catch (error) {
+      if (wasRunCancelled(todoId)) return
       onError?.(error)
       try {
         if (activeRunId.value) {
@@ -434,9 +530,11 @@ export function useTodoRunQueue({
 
   const pollUntilDone = (todoId, runId, bridgeRunId) =>
     new Promise((resolve) => {
+      releasePoll = resolve
       const tick = async () => {
         try {
           const data = await agentGetRun(bridgeRunId)
+          if (shouldSkipPollTick(releasePoll)) return
           const remote = data?.run || {}
           const patched = await updateTodoRun(runId, {
             status: remote.status || 'running',
@@ -453,30 +551,29 @@ export function useTodoRunQueue({
           setRunCache(todoId, patched)
 
           const status = String(remote.status || '')
-          if (status === 'finished' || status === 'error' || status === 'cancelled') {
-            clearPoll()
+          if (isTerminalRunStatus(status)) {
+            endPoll()
             const finished = await updateTodoRun(runId, {
               finishedAt: formatDateTime(),
               status,
             })
             await refreshRunHistory(todoId, finished)
+            await applyTodoPatch(todoId, {
+              runStatus: mapTerminalRunToTodoRunStatus(status),
+            })
             if (status === 'finished') {
-              await applyTodoPatch(todoId, {
-                runStatus: TODO_RUN_STATUS.PENDING_REVIEW,
-              })
               onToast?.('待办执行完成，请验收')
+            } else if (status === 'cancelled') {
+              onToast?.('已取消执行')
             } else {
-              await applyTodoPatch(todoId, { runStatus: TODO_RUN_STATUS.FAILED })
-              onToast?.(status === 'cancelled' ? '已取消执行' : '执行失败')
+              onToast?.('执行失败')
             }
-            resolve()
             return
           }
         } catch (error) {
-          clearPoll()
+          endPoll()
           onError?.(error)
           await applyTodoPatch(todoId, { runStatus: TODO_RUN_STATUS.FAILED }).catch(() => {})
-          resolve()
         }
       }
 
@@ -527,16 +624,90 @@ export function useTodoRunQueue({
     await applyTodoPatch(todo.id, { runStatus: TODO_RUN_STATUS.IDLE })
   }
 
-  const cancelActive = async () => {
+  const cancelQueuedTodo = async (todo) => {
+    if (!todo?.id) return
+    const id = String(todo.id)
+    queueIds.value = queueIds.value.filter((qid) => String(qid) !== id)
+    const nextStartOptions = { ...startOptionsByTodoId.value }
+    delete nextStartOptions[id]
+    startOptionsByTodoId.value = nextStartOptions
+    if (todo.runStatus === TODO_RUN_STATUS.QUEUED) {
+      await applyTodoPatch(todo.id, { runStatus: TODO_RUN_STATUS.IDLE })
+      onToast?.('已取消排队')
+    }
+  }
+
+  const stopTodo = async (todo) => {
+    if (!todo?.id) return
+    const status = normalizeTodoRunStatus(todo.runStatus)
+    if (status === TODO_RUN_STATUS.QUEUED) {
+      await cancelQueuedTodo(todo)
+      return
+    }
+    if (status === TODO_RUN_STATUS.RUNNING) {
+      if (String(activeTodoId.value) === String(todo.id)) {
+        await cancelActive()
+      } else {
+        await applyTodoPatch(todo.id, { runStatus: TODO_RUN_STATUS.IDLE })
+        onToast?.('已停止')
+      }
+    }
+  }
+
+  const cancelActive = async ({ notify = true } = {}) => {
     const todoId = activeTodoId.value
     const runId = activeRunId.value
-    if (!todoId || !runId) return
+    if (!todoId) return
+    endPoll()
     try {
-      const run = await fetchTodoRun(runId)
-      if (run?.bridgeRunId) await agentCancelRun(run.bridgeRunId)
+      if (runId) {
+        const run = await fetchTodoRun(runId)
+        if (run?.bridgeRunId) await agentCancelRun(run.bridgeRunId)
+        await finalizeCancelledRun(todoId, runId, { notify })
+      } else {
+        await applyTodoPatch(todoId, { runStatus: TODO_RUN_STATUS.IDLE }).catch(() => {})
+        if (notify) onToast?.('已取消执行')
+      }
     } catch (error) {
       onError?.(error)
+    } finally {
+      activeTodoId.value = null
+      activeRunId.value = null
+      void pump()
     }
+  }
+
+  const cancelOnLeave = async ({ notify = false } = {}) => {
+    const queuedIds = [...queueIds.value]
+    queueIds.value = []
+    for (const id of queuedIds) {
+      const nextStartOptions = { ...startOptionsByTodoId.value }
+      delete nextStartOptions[String(id)]
+      startOptionsByTodoId.value = nextStartOptions
+      await applyTodoPatch(id, { runStatus: TODO_RUN_STATUS.IDLE }).catch(() => {})
+    }
+    const todoId = activeTodoId.value
+    const runId = activeRunId.value
+    endPoll()
+    try {
+      if (todoId && runId) {
+        const run = await fetchTodoRun(runId)
+        if (run?.bridgeRunId) await agentCancelRun(run.bridgeRunId).catch(() => {})
+        await finalizeCancelledRun(todoId, runId, { notify })
+      } else if (todoId) {
+        await applyTodoPatch(todoId, { runStatus: TODO_RUN_STATUS.IDLE }).catch(() => {})
+      }
+    } catch (error) {
+      if (notify) onError?.(error)
+    } finally {
+      activeTodoId.value = null
+      activeRunId.value = null
+    }
+  }
+
+  const cancelAll = async () => {
+    await cancelOnLeave({ notify: false })
+    onToast?.('已停止全部任务')
   }
 
   const loadRunForTodo = async (todo) => {
@@ -594,27 +765,47 @@ export function useTodoRunQueue({
     })
   }
 
+  const triggerCancelOnLeave = () => {
+    void cancelOnLeave()
+  }
+
+  onMounted(() => {
+    void ensureOrphanRunsReset({ patchTodoLocal, onToast })
+    window.addEventListener('beforeunload', triggerCancelOnLeave)
+    window.addEventListener('lanbitou:plugin-out', triggerCancelOnLeave)
+  })
+
   onBeforeUnmount(() => {
-    clearPoll()
+    window.removeEventListener('beforeunload', triggerCancelOnLeave)
+    window.removeEventListener('lanbitou:plugin-out', triggerCancelOnLeave)
+    void cancelOnLeave()
   })
 
   return {
     queueIds,
+    continueQueuedTodoIds,
     queueLength,
+    runControlActive,
     activeTodoId,
     runningTitle,
     runByTodoId,
     enqueue,
     continueTodo,
+    updateQueuedContinueFeedback,
     acceptTodo,
     updateRunChecklist,
     rejectTodo,
     dismissFailed,
+    cancelQueuedTodo,
+    stopTodo,
     cancelActive,
+    cancelAll,
+    cancelOnLeave,
     loadRunForTodo,
     preloadRunsForProject,
     loadDiffForTodo,
     syncArchiveMeta: () => syncArchiveMeta(getProject?.()),
+    ensureOrphanRunsReset: () => ensureOrphanRunsReset({ patchTodoLocal, onToast }),
     statusLabel: TODO_RUN_STATUS_LABEL,
   }
 }

@@ -30,7 +30,9 @@
       :pending-sync-count="pendingSyncCount"
       :queue-length="queueLength"
       :running-title="runningTitle"
+      :run-control-active="runControlActive"
       :run-details="runByTodoId"
+      :continue-queued-todo-ids="continueQueuedTodoIds"
       :load-diff="loadDiffForTodo"
       @back="backToList"
       @edit="openEditModal"
@@ -46,12 +48,15 @@
       @run-todo="handleRunTodo"
       @generate-selected="openGenerateModal"
       @cancel-run="cancelActive"
+      @cancel-all="cancelAll"
       @accept-todo="handleAcceptTodo"
       @reject-todo="(todo) => rejectTodo(todo, { requeue: false })"
       @retry-todo="(todo) => continueTodo(todo, '')"
       @dismiss-failed="dismissFailed"
+      @cancel-queued-todo="cancelQueuedTodo"
+      @stop-todo="handleStopTodo"
       @load-run="loadRunForTodo"
-      @continue-todo="({ todo, feedback }) => continueTodo(todo, feedback)"
+      @continue-todo="handleContinueTodo"
       @checklist-change="handleChecklistChange"
       @reorder-todos="handleReorderTodos"
       @toast="notifyToast"
@@ -94,7 +99,7 @@
 </template>
 
 <script setup>
-import { computed, ref, watch } from 'vue'
+import { computed, nextTick, ref, watch } from 'vue'
 import {
   createProject,
   deleteProject,
@@ -209,18 +214,26 @@ const patchTodoLocal = (updated) => {
 
 const {
   queueLength,
+  continueQueuedTodoIds,
+  runControlActive,
   runningTitle,
   runByTodoId,
   enqueue,
   continueTodo,
+  updateQueuedContinueFeedback,
   acceptTodo,
   updateRunChecklist,
   rejectTodo,
   dismissFailed,
+  cancelQueuedTodo,
+  stopTodo,
   cancelActive,
+  cancelAll,
+  cancelOnLeave,
   loadRunForTodo,
   loadDiffForTodo,
   preloadRunsForProject,
+  ensureOrphanRunsReset,
 } = useTodoRunQueue({
   getProject: () => currentProject.value,
   getTodos: () => todos.value,
@@ -236,6 +249,28 @@ const handleAcceptTodo = async (payload) => {
       reviewNote: payload?.reviewNote || '',
       checklist: payload?.checklist,
     })
+  } catch (error) {
+    notifyError(error)
+  }
+}
+
+const handleStopTodo = async (todo) => {
+  if (!todo) return
+  try {
+    await stopTodo(todo)
+  } catch (error) {
+    notifyError(error)
+  }
+}
+
+const handleContinueTodo = async ({ todo, feedback }) => {
+  if (!todo) return
+  if (todo.runStatus === 'queued') {
+    updateQueuedContinueFeedback(todo, feedback)
+    return
+  }
+  try {
+    await continueTodo(todo, feedback)
   } catch (error) {
     notifyError(error)
   }
@@ -409,6 +444,7 @@ const loadTodos = async () => {
     todos.value = []
     return
   }
+  await ensureOrphanRunsReset()
   const keepListVisible = todos.value.length > 0
   if (!keepListVisible) loadingTodos.value = true
   try {
@@ -464,6 +500,32 @@ const openProject = async (project) => {
   if (pending?.candidates?.length) {
     notifyToast(`有 ${pending.candidates.filter((i) => !i.exists).length || pending.candidates.length} 条待确认的同步结果`)
   }
+}
+
+const openTodoAt = async ({ projectId, todoId }) => {
+  const pid = String(projectId || '').trim()
+  const tid = String(todoId || '').trim()
+  if (!pid || !tid) return false
+
+  if (!projects.value.length) {
+    await loadProjects()
+  }
+  const project = projects.value.find((item) => item.id === pid)
+  if (!project) return false
+
+  currentProjectId.value = pid
+  view.value = 'detail'
+  await loadTodos()
+
+  const hasTodo = todos.value.some((item) => String(item.id) === tid)
+  if (!hasTodo) return false
+
+  for (let attempt = 0; attempt < 4; attempt += 1) {
+    await nextTick()
+    if (await detailViewRef.value?.scrollToTodo?.(tid)) return true
+    await new Promise((resolve) => window.setTimeout(resolve, 60))
+  }
+  return false
 }
 
 const openCreateModal = () => {
@@ -934,14 +996,19 @@ const handleSyncConfirm = async (selectedItems) => {
 
 watch(
   () => props.active,
-  (isActive) => {
-    if (isActive) refreshAll()
+  (isActive, wasActive) => {
+    if (isActive) {
+      refreshAll()
+    } else if (wasActive) {
+      void cancelOnLeave()
+    }
   },
   { immediate: true },
 )
 
 defineExpose({
   reload: refreshAll,
+  openTodoAt,
 })
 </script>
 

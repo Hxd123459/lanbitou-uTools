@@ -10,6 +10,7 @@ import {
   STRUCT_FOLDER_PREFIX,
   STRUCT_NOTE_PREFIX,
   TODO_PREFIX,
+  TODO_RUN_PREFIX,
 } from '../storage/utools/constants'
 import {
   dbAllDocs,
@@ -28,8 +29,11 @@ import {
   LB_VERSION,
   PROFILE_BACKUP_FILE,
   SEDIMENT_DIR,
+  TODO_RUNS_BACKUP_FILE,
   joinZipPath,
   mimeToExtension,
+  normalizeBackupSortOrder,
+  mapTodoRunForBackup,
   serializeFrontmatter,
 } from './format'
 
@@ -106,6 +110,11 @@ async function loadTodos({ includeDeleted = false } = {}) {
   return (docs || [])
     .map(stripDoc)
     .filter((doc) => doc?.id && (includeDeleted || !doc.deletedAt))
+}
+
+async function loadTodoRuns() {
+  const docs = await dbAllDocs(TODO_RUN_PREFIX)
+  return (docs || []).map(stripDoc).filter((doc) => doc?.id)
 }
 
 async function loadProfiles() {
@@ -296,15 +305,17 @@ async function buildSedimentAttachmentEntries(noteId, content, attachmentWrites)
 }
 
 export async function exportLanbitouBackup({ includeDeleted = false } = {}) {
-  const [notes, structNotes, folders, tags, projects, todos, profiles] = await Promise.all([
-    loadNotes({ includeDeleted }),
-    loadStructNotes(),
-    loadFolders(),
-    listTagDocs(),
-    loadProjects({ includeDeleted }),
-    loadTodos({ includeDeleted }),
-    loadProfiles(),
-  ])
+  const [notes, structNotes, folders, tags, projects, todos, todoRuns, profiles] =
+    await Promise.all([
+      loadNotes({ includeDeleted }),
+      loadStructNotes(),
+      loadFolders(),
+      listTagDocs(),
+      loadProjects({ includeDeleted }),
+      loadTodos({ includeDeleted }),
+      loadTodoRuns(),
+      loadProfiles(),
+    ])
 
   const tagNameById = new Map(tags.map((tag) => [String(tag.id), tag.tagName || '']))
   const folderById = new Map(folders.map((folder) => [String(folder.id), folder]))
@@ -389,6 +400,7 @@ export async function exportLanbitouBackup({ includeDeleted = false } = {}) {
       tags: tags.length,
       projects: projects.length,
       todos: todos.length,
+      todoRuns: todoRuns.length,
       profiles: profiles.length,
     },
   }
@@ -418,6 +430,7 @@ export async function exportLanbitouBackup({ includeDeleted = false } = {}) {
         outOfScope: project.outOfScope || '',
         decisions: Array.isArray(project.decisions) ? project.decisions : [],
         lastSyncedAt: project.lastSyncedAt || null,
+        sortOrder: normalizeBackupSortOrder(project.sortOrder, 0),
         createTime: project.createTime || '',
         updateTime: project.updateTime || '',
         deletedAt: project.deletedAt || null,
@@ -444,6 +457,7 @@ export async function exportLanbitouBackup({ includeDeleted = false } = {}) {
         sourceHash: todo.sourceHash || null,
         runStatus: todo.runStatus || 'idle',
         lastRunId: todo.lastRunId || null,
+        sortOrder: normalizeBackupSortOrder(todo.sortOrder, 0),
         createTime: todo.createTime || '',
         updateTime: todo.updateTime || '',
         deletedAt: todo.deletedAt || null,
@@ -451,6 +465,9 @@ export async function exportLanbitouBackup({ includeDeleted = false } = {}) {
       null,
       2,
     ),
+  )
+  files[TODO_RUNS_BACKUP_FILE] = new TextEncoder().encode(
+    JSON.stringify(todoRuns.map(mapTodoRunForBackup), null, 2),
   )
   files[PROFILE_BACKUP_FILE] = new TextEncoder().encode(
     JSON.stringify(profiles, null, 2),

@@ -1,18 +1,17 @@
 <template>
   <li
     class="todo-item-row"
+    :data-todo-id="todo.id"
     :class="{
       'is-done': todo.done,
       'is-editing': editing,
       'is-selected': selected,
+      'is-highlighted': highlighted,
       'is-expanded': expanded,
       'is-executing': isExecuting,
       'is-queued': isQueued,
     }"
   >
-    <span v-if="isExecuting" class="todo-run-ring" aria-hidden="true">
-      <span class="todo-run-ring-spin" />
-    </span>
     <button
       v-if="sortable"
       type="button"
@@ -185,6 +184,33 @@
           </button>
         </template>
 
+        <template v-else-if="todo.runStatus === 'running' || todo.runStatus === 'queued'">
+          <button
+            type="button"
+            class="todo-action-btn is-danger"
+            :disabled="busy"
+            @click="emit('stop', todo)"
+          >
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <rect x="6" y="6" width="12" height="12" rx="1" />
+            </svg>
+            <span>停止</span>
+          </button>
+          <button
+            v-if="todo.runStatus === 'queued' && isContinueQueued"
+            type="button"
+            class="todo-action-btn"
+            :disabled="busy"
+            @click="openContinue"
+          >
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M21 12a9 9 0 1 1-2.6-6.3" />
+              <path d="M21 3v6h-6" />
+            </svg>
+            <span>继续改</span>
+          </button>
+        </template>
+
         <button
           v-else-if="canContinueAccepted"
           type="button"
@@ -264,6 +290,7 @@
 
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { getTodoDisplayStatus } from '../../constants/todoRunStatus'
 import {
   formatDurationMs,
   formatTokenCount,
@@ -284,6 +311,10 @@ const props = defineProps({
     type: Boolean,
     default: false,
   },
+  highlighted: {
+    type: Boolean,
+    default: false,
+  },
   canRunAgents: {
     type: Boolean,
     default: false,
@@ -295,6 +326,10 @@ const props = defineProps({
   loadDiff: {
     type: Function,
     default: null,
+  },
+  isContinueQueued: {
+    type: Boolean,
+    default: false,
   },
   sortable: {
     type: Boolean,
@@ -311,6 +346,7 @@ const emit = defineEmits([
   'reject',
   'retry',
   'dismiss-failed',
+  'stop',
   'load-run',
   'continue',
   'checklist-change',
@@ -349,20 +385,11 @@ const canRun = computed(
 const isExecuting = computed(() => props.todo?.runStatus === 'running')
 const isQueued = computed(() => props.todo?.runStatus === 'queued')
 
-const statusKey = computed(() => {
-  if (props.todo?.done) return 'done'
-  if (props.todo?.runStatus === 'pending_review') return 'pending_review'
-  if (props.todo?.runStatus === 'running' || props.todo?.runStatus === 'queued') return 'running'
-  return 'idle'
-})
-
-/** 进行中 / 排队中不挂文字状态，靠左侧色条与旋转环区分 */
-const statusText = computed(() => {
-  if (props.todo?.done) return '已验收'
-  if (props.todo?.runStatus === 'pending_review') return '待验收'
-  if (props.todo?.runStatus === 'running' || props.todo?.runStatus === 'queued') return ''
-  return '未完成'
-})
+const displayStatus = computed(() =>
+  getTodoDisplayStatus(props.todo, { isContinueQueued: props.isContinueQueued }),
+)
+const statusKey = computed(() => displayStatus.value.key)
+const statusText = computed(() => displayStatus.value.text)
 
 const nowTick = ref(Date.now())
 let tickTimer = null
@@ -495,11 +522,6 @@ const toggleExpand = () => {
   background: var(--color-surface);
 }
 
-.todo-item-row > *:not(.todo-run-ring) {
-  position: relative;
-  z-index: 1;
-}
-
 .todo-item-row.is-done {
   opacity: 0.72;
 }
@@ -509,55 +531,41 @@ const toggleExpand = () => {
   border-color: rgba(24, 24, 27, 0.22);
 }
 
+.todo-item-row.is-highlighted {
+  border-color: rgba(37, 99, 235, 0.45);
+  background: rgba(37, 99, 235, 0.08);
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.12);
+}
+
 .todo-item-row.is-executing {
-  border-color: rgba(37, 99, 235, 0.28);
-  background: linear-gradient(90deg, rgba(37, 99, 235, 0.06) 0%, var(--color-surface) 28%);
-  box-shadow: inset 3px 0 0 #2563eb;
+  background: rgba(37, 99, 235, 0.06);
+  animation: todo-executing-breathe 2s ease-in-out infinite;
+}
+
+@keyframes todo-executing-breathe {
+  0%,
+  100% {
+    border-color: rgba(37, 99, 235, 0.2);
+    box-shadow: 0 0 0 0 rgba(37, 99, 235, 0);
+  }
+  50% {
+    border-color: rgba(37, 99, 235, 0.55);
+    box-shadow:
+      0 0 0 2px rgba(37, 99, 235, 0.14),
+      0 0 14px rgba(37, 99, 235, 0.12);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .todo-item-row.is-executing {
+    animation: none;
+    border-color: rgba(37, 99, 235, 0.28);
+  }
 }
 
 .todo-item-row.is-queued {
   border-color: rgba(100, 116, 139, 0.28);
-  background: linear-gradient(90deg, rgba(100, 116, 139, 0.07) 0%, var(--color-surface) 28%);
-  box-shadow: inset 3px 0 0 #94a3b8;
-}
-
-.todo-run-ring {
-  position: absolute;
-  inset: -2px;
-  z-index: 0;
-  border-radius: calc(var(--radius-md, 10px) + 2px);
-  padding: 2px;
-  overflow: hidden;
-  pointer-events: none;
-  -webkit-mask:
-    linear-gradient(#fff 0 0) content-box,
-    linear-gradient(#fff 0 0);
-  -webkit-mask-composite: xor;
-  mask-composite: exclude;
-}
-
-.todo-run-ring-spin {
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  width: 220%;
-  height: 220%;
-  translate: -50% -50%;
-  background: conic-gradient(
-    from 0deg,
-    transparent 0deg 342deg,
-    rgba(37, 99, 235, 0.12) 348deg,
-    #2563eb 354deg,
-    #93c5fd 358deg,
-    transparent 360deg
-  );
-  animation: todo-run-border-spin 3.6s linear infinite;
-}
-
-@keyframes todo-run-border-spin {
-  to {
-    transform: rotate(360deg);
-  }
+  background: rgba(100, 116, 139, 0.07);
 }
 
 .todo-sort-handle {
@@ -717,6 +725,16 @@ const toggleExpand = () => {
 .todo-status-text.is-done {
   background: rgba(22, 163, 74, 0.12);
   color: #15803d;
+}
+
+.todo-status-text.is-failed {
+  background: rgba(220, 38, 38, 0.12);
+  color: #b91c1c;
+}
+
+.todo-status-text.is-queued_continue {
+  background: rgba(245, 158, 11, 0.16);
+  color: #b45309;
 }
 
 .todo-item-edit-input {
