@@ -6,5 +6,4 @@ export const STRUCT_NOTE_PREFIX = `${PREFIX}/struct/note/`
 export const ATTACHMENT_PREFIX = `${PREFIX}/att/`
 export const PROJECT_PREFIX = `${PREFIX}/todo/project/`
 export const TODO_PREFIX = `${PREFIX}/todo/item/`
-export const TODO_RUN_PREFIX = `${PREFIX}/todo/run/`
 export const PROFILE_PREFIX = `${PREFIX}/profile/`

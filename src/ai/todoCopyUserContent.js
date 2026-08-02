@@ -1,21 +1,20 @@
-import {
-  getTodoDisplayStatus,
-  TODO_DISPLAY_STATUS_LABEL,
-} from '../constants/todoRunStatus.js'
+const STATUS_LABEL = {
+  done: '已完成',
+  idle: '未完成',
+}
 
-export function buildUserContent(project, todos, runsById = {}) {
+function todoDisplayKey(todo) {
+  return todo?.done ? 'done' : 'idle'
+}
+
+export function buildUserContent(project, todos) {
   const blocks = todos.map((todo, i) => {
-    const run = runsById[String(todo.id)] || null
-    const { key } = getTodoDisplayStatus(todo)
-    const statusText = TODO_DISPLAY_STATUS_LABEL[key] || '未完成'
+    const key = todoDisplayKey(todo)
+    const statusText = STATUS_LABEL[key] || '未完成'
     return [
       `${i + 1}. ${todo.title}`,
       `状态: ${statusText}`,
-      run?.summary ? `摘要: ${String(run.summary).slice(0, 400)}` : '',
-      run?.reviewNote ? `验收备注: ${run.reviewNote}` : '',
-    ]
-      .filter(Boolean)
-      .join('\n')
+    ].join('\n')
   })
   return [
     `事情：${project?.name || ''}`,

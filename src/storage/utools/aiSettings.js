@@ -1,6 +1,5 @@
 const SETTINGS_KEY = 'lanbitou/ai-settings'
 const API_KEY_KEY = 'lanbitou/ai-api-key'
-const CURSOR_API_KEY_KEY = 'lanbitou/cursor-api-key'
 
 export const AI_PROVIDERS = {
   utools: { id: 'utools', label: 'uTools AI', defaultModel: '', defaultBaseUrl: '' },
@@ -59,7 +58,6 @@ export function loadAiSettings() {
 
   const crypto = getCryptoStorage()
   const apiKey = crypto?.getItem(API_KEY_KEY) || ''
-  const cursorApiKey = crypto?.getItem(CURSOR_API_KEY_KEY) || ''
 
   const autoTagEnabled = saved?.autoTagEnabled === true
   const mimicWritingStyle =
@@ -80,7 +78,6 @@ export function loadAiSettings() {
     model,
     baseUrl,
     apiKey,
-    cursorApiKey,
     autoTagEnabled,
     mimicWritingStyle,
     humanizeDraft,
@@ -93,7 +90,6 @@ export function saveAiSettings({
   model,
   baseUrl,
   apiKey,
-  cursorApiKey,
   autoTagEnabled,
   mimicWritingStyle,
   humanizeDraft,
@@ -144,12 +140,6 @@ export function saveAiSettings({
     const trimmed = String(apiKey ?? '').trim()
     if (trimmed) crypto.setItem(API_KEY_KEY, trimmed)
     else crypto.removeItem(API_KEY_KEY)
-  }
-
-  if (crypto && cursorApiKey !== undefined) {
-    const trimmed = String(cursorApiKey ?? '').trim()
-    if (trimmed) crypto.setItem(CURSOR_API_KEY_KEY, trimmed)
-    else crypto.removeItem(CURSOR_API_KEY_KEY)
   }
 }
 

@@ -7,9 +7,6 @@
       'is-editing': editing,
       'is-selected': selected,
       'is-highlighted': highlighted,
-      'is-expanded': expanded,
-      'is-executing': isExecuting,
-      'is-queued': isQueued,
     }"
   >
     <button
@@ -72,28 +69,10 @@
       <div v-else class="todo-item-title-row">
         <p class="todo-item-title" @dblclick="startEdit">{{ todo.title }}</p>
         <span
-          v-if="statusText"
           class="todo-status-text"
-          :class="`is-${statusKey}`"
+          :class="todo.done ? 'is-done' : 'is-idle'"
         >
-          {{ statusText }}
-        </span>
-      </div>
-
-      <div v-if="metricsVisible" class="todo-item-metrics" aria-label="执行指标">
-        <span v-if="tokenLabel" class="todo-metric" title="Token 消耗">
-          <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <path d="M13 2 3 14h7l-1 8 10-12h-7l1-8z" />
-          </svg>
-          <strong>{{ tokenLabel }}</strong>
-          <span class="todo-metric-unit">tokens</span>
-        </span>
-        <span v-if="durationLabel" class="todo-metric" title="执行耗时">
-          <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <circle cx="12" cy="12" r="9" />
-            <path d="M12 7v5l3 2" />
-          </svg>
-          <strong>{{ durationLabel }}</strong>
+          {{ todo.done ? '已完成' : '未完成' }}
         </span>
       </div>
 
@@ -106,137 +85,44 @@
         </span>
       </div>
 
-      <div v-if="expanded && runDetail" class="todo-run-detail">
-        <TodoRunReviewPanel
-          :todo="todo"
-          :run-detail="runDetail"
-          :busy="busy"
-          :show-accept-note="todo.runStatus === 'pending_review'"
-          :load-diff="loadDiff"
-          @checklist-change="onChecklistChange"
-          @review-note-change="onReviewNoteChange"
-        />
-      </div>
-
-      <div v-if="continueOpen" class="todo-continue-box">
-        <textarea
-          ref="continueInputRef"
-          v-model="continueFeedback"
-          class="todo-continue-input"
-          rows="2"
-          placeholder="哪里不满意？例如：样式再紧凑一点…"
-          :disabled="busy"
-          @keydown.enter.exact.prevent="submitContinue"
-        />
-        <div class="todo-continue-actions">
-          <button type="button" class="todo-action-btn is-primary" :disabled="busy" @click="submitContinue">
-            提交修改
-          </button>
-          <button type="button" class="todo-action-btn" :disabled="busy" @click="closeContinue">
-            取消
-          </button>
-        </div>
-      </div>
-
       <div v-if="!editing" class="todo-item-actions">
         <button
-          v-if="canRun"
           type="button"
           class="todo-action-btn"
+          :class="{ 'is-primary': !todo.done }"
           :disabled="busy"
-          @click="emit('run', todo)"
+          @click="emit('toggle-done', todo)"
         >
-          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <polygon points="6 3 20 12 6 21 6 3" />
-          </svg>
-          <span>执行</span>
-        </button>
-
-        <template v-if="todo.runStatus === 'pending_review'">
-          <button type="button" class="todo-action-btn is-primary" :disabled="busy" @click="emitAccept">
-            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-              <path d="m5 12 4 4L19 6" />
-            </svg>
-            <span>通过</span>
-          </button>
-          <button type="button" class="todo-action-btn" :disabled="busy" @click="openContinue">
-            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-              <path d="M21 12a9 9 0 1 1-2.6-6.3" />
-              <path d="M21 3v6h-6" />
-            </svg>
-            <span>继续改</span>
-          </button>
-        </template>
-
-        <template v-else-if="todo.runStatus === 'failed'">
-          <button type="button" class="todo-action-btn" :disabled="busy" @click="emit('retry', todo)">
-            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-              <path d="M21 12a9 9 0 1 1-2.6-6.3" />
-              <path d="M21 3v6h-6" />
-            </svg>
-            <span>重试</span>
-          </button>
-          <button type="button" class="todo-action-btn" :disabled="busy" @click="emit('dismiss-failed', todo)">
-            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-              <path d="M18 6 6 18M6 6l12 12" />
-            </svg>
-            <span>忽略</span>
-          </button>
-        </template>
-
-        <template v-else-if="todo.runStatus === 'running' || todo.runStatus === 'queued'">
-          <button
-            type="button"
-            class="todo-action-btn is-danger"
-            :disabled="busy"
-            @click="emit('stop', todo)"
+          <svg
+            v-if="!todo.done"
+            viewBox="0 0 24 24"
+            width="14"
+            height="14"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.8"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
           >
-            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-              <rect x="6" y="6" width="12" height="12" rx="1" />
-            </svg>
-            <span>停止</span>
-          </button>
-          <button
-            v-if="todo.runStatus === 'queued' && isContinueQueued"
-            type="button"
-            class="todo-action-btn"
-            :disabled="busy"
-            @click="openContinue"
+            <path d="m5 12 4 4L19 6" />
+          </svg>
+          <svg
+            v-else
+            viewBox="0 0 24 24"
+            width="14"
+            height="14"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.8"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
           >
-            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-              <path d="M21 12a9 9 0 1 1-2.6-6.3" />
-              <path d="M21 3v6h-6" />
-            </svg>
-            <span>继续改</span>
-          </button>
-        </template>
-
-        <button
-          v-else-if="canContinueAccepted"
-          type="button"
-          class="todo-action-btn"
-          :disabled="busy"
-          @click="openContinue"
-        >
-          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <path d="M21 12a9 9 0 1 1-2.6-6.3" />
-            <path d="M21 3v6h-6" />
+            <path d="M3 12a9 9 0 1 0 9-9" />
+            <path d="M3 4v5h5" />
           </svg>
-          <span>继续改</span>
-        </button>
-
-        <button
-          v-if="todo.lastRunId"
-          type="button"
-          class="todo-action-btn"
-          :disabled="busy"
-          @click="toggleExpand"
-        >
-          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12z" />
-            <circle cx="12" cy="12" r="3" />
-          </svg>
-          <span>{{ expanded ? '收起' : '查看结果' }}</span>
+          <span>{{ todo.done ? '取消完成' : '完成' }}</span>
         </button>
 
         <button
@@ -289,14 +175,7 @@
 </template>
 
 <script setup>
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { getTodoDisplayStatus } from '../../constants/todoRunStatus'
-import {
-  formatDurationMs,
-  formatTokenCount,
-  getTodoMetrics,
-} from '../../utils/todoRunMetrics'
-import TodoRunReviewPanel from './TodoRunReviewPanel.vue'
+import { nextTick, ref } from 'vue'
 
 const props = defineProps({
   todo: {
@@ -315,22 +194,6 @@ const props = defineProps({
     type: Boolean,
     default: false,
   },
-  canRunAgents: {
-    type: Boolean,
-    default: false,
-  },
-  runDetail: {
-    type: Object,
-    default: null,
-  },
-  loadDiff: {
-    type: Function,
-    default: null,
-  },
-  isContinueQueued: {
-    type: Boolean,
-    default: false,
-  },
   sortable: {
     type: Boolean,
     default: false,
@@ -342,137 +205,13 @@ const emit = defineEmits([
   'open-source',
   'update-title',
   'select-change',
-  'accept',
-  'reject',
-  'retry',
-  'dismiss-failed',
-  'stop',
-  'load-run',
-  'continue',
-  'checklist-change',
-  'run',
+  'toggle-done',
 ])
 
 const editing = ref(false)
 const editTitle = ref('')
 const editInputRef = ref(null)
-const continueInputRef = ref(null)
-const expanded = ref(false)
-const continueOpen = ref(false)
-const continueFeedback = ref('')
-const pendingReviewNote = ref('')
-const pendingChecklist = ref(null)
 let committing = false
-
-const canContinueAccepted = computed(
-  () =>
-    Boolean(props.todo?.done) &&
-    Boolean(props.todo?.lastRunId) &&
-    props.todo?.runStatus !== 'queued' &&
-    props.todo?.runStatus !== 'running' &&
-    props.todo?.runStatus !== 'pending_review',
-)
-
-const canRun = computed(
-  () =>
-    props.canRunAgents &&
-    !props.todo?.done &&
-    props.todo?.runStatus !== 'queued' &&
-    props.todo?.runStatus !== 'running' &&
-    props.todo?.runStatus !== 'pending_review',
-)
-
-const isExecuting = computed(() => props.todo?.runStatus === 'running')
-const isQueued = computed(() => props.todo?.runStatus === 'queued')
-
-const displayStatus = computed(() =>
-  getTodoDisplayStatus(props.todo, { isContinueQueued: props.isContinueQueued }),
-)
-const statusKey = computed(() => displayStatus.value.key)
-const statusText = computed(() => displayStatus.value.text)
-
-const nowTick = ref(Date.now())
-let tickTimer = null
-
-const todoMetrics = computed(() => getTodoMetrics(props.todo, props.runDetail, nowTick.value))
-
-const tokenLabel = computed(() => {
-  const total = todoMetrics.value.totalTokens
-  if (!total) return ''
-  return formatTokenCount(total)
-})
-
-const durationLabel = computed(() => {
-  const total = todoMetrics.value.totalDurationMs
-  return total > 0 ? formatDurationMs(total) : ''
-})
-
-const metricsVisible = computed(() => Boolean(tokenLabel.value || durationLabel.value))
-
-const syncTickTimer = () => {
-  if (props.todo?.runStatus === 'running' && props.runDetail?.startedAt) {
-    if (!tickTimer) {
-      tickTimer = window.setInterval(() => {
-        nowTick.value = Date.now()
-      }, 1000)
-    }
-    return
-  }
-  if (tickTimer) {
-    clearInterval(tickTimer)
-    tickTimer = null
-  }
-}
-
-onMounted(syncTickTimer)
-watch(
-  () => [props.todo?.runStatus, props.runDetail?.startedAt, props.runDetail?.finishedAt],
-  () => {
-    nowTick.value = Date.now()
-    syncTickTimer()
-  },
-)
-onBeforeUnmount(() => {
-  if (tickTimer) clearInterval(tickTimer)
-})
-
-const onChecklistChange = (list) => {
-  pendingChecklist.value = list
-  emit('checklist-change', { todo: props.todo, checklist: list })
-}
-
-const onReviewNoteChange = (note) => {
-  pendingReviewNote.value = note
-}
-
-const emitAccept = () => {
-  emit('accept', {
-    todo: props.todo,
-    reviewNote: pendingReviewNote.value,
-    checklist: pendingChecklist.value,
-  })
-}
-
-const openContinue = async () => {
-  continueOpen.value = true
-  continueFeedback.value = ''
-  await nextTick()
-  continueInputRef.value?.focus?.()
-}
-
-const closeContinue = () => {
-  continueOpen.value = false
-  continueFeedback.value = ''
-}
-
-const submitContinue = () => {
-  if (props.busy) return
-  emit('continue', {
-    todo: props.todo,
-    feedback: String(continueFeedback.value || '').trim(),
-  })
-  closeContinue()
-}
 
 const startEdit = async () => {
   if (props.busy) return
@@ -502,11 +241,6 @@ const commitEdit = () => {
     committing = false
   })
 }
-
-const toggleExpand = () => {
-  expanded.value = !expanded.value
-  if (expanded.value) emit('load-run', props.todo)
-}
 </script>
 
 <style scoped>
@@ -535,37 +269,6 @@ const toggleExpand = () => {
   border-color: rgba(37, 99, 235, 0.45);
   background: rgba(37, 99, 235, 0.08);
   box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.12);
-}
-
-.todo-item-row.is-executing {
-  background: rgba(37, 99, 235, 0.06);
-  animation: todo-executing-breathe 2s ease-in-out infinite;
-}
-
-@keyframes todo-executing-breathe {
-  0%,
-  100% {
-    border-color: rgba(37, 99, 235, 0.2);
-    box-shadow: 0 0 0 0 rgba(37, 99, 235, 0);
-  }
-  50% {
-    border-color: rgba(37, 99, 235, 0.55);
-    box-shadow:
-      0 0 0 2px rgba(37, 99, 235, 0.14),
-      0 0 14px rgba(37, 99, 235, 0.12);
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .todo-item-row.is-executing {
-    animation: none;
-    border-color: rgba(37, 99, 235, 0.28);
-  }
-}
-
-.todo-item-row.is-queued {
-  border-color: rgba(100, 116, 139, 0.28);
-  background: rgba(100, 116, 139, 0.07);
 }
 
 .todo-sort-handle {
@@ -654,43 +357,6 @@ const toggleExpand = () => {
   cursor: text;
 }
 
-.todo-item-metrics {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px;
-  margin-top: 6px;
-}
-
-.todo-metric {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  min-height: 22px;
-  padding: 0 8px;
-  border-radius: 999px;
-  background: rgba(24, 24, 27, 0.06);
-  color: var(--color-primary);
-  font-size: 12px;
-  font-variant-numeric: tabular-nums;
-  line-height: 1.2;
-}
-
-.todo-metric svg {
-  flex: 0 0 auto;
-  color: var(--color-secondary-text);
-}
-
-.todo-metric strong {
-  font-weight: 700;
-  letter-spacing: 0.2px;
-}
-
-.todo-metric-unit {
-  color: var(--color-secondary-text);
-  font-weight: 500;
-}
-
 .todo-item-row.is-done .todo-item-title {
   text-decoration: line-through;
   color: var(--color-secondary-text);
@@ -699,7 +365,6 @@ const toggleExpand = () => {
 .todo-status-text {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
   flex: 0 0 auto;
   height: 22px;
   padding: 0 8px;
@@ -712,29 +377,14 @@ const toggleExpand = () => {
   color: #64748b;
 }
 
-.todo-status-text.is-idle {
-  background: rgba(100, 116, 139, 0.12);
-  color: #64748b;
-}
-
-.todo-status-text.is-pending_review {
-  background: rgba(245, 158, 11, 0.16);
-  color: #b45309;
-}
-
 .todo-status-text.is-done {
   background: rgba(22, 163, 74, 0.12);
   color: #15803d;
 }
 
-.todo-status-text.is-failed {
-  background: rgba(220, 38, 38, 0.12);
-  color: #b91c1c;
-}
-
-.todo-status-text.is-queued_continue {
-  background: rgba(245, 158, 11, 0.16);
-  color: #b45309;
+.todo-status-text.is-idle {
+  background: rgba(100, 116, 139, 0.12);
+  color: #64748b;
 }
 
 .todo-item-edit-input {
@@ -773,51 +423,6 @@ const toggleExpand = () => {
   max-width: 100%;
 }
 
-.todo-run-detail {
-  margin-top: 8px;
-  padding: 10px;
-  border-radius: 8px;
-  background: rgba(24, 24, 27, 0.03);
-  border: 1px solid var(--color-border);
-}
-
-.todo-continue-box {
-  margin-top: 8px;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  padding: 8px;
-  border: 1px solid var(--color-border);
-  border-radius: 8px;
-  background: rgba(24, 24, 27, 0.02);
-}
-
-.todo-continue-input {
-  width: 100%;
-  resize: vertical;
-  min-height: 52px;
-  padding: 8px 10px;
-  border: 1px solid var(--color-border);
-  border-radius: 6px;
-  font: inherit;
-  font-size: 12px;
-  line-height: 1.45;
-  color: var(--color-primary);
-  background: var(--color-bg, #fff);
-  box-sizing: border-box;
-}
-
-.todo-continue-input:focus {
-  outline: none;
-  border-color: var(--color-accent);
-}
-
-.todo-continue-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-
 .todo-item-actions {
   margin-top: 10px;
   display: flex;
@@ -847,13 +452,7 @@ const toggleExpand = () => {
   color: var(--color-accent);
 }
 
-.todo-action-btn.is-danger:hover:not(:disabled) {
-  border-color: rgba(220, 38, 38, 0.35);
-  background: rgba(220, 38, 38, 0.06);
-  color: var(--color-error);
-}
-
-.todo-action-btn:hover:not(:disabled):not(.is-danger) {
+.todo-action-btn:hover:not(:disabled) {
   border-color: var(--btn-icon-border-hover);
   background: var(--btn-icon-bg-hover);
   color: var(--btn-icon-color-hover);

@@ -6,7 +6,6 @@ export const FRAGMENTS_DIR = '碎片'
 export const SEDIMENT_DIR = '沉淀'
 export const ATTACHMENTS_DIR = '_attachments'
 export const PROFILE_BACKUP_FILE = 'profiles.json'
-export const TODO_RUNS_BACKUP_FILE = 'todoRuns.json'
 
 export const LB_TYPE_FRAGMENT = 'fragment'
 export const LB_TYPE_SEDIMENT = 'sediment'
@@ -208,30 +207,4 @@ export function resolveBackupSortOrder(source, existingSortOrder) {
     return normalizeBackupSortOrder(source.sortOrder, 0)
   }
   return normalizeBackupSortOrder(existingSortOrder, 0)
-}
-
-export function mapTodoRunForBackup(run = {}) {
-  return {
-    id: run.id,
-    todoId: run.todoId || '',
-    projectId: run.projectId || '',
-    provider: run.provider || 'cursor',
-    status: run.status || 'queued',
-    prompt: run.prompt || '',
-    log: run.log || '',
-    summary: run.summary || '',
-    changedFiles: Array.isArray(run.changedFiles) ? run.changedFiles : [],
-    checklist: Array.isArray(run.checklist) ? run.checklist : [],
-    usage: run.usage || null,
-    agentId: run.agentId || null,
-    bridgeRunId: run.bridgeRunId || null,
-    baseRef: run.baseRef || null,
-    branchName: run.branchName || null,
-    reviewNote: run.reviewNote || '',
-    error: run.error || '',
-    startedAt: run.startedAt || null,
-    finishedAt: run.finishedAt || null,
-    createTime: run.createTime || '',
-    updateTime: run.updateTime || '',
-  }
 }

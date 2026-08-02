@@ -1,41 +1,33 @@
-import {
-  getTodoDisplayStatus,
-  TODO_DISPLAY_STATUS_LABEL,
-} from '../constants/todoRunStatus.js'
-
-const FALLBACK_STATUS_ORDER = ['done', 'pending_review', 'running', 'queued', 'failed', 'idle']
+const FALLBACK_STATUS_ORDER = ['done', 'idle']
 
 const FALLBACK_STATUS_SECTION = {
   daily: {
     done: '今日完成',
-    pending_review: '待验收',
-    running: '进行中',
-    queued: '排队中',
-    failed: '风险或阻塞',
     idle: '未完成',
   },
   release: {
-    done: '已验收',
-    pending_review: '待验收',
-    running: '进行中',
-    queued: '排队中',
-    failed: '失败',
+    done: '已完成',
     idle: '未完成',
   },
   retro: {
-    done: '已验收',
-    pending_review: '待验收',
-    running: '进行中',
-    queued: '排队中',
-    failed: '失败',
+    done: '已完成',
     idle: '未完成',
   },
+}
+
+const STATUS_LABEL = {
+  done: '已完成',
+  idle: '未完成',
+}
+
+function todoDisplayKey(todo) {
+  return todo?.done ? 'done' : 'idle'
 }
 
 function groupTodosByDisplayStatus(todos) {
   const groups = new Map()
   for (const todo of todos) {
-    const { key } = getTodoDisplayStatus(todo)
+    const key = todoDisplayKey(todo)
     if (!groups.has(key)) groups.set(key, [])
     groups.get(key).push(todo)
   }
@@ -51,7 +43,7 @@ function buildFallbackGroupedLines(template, todos, headingPrefix = '##') {
     if (!items?.length) continue
     lines.push(`${headingPrefix} ${sections[key]}`, '')
     for (const todo of items) {
-      const label = TODO_DISPLAY_STATUS_LABEL[key]
+      const label = STATUS_LABEL[key]
       lines.push(label ? `- ${todo.title}（${label}）` : `- ${todo.title}`)
     }
     lines.push('')

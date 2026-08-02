@@ -1,9 +1,4 @@
 import { NOTE_PREFIX, TODO_PREFIX } from './constants'
-import {
-  isOrphanRunStatus,
-  normalizeTodoRunStatus,
-  TODO_RUN_STATUS,
-} from '../../constants/todoRunStatus'
 import { dbAllDocs, dbGet, dbPut } from './dbClient'
 import { createId, formatDateTime } from './utils'
 
@@ -47,8 +42,6 @@ function toTodo(doc) {
     sourceExcerpt: doc.sourceExcerpt || '',
     doneWhen: doc.doneWhen || '',
     sourceHash: doc.sourceHash || null,
-    runStatus: normalizeTodoRunStatus(doc.runStatus),
-    lastRunId: doc.lastRunId ? String(doc.lastRunId) : null,
     sortOrder: Number.isFinite(Number(doc.sortOrder)) ? Number(doc.sortOrder) : null,
     createTime: doc.createTime || '',
     updateTime: doc.updateTime || '',
@@ -131,23 +124,6 @@ export async function listTodosBySourceNoteIds(noteIds = [], { projectId = null 
     .filter(Boolean)
 }
 
-/** 启动时将中断的 running/queued 待办批量重置为 idle */
-export async function resetOrphanRunTodos() {
-  const docs = await loadAllTodoDocs()
-  const stale = docs.filter((doc) => isOrphanRunStatus(doc.runStatus))
-  if (!stale.length) return []
-
-  const now = formatDateTime()
-  const updated = []
-  for (const doc of stale) {
-    doc.runStatus = TODO_RUN_STATUS.IDLE
-    doc.updateTime = now
-    await saveTodoDoc(doc)
-    updated.push(toTodo(doc))
-  }
-  return updated
-}
-
 export async function listSourceHashesByProject(projectId) {
   const todos = await listTodosByProject(projectId)
   return new Set(todos.map((item) => item.sourceHash).filter(Boolean))
@@ -201,8 +177,6 @@ export async function createTodo({
     sourceExcerpt: String(sourceExcerpt ?? '').trim(),
     doneWhen: String(doneWhen ?? '').trim().slice(0, 120),
     sourceHash: hash,
-    runStatus: TODO_RUN_STATUS.IDLE,
-    lastRunId: null,
     sortOrder: nextSortOrder,
     createTime: now,
     updateTime: now,
@@ -227,12 +201,6 @@ export async function updateTodo(id, patch = {}) {
   if (patch.done != null) doc.done = Boolean(patch.done)
   if (patch.priority != null) {
     doc.priority = patch.priority === 'high' ? 'high' : 'normal'
-  }
-  if (Object.prototype.hasOwnProperty.call(patch, 'runStatus')) {
-    doc.runStatus = normalizeTodoRunStatus(patch.runStatus)
-  }
-  if (Object.prototype.hasOwnProperty.call(patch, 'lastRunId')) {
-    doc.lastRunId = patch.lastRunId ? String(patch.lastRunId) : null
   }
   if (Object.prototype.hasOwnProperty.call(patch, 'doneWhen')) {
     doc.doneWhen = String(patch.doneWhen ?? '').trim().slice(0, 120)

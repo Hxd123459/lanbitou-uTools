@@ -128,78 +128,10 @@
             </svg>
           </span>
         </AppTooltip>
-
-        <AppTooltip
-          class="project-detail-icon-tip"
-          :class="{ 'is-muted': !project?.localPath }"
-          :text="`代码地址：${project?.localPath || '未关联'}`"
-        >
-          <span class="project-detail-icon-btn is-static" aria-label="代码仓库">
-            <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-              <path d="M9 19c-4.3 1.4-4.3-2.5-6-3m12 5v-3.5c0-1 .1-1.4-.5-2 2.8-.3 5.5-1.4 5.5-6a4.6 4.6 0 0 0-1.3-3.2 4.2 4.2 0 0 0-.1-3.2s-1.1-.3-3.5 1.3a12 12 0 0 0-6 0C6.5 2.8 5.4 3.1 5.4 3.1a4.2 4.2 0 0 0-.1 3.2A4.6 4.6 0 0 0 4 9.5c0 4.6 2.7 5.7 5.5 6-.6.6-.6 1.2-.5 2V21" />
-            </svg>
-          </span>
-        </AppTooltip>
-
-        <AppTooltip
-          class="project-detail-icon-tip"
-          :class="{ 'is-muted': !branchLabel }"
-          :text="`当前分支：${branchTooltip}`"
-        >
-          <span class="project-detail-icon-btn is-static" aria-label="当前分支">
-            <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-              <path d="M6 3v12" />
-              <circle cx="18" cy="6" r="3" />
-              <circle cx="6" cy="18" r="3" />
-              <path d="M18 9a9 9 0 0 1-9 9" />
-            </svg>
-          </span>
-        </AppTooltip>
-
-        <AppTooltip
-          class="project-detail-icon-tip"
-          :text="showStats ? '返回待办列表' : '任务统计'"
-        >
-          <button
-            type="button"
-            class="project-detail-icon-btn"
-            :class="{ 'is-active': showStats }"
-            :aria-label="showStats ? '返回待办列表' : '任务统计'"
-            :aria-pressed="showStats"
-            @click="toggleStats"
-          >
-            <svg
-              v-if="showStats"
-              viewBox="0 0 24 24"
-              width="15"
-              height="15"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="1.8"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              aria-hidden="true"
-            >
-              <path d="M19 12H5" />
-              <path d="M12 19l-7-7 7-7" />
-            </svg>
-            <svg
-              v-else
-              viewBox="0 0 1024 1024"
-              width="15"
-              height="15"
-              fill="currentColor"
-              aria-hidden="true"
-            >
-              <path d="M341.333333 938.666667H128a42.666667 42.666667 0 0 1-42.666667-42.666667V405.333333a42.666667 42.666667 0 0 1 42.666667-42.666666h213.333333V128a42.666667 42.666667 0 0 1 42.666667-42.666667h256a42.666667 42.666667 0 0 1 42.666667 42.666667v405.333333h213.333333a42.666667 42.666667 0 0 1 42.56 39.466667L938.666667 576v320a42.666667 42.666667 0 0 1-39.466667 42.56L896 938.666667H341.333333z m0-512H149.333333v448h192V426.666667z m533.333334 170.666666h-192v277.333334h192V597.333333zM618.666667 149.333333H405.333333v725.333334h213.333334V149.333333z" />
-            </svg>
-          </button>
-        </AppTooltip>
       </div>
 
       <div class="project-detail-toolbar-right">
-        <div v-if="!showStats" class="project-detail-status-area">
-          <AgentBridgeStatus @toast="emit('toast', $event)" />
+        <div class="project-detail-status-area">
           <button
             v-if="!syncing && pendingSyncCount > 0"
             type="button"
@@ -210,7 +142,7 @@
           </button>
         </div>
 
-        <div v-if="!showStats" class="project-detail-scope" role="tablist" aria-label="按状态筛选">
+        <div class="project-detail-scope" role="tablist" aria-label="按状态筛选">
           <button
             v-for="opt in statusFilterOptions"
             :key="opt.key"
@@ -235,158 +167,64 @@
     </div>
 
     <div class="project-detail-pane">
-      <AnimatePresence mode="wait" :initial="false">
-        <motion.div
-          v-if="showStats"
-          key="project-detail-stats"
-          class="project-detail-stats"
-          aria-label="执行统计"
-          :exit="presets.fade.exit"
-          :transition="presets.fade.transition"
+      <div class="project-detail-todos">
+        <div
+          v-if="loading && !todos.length"
+          class="project-detail-empty"
         >
-          <div class="project-detail-stats-kpis">
-            <motion.article
-              v-for="(kpi, index) in statsKpis"
-              :key="kpi.key"
-              class="project-detail-stats-kpi"
-              :class="{ 'project-detail-stats-kpi--cost': kpi.key === 'cost' }"
-              :initial="presets.reveal.initial"
-              :animate="presets.reveal.animate"
-              :transition="statsStaggerTransition(index)"
-            >
-              <span class="project-detail-stats-kpi-label">{{ kpi.label }}</span>
-              <AnimatedStatValue
-                :key="`${kpi.key}-${statsAnimEpoch}`"
-                class="project-detail-stats-kpi-value"
-                :value="kpi.value"
-                :format="kpi.format"
-                from-zero
-              />
-            </motion.article>
-          </div>
+          <p class="project-detail-state">加载中…</p>
+        </div>
+        <div
+          v-else-if="!todos.length"
+          class="project-detail-empty"
+        >
+          <p class="project-detail-state">{{ emptyTodosHint }}</p>
+        </div>
+        <p
+          v-else-if="!filteredTodos.length"
+          class="project-detail-state project-detail-state--inline"
+        >
+          该状态下暂无待办
+        </p>
 
-          <div class="project-detail-stats-charts">
-            <motion.section
-              class="project-detail-stats-card"
-              :initial="presets.reveal.initial"
-              :animate="presets.reveal.animate"
-              :transition="statsStaggerTransition(statsKpis.length)"
-            >
-              <div class="project-detail-stats-card-head">
-                <h3 class="project-detail-stats-card-title">近 15 日 Token 用量</h3>
-                <span class="project-detail-stats-card-meta">{{ tokenChartMeta }}</span>
-              </div>
-              <RunStatsBarChart
-                :key="`token-chart-${statsAnimEpoch}`"
-                :labels="chartDateLabels"
-                :values="chartTokenValues"
-                :format-value="formatChartTokens"
-              />
-            </motion.section>
-            <motion.section
-              class="project-detail-stats-card"
-              :initial="presets.reveal.initial"
-              :animate="presets.reveal.animate"
-              :transition="statsStaggerTransition(statsKpis.length + 1)"
-            >
-              <div class="project-detail-stats-card-head">
-                <h3 class="project-detail-stats-card-title">近 15 日执行时间</h3>
-                <span class="project-detail-stats-card-meta">{{ durationChartMeta }}</span>
-              </div>
-              <RunStatsBarChart
-                :key="`duration-chart-${statsAnimEpoch}`"
-                :labels="chartDateLabels"
-                :values="chartDurationValues"
-                :format-value="formatChartDuration"
-              />
-            </motion.section>
-          </div>
-
-          <p class="project-detail-stats-hint">费用按 Cursor 类模型单价估算，仅供参考</p>
-        </motion.div>
-
-        <motion.div
+        <VueDraggable
           v-else
-          key="project-detail-todos"
-          class="project-detail-todos"
-          :initial="presets.fade.initial"
-          :animate="presets.fade.animate"
-          :exit="presets.fade.exit"
-          :transition="presets.fade.transition"
+          ref="todoListRef"
+          v-model="sortableTodos"
+          item-key="id"
+          tag="ul"
+          class="project-detail-list"
+          :class="{ 'has-bottom-bar': hasBottomBar }"
+          role="list"
+          :animation="180"
+          :disabled="busy || sortSaving || statusFilter !== 'all' || selectedCount > 0"
+          handle=".todo-sort-handle"
+          filter=".todo-item-check, .todo-item-actions, input, textarea"
+          :prevent-on-filter="false"
+          ghost-class="todo-sort-ghost"
+          chosen-class="todo-sort-chosen"
+          @end="onTodoSortEnd"
         >
-          <div
-            v-if="loading && !todos.length"
-            class="project-detail-empty"
-          >
-            <p class="project-detail-state">加载中…</p>
-          </div>
-          <div
-            v-else-if="!todos.length"
-            class="project-detail-empty"
-          >
-            <p v-if="!canRunAgents" class="project-detail-state">
-              编辑事情并关联本地项目路径后，可排队让 Cursor 执行待办
-            </p>
-            <p class="project-detail-state">{{ emptyTodosHint }}</p>
-          </div>
-          <p
-            v-else-if="!filteredTodos.length"
-            class="project-detail-state project-detail-state--inline"
-          >
-            该状态下暂无待办
-          </p>
-
-          <VueDraggable
-            v-else
-            ref="todoListRef"
-            v-model="sortableTodos"
-            item-key="id"
-            tag="ul"
-            class="project-detail-list"
-            :class="{ 'has-bottom-bar': hasBottomBar }"
-            role="list"
-            :animation="180"
-            :disabled="busy || sortSaving || statusFilter !== 'all' || selectedCount > 0"
-            handle=".todo-sort-handle"
-            filter=".todo-item-check, .todo-item-actions, .todo-continue-box, input, textarea"
-            :prevent-on-filter="false"
-            ghost-class="todo-sort-ghost"
-            chosen-class="todo-sort-chosen"
-            @end="onTodoSortEnd"
-          >
-            <TodoItemRow
-              v-for="todo in sortableTodos"
-              :key="todo.id"
-              :todo="todo"
-              :busy="busy"
-              :selected="selectedIds.has(String(todo.id))"
-              :highlighted="highlightedTodoId === String(todo.id)"
-              :can-run-agents="canRunAgents"
-              :run-detail="runDetails?.[String(todo.id)] || null"
-              :is-continue-queued="continueQueuedTodoIds.has(String(todo.id))"
-              :load-diff="loadDiff"
-              :sortable="statusFilter === 'all' && selectedCount === 0"
-              @delete="emit('delete-todo', $event)"
-              @open-source="emit('open-source', $event)"
-              @update-title="emit('update-todo-title', $event)"
-              @select-change="onSelectChange"
-              @accept="emit('accept-todo', $event)"
-              @reject="emit('reject-todo', $event)"
-              @retry="emit('retry-todo', $event)"
-              @dismiss-failed="emit('dismiss-failed', $event)"
-              @stop="emit('stop-todo', $event)"
-              @load-run="emit('load-run', $event)"
-              @continue="emit('continue-todo', $event)"
-              @checklist-change="emit('checklist-change', $event)"
-              @run="emit('run-todo', $event)"
-            />
-          </VueDraggable>
-        </motion.div>
-      </AnimatePresence>
+          <TodoItemRow
+            v-for="todo in sortableTodos"
+            :key="todo.id"
+            :todo="todo"
+            :busy="busy"
+            :selected="selectedIds.has(String(todo.id))"
+            :highlighted="highlightedTodoId === String(todo.id)"
+            :sortable="statusFilter === 'all' && selectedCount === 0"
+            @delete="emit('delete-todo', $event)"
+            @open-source="emit('open-source', $event)"
+            @update-title="emit('update-todo-title', $event)"
+            @select-change="onSelectChange"
+            @toggle-done="emit('toggle-todo', $event)"
+          />
+        </VueDraggable>
+      </div>
 
       <AnimatePresence :initial="false">
         <div
-          v-if="!showStats && selectedCount > 0"
+          v-if="selectedCount > 0"
           key="todo-bulk-bar-wrap"
           class="project-detail-bottom-bar-wrap"
         >
@@ -399,22 +237,6 @@
             :exit="presets.reveal.exit"
             :transition="presets.reveal.transition"
           >
-            <motion.button
-              type="button"
-              class="project-detail-bulk-btn"
-              :disabled="busy"
-              :while-hover="presets.button.hover"
-              :while-tap="presets.button.tap"
-              :transition="presets.button.transition"
-              @click="emit('enqueue-selected')"
-            >
-              <span class="project-detail-bulk-btn-icon" aria-hidden="true">
-                <svg viewBox="0 0 1024 1024" width="18" height="18" fill="currentColor">
-                  <path d="M161.2 839.9v-654c0-56.1 60.7-91.1 109.3-63.1l566.3 327c48.6 28 48.6 98.1 0 126.2L270.4 903c-48.5 28-109.2-7.1-109.2-63.1z" />
-                </svg>
-              </span>
-              <span class="project-detail-bulk-btn-label">开始执行</span>
-            </motion.button>
             <motion.button
               type="button"
               class="project-detail-bulk-btn"
@@ -460,45 +282,6 @@
             </div>
           </motion.div>
         </div>
-        <div
-          v-else-if="showRunControlBar"
-          key="todo-run-bar-wrap"
-          class="project-detail-bottom-bar-wrap"
-        >
-          <motion.div
-            class="project-detail-run-bar"
-            role="toolbar"
-            aria-label="执行控制"
-            :initial="presets.reveal.initial"
-            :animate="presets.reveal.animate"
-            :exit="presets.reveal.exit"
-            :transition="presets.reveal.transition"
-          >
-            <button
-              v-if="runningTitle"
-              type="button"
-              class="project-detail-status-badge is-stop-run"
-              :title="`正在执行：${runningTitle}`"
-              :disabled="busy"
-              @click="emit('cancel-run')"
-            >
-              停止当前任务
-            </button>
-            <button
-              v-if="queueLength > 0"
-              type="button"
-              class="project-detail-status-badge is-stop-run is-stop-all"
-              :title="runningTitle ? `停止当前任务及排队中的 ${queueLength} 条` : `停止排队中的 ${queueLength} 条`"
-              :disabled="busy"
-              @click="emit('cancel-all')"
-            >
-              停止全部
-            </button>
-            <span v-if="queueLength > 0" class="project-detail-status-badge">
-              排队 {{ queueLength }} 条
-            </span>
-          </motion.div>
-        </div>
       </AnimatePresence>
     </div>
   </section>
@@ -508,24 +291,11 @@
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { AnimatePresence, motion } from 'motion-v'
 import { VueDraggable } from 'vue-draggable-plus'
-import AnimatedStatValue from '../motion/AnimatedStatValue.vue'
 import AppButton from '../motion/AppButton.vue'
 import AppTooltip from '../common/AppTooltip.vue'
 import TodoItemRow from './TodoItemRow.vue'
-import RunStatsBarChart from './RunStatsBarChart.vue'
-import AgentBridgeStatus from './AgentBridgeStatus.vue'
 import { useMotionPresets } from '../../composables/useMotionPresets'
 import { fetchStructFolder } from '../../api/structFolder'
-import { agentGitStatus, isAgentBridgeAvailable } from '../../api/agentBridge'
-import {
-  aggregateProjectMetricsByDay,
-  aggregateProjectTodoMetrics,
-  STATS_CHART_DAYS,
-  formatCostCny,
-  formatDurationMs,
-  formatTokenCount,
-} from '../../utils/todoRunMetrics'
-import { pinRunningTodosFirst } from '../../utils/todoSort'
 
 const props = defineProps({
   project: { type: Object, default: null },
@@ -536,12 +306,6 @@ const props = defineProps({
   syncing: { type: Boolean, default: false },
   syncPhase: { type: String, default: '' },
   pendingSyncCount: { type: Number, default: 0 },
-  queueLength: { type: Number, default: 0 },
-  runningTitle: { type: String, default: '' },
-  runControlActive: { type: Boolean, default: false },
-  runDetails: { type: Object, default: () => ({}) },
-  continueQueuedTodoIds: { type: Object, default: () => new Set() },
-  loadDiff: { type: Function, default: null },
 })
 
 const emit = defineEmits([
@@ -555,61 +319,24 @@ const emit = defineEmits([
   'open-tag',
   'open-sediment-folder',
   'update-todo-title',
-  'enqueue-selected',
+  'toggle-todo',
   'generate-selected',
-  'cancel-run',
-  'cancel-all',
-  'accept-todo',
-  'reject-todo',
-  'retry-todo',
-  'dismiss-failed',
-  'cancel-queued-todo',
-  'stop-todo',
-  'load-run',
-  'continue-todo',
-  'checklist-change',
-  'run-todo',
   'reorder-todos',
-  'toast',
 ])
 
-const { presets, reduced } = useMotionPresets()
-
-const STATS_STAGGER_STEP = 0.06
-
-const statsStaggerTransition = (index) => ({
-  ...presets.value.reveal.transition,
-  delay: reduced.value ? 0 : index * STATS_STAGGER_STEP,
-})
+const { presets } = useMotionPresets()
 
 const selectedIds = ref(new Set())
-const showStats = ref(false)
-const statsAnimEpoch = ref(0)
-const nowTick = ref(Date.now())
-let statsTickTimer = null
 const statusFilter = ref('all')
 const sedimentFolderName = ref('')
-const gitBranch = ref('')
-const gitBranchLoading = ref(false)
 const sortSaving = ref(false)
 const sortableTodos = ref([])
 const todoListRef = ref(null)
 const highlightedTodoId = ref('')
 let highlightTimer = null
 
-const canRunAgents = computed(() => Boolean(props.project?.localPath))
 const selectedCount = computed(() => selectedIds.value.size)
-
-const showRunControlBar = computed(() =>
-  !showStats.value &&
-  selectedCount.value === 0 &&
-  canRunAgents.value &&
-  props.runControlActive,
-)
-
-const hasBottomBar = computed(() =>
-  !showStats.value && (selectedCount.value > 0 || showRunControlBar.value),
-)
+const hasBottomBar = computed(() => selectedCount.value > 0)
 
 const hasTag = computed(() => {
   const ids = Array.isArray(props.project?.tagIds) ? props.project.tagIds : []
@@ -621,30 +348,17 @@ const emptyTodosHint = computed(() => {
   return '暂无待办，可点右上角 + 添加'
 })
 
-const branchLabel = computed(() => String(gitBranch.value || '').trim())
-const branchTooltip = computed(() => {
-  if (!props.project?.localPath) return '未关联代码仓库'
-  if (gitBranchLoading.value) return '读取中…'
-  return branchLabel.value || '无法读取分支'
-})
-
 const statusFilterOptions = [
   { key: 'all', label: '全部' },
   { key: 'idle', label: '未完成' },
-  { key: 'pending_review', label: '待验收' },
-  { key: 'done', label: '已验收' },
+  { key: 'done', label: '已完成' },
 ]
 
-const todoStatusKey = (todo) => {
-  if (todo?.done) return 'done'
-  if (todo?.runStatus === 'pending_review') return 'pending_review'
-  // running / queued 归入未完成，不再单独成「执行中」筛选项
-  return 'idle'
-}
+const todoStatusKey = (todo) => (todo?.done ? 'done' : 'idle')
 
 const statusCounts = computed(() => {
   const list = Array.isArray(props.todos) ? props.todos : []
-  const counts = { all: list.length, idle: 0, pending_review: 0, done: 0 }
+  const counts = { all: list.length, idle: 0, done: 0 }
   list.forEach((todo) => {
     const key = todoStatusKey(todo)
     counts[key] = (counts[key] || 0) + 1
@@ -652,87 +366,10 @@ const statusCounts = computed(() => {
   return counts
 })
 
-const hasLiveRunTodo = computed(() =>
-  (props.todos || []).some((todo) => todo.runStatus === 'running'),
-)
-
-const runMetrics = computed(() =>
-  aggregateProjectTodoMetrics(props.todos, props.runDetails, nowTick.value),
-)
-
-const formatKpiTokens = (n) => {
-  const num = Math.max(0, Math.round(Number(n) || 0))
-  return num ? `${formatTokenCount(num)} tokens` : '0'
-}
-
-const formatKpiDuration = (ms) => {
-  const total = Math.max(0, Math.round(Number(ms) || 0))
-  return total ? formatDurationMs(total) : '0秒'
-}
-
-const formatKpiCost = (n) => formatCostCny(Math.max(0, Number(n) || 0))
-
-const statsKpis = computed(() => {
-  const { totalTokens, totalDurationMs, costCny } = runMetrics.value
-  return [
-    { key: 'tokens', label: '总 Token', value: totalTokens, format: formatKpiTokens },
-    { key: 'duration', label: '总时间', value: totalDurationMs, format: formatKpiDuration },
-    { key: 'cost', label: '约合费用', value: costCny, format: formatKpiCost },
-  ]
-})
-
-const runMetricsByDay = computed(() =>
-  aggregateProjectMetricsByDay(
-    props.todos,
-    props.runDetails,
-    STATS_CHART_DAYS,
-    nowTick.value,
-  ),
-)
-
-const chartDateLabels = computed(() =>
-  runMetricsByDay.value.map((item) => item.dateKey),
-)
-
-const chartTokenValues = computed(() =>
-  runMetricsByDay.value.map((item) => item.totalTokens),
-)
-
-const chartDurationValues = computed(() =>
-  runMetricsByDay.value.map((item) => item.totalDurationMs),
-)
-
-const formatChartTokens = (value) => {
-  const n = Number(value) || 0
-  return n ? `${formatTokenCount(n)} tokens` : '0'
-}
-
-const formatChartDuration = (value) => {
-  const ms = Number(value) || 0
-  return ms ? formatDurationMs(ms) : '0秒'
-}
-
-const tokenChartMeta = computed(() => {
-  const items = runMetricsByDay.value
-  const activeDays = items.filter((item) => item.totalTokens > 0).length
-  const total = items.reduce((sum, item) => sum + item.totalTokens, 0)
-  return `活跃 ${activeDays} 天 · 累计 ${total ? formatTokenCount(total) : '0'} tokens`
-})
-
-const durationChartMeta = computed(() => {
-  const items = runMetricsByDay.value
-  const activeDays = items.filter((item) => item.totalDurationMs > 0).length
-  const totalMs = items.reduce((sum, item) => sum + item.totalDurationMs, 0)
-  return `活跃 ${activeDays} 天 · 累计 ${totalMs ? formatDurationMs(totalMs) : '0秒'}`
-})
-
 const filteredTodos = computed(() => {
   const list = Array.isArray(props.todos) ? props.todos : []
-  const filtered =
-    statusFilter.value === 'all'
-      ? list
-      : list.filter((todo) => todoStatusKey(todo) === statusFilter.value)
-  return pinRunningTodosFirst(filtered)
+  if (statusFilter.value === 'all') return list
+  return list.filter((todo) => todoStatusKey(todo) === statusFilter.value)
 })
 
 watch(
@@ -767,8 +404,6 @@ const scrollToTodo = async (todoId) => {
   const todo = (props.todos || []).find((item) => String(item.id) === id)
   if (!todo) return false
 
-  if (showStats.value) showStats.value = false
-
   const key = todoStatusKey(todo)
   if (statusFilter.value !== 'all' && key !== statusFilter.value) {
     statusFilter.value = 'all'
@@ -785,24 +420,6 @@ const scrollToTodo = async (todoId) => {
   highlightTimer = window.setTimeout(clearTodoHighlight, 2400)
   return true
 }
-
-const scrollTodoListToTopIfNeeded = () => {
-  if (showStats.value) return
-  const el = resolveTodoListEl()
-  if (!el || el.scrollTop <= 0) return
-  el.scrollTo({ top: 0, behavior: 'smooth' })
-}
-
-watch(
-  () => {
-    const running = (props.todos || []).find((todo) => todo.runStatus === 'running')
-    return running ? String(running.id) : ''
-  },
-  (runningId, prevRunningId) => {
-    if (!runningId || runningId === prevRunningId) return
-    nextTick(scrollTodoListToTopIfNeeded)
-  },
-)
 
 const dateRangeText = computed(() => {
   const start = String(props.project?.startAt || '').slice(0, 10)
@@ -828,21 +445,6 @@ const primaryTag = computed(() => {
   return { id, name }
 })
 
-const loadGitBranch = async (localPath) => {
-  const cwd = String(localPath || '').trim()
-  gitBranch.value = ''
-  if (!cwd || !isAgentBridgeAvailable()) return
-  gitBranchLoading.value = true
-  try {
-    const result = await agentGitStatus({ cwd })
-    gitBranch.value = String(result?.branch || '').trim()
-  } catch {
-    gitBranch.value = ''
-  } finally {
-    gitBranchLoading.value = false
-  }
-}
-
 watch(
   () => props.project?.sedimentFolderId,
   async (folderId) => {
@@ -857,14 +459,6 @@ watch(
     } catch {
       sedimentFolderName.value = props.project?.name || '沉淀文件夹'
     }
-  },
-  { immediate: true },
-)
-
-watch(
-  () => props.project?.localPath,
-  (path) => {
-    void loadGitBranch(path)
   },
   { immediate: true },
 )
@@ -892,60 +486,13 @@ const setStatusFilter = (key) => {
   clearSelection()
 }
 
-const syncStatsTickTimer = () => {
-  if (showStats.value && hasLiveRunTodo.value) {
-    if (!statsTickTimer) {
-      statsTickTimer = window.setInterval(() => {
-        nowTick.value = Date.now()
-      }, 1000)
-    }
-    return
-  }
-  if (statsTickTimer) {
-    clearInterval(statsTickTimer)
-    statsTickTimer = null
-  }
-}
-
-const refreshTodoRunDetails = () => {
-  for (const todo of props.todos || []) {
-    const tid = String(todo.id || '')
-    const detail = props.runDetails?.[tid]
-    const needsHistory =
-      (todo.lastRunId || todo.runStatus !== 'idle') &&
-      (!detail?.history || detail.history.length <= 1)
-    if (
-      needsHistory ||
-      todo.runStatus === 'running' ||
-      todo.runStatus === 'queued'
-    ) {
-      emit('load-run', todo)
-    }
-  }
-}
-
-const toggleStats = () => {
-  showStats.value = !showStats.value
-  if (showStats.value) {
-    statsAnimEpoch.value += 1
-    clearSelection()
-    nowTick.value = Date.now()
-    refreshTodoRunDetails()
-  }
-  syncStatsTickTimer()
-}
-
-watch([showStats, hasLiveRunTodo], syncStatsTickTimer)
-
 onBeforeUnmount(() => {
-  if (statsTickTimer) clearInterval(statsTickTimer)
   clearTodoHighlight()
 })
 
 const onTodoSortEnd = (evt) => {
   if (evt.oldIndex === evt.newIndex || evt.oldIndex == null || evt.newIndex == null) return
   if (statusFilter.value !== 'all') return
-  sortableTodos.value = pinRunningTodosFirst(sortableTodos.value)
   const orderedIds = sortableTodos.value.map((item) => item.id)
   sortSaving.value = true
   emit('reorder-todos', orderedIds)
@@ -955,10 +502,8 @@ watch(
   () => props.project?.id,
   () => {
     selectedIds.value = new Set()
-    showStats.value = false
     statusFilter.value = 'all'
     clearTodoHighlight()
-    syncStatsTickTimer()
   },
 )
 
@@ -1197,11 +742,6 @@ defineExpose({ getSelectedTodos, clearSelection, scrollToTodo })
   cursor: default;
 }
 
-.project-detail-icon-btn.is-active {
-  color: var(--color-accent);
-  background: rgba(37, 99, 235, 0.1);
-}
-
 .project-detail-links :deep(.project-detail-icon-tip:hover) .project-detail-icon-btn,
 .project-detail-icon-btn:hover {
   color: var(--color-text);
@@ -1307,116 +847,6 @@ button.project-detail-icon-btn:hover {
   overflow: hidden;
 }
 
-.project-detail-stats {
-  flex: 1 1 auto;
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-  min-height: 0;
-  min-width: 0;
-  padding: 8px 4px 12px;
-  overflow-y: auto;
-  overflow-x: hidden;
-  box-sizing: border-box;
-  container-type: inline-size;
-  container-name: project-detail-stats;
-}
-
-.project-detail-stats-kpis {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 12px;
-  min-width: 0;
-}
-
-.project-detail-stats-kpi {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  min-width: 0;
-  padding: 16px;
-  border-radius: var(--radius-md);
-  border: 1px solid var(--color-border);
-  background: var(--color-surface);
-  box-shadow: var(--shadow-card);
-  transition: box-shadow 200ms ease;
-}
-
-.project-detail-stats-kpi-label {
-  font-size: 12px;
-  color: var(--color-secondary-text);
-}
-
-.project-detail-stats-kpi-value {
-  font-size: 20px;
-  font-weight: 600;
-  line-height: 1.2;
-  color: var(--color-primary);
-  font-variant-numeric: tabular-nums;
-}
-
-.project-detail-stats-kpi--cost {
-  border-color: rgba(245, 158, 11, 0.22);
-  background: linear-gradient(180deg, rgba(245, 158, 11, 0.05) 0%, var(--color-surface) 100%);
-}
-
-.project-detail-stats-kpi--cost .project-detail-stats-kpi-value {
-  color: var(--color-accent);
-}
-
-.project-detail-stats-charts {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-  min-width: 0;
-}
-
-.project-detail-stats-card {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-  min-width: 0;
-  padding: 18px;
-  border-radius: var(--radius-md);
-  border: 1px solid var(--color-border);
-  background: var(--color-surface);
-  box-shadow: var(--shadow-card);
-}
-
-.project-detail-stats-card-head {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 8px 12px;
-  flex-wrap: nowrap;
-  min-width: 0;
-}
-
-.project-detail-stats-card-title {
-  margin: 0;
-  flex: 0 1 auto;
-  min-width: 0;
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--color-primary);
-  white-space: nowrap;
-}
-
-.project-detail-stats-card-meta {
-  flex: 0 0 auto;
-  font-size: 12px;
-  color: var(--color-secondary-text);
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-}
-
-.project-detail-stats-hint {
-  margin: 0;
-  font-size: 12px;
-  color: var(--color-secondary-text);
-  line-height: 1.5;
-}
-
 .project-detail-empty {
   flex: 1 1 auto;
   display: flex;
@@ -1458,10 +888,6 @@ button.project-detail-icon-btn:hover {
   white-space: nowrap;
 }
 
-.project-detail-status-badge.is-running {
-  font-weight: 600;
-}
-
 .project-detail-status-badge.is-pending-sync {
   border: 0;
   font: inherit;
@@ -1474,43 +900,6 @@ button.project-detail-icon-btn:hover {
 
 .project-detail-status-badge.is-pending-sync:hover {
   background: rgba(180, 83, 9, 0.16);
-}
-
-.project-detail-status-badge.is-stop-run {
-  border: 0;
-  font: inherit;
-  font-size: 12px;
-  font-weight: 600;
-  cursor: pointer;
-  background: rgba(220, 38, 38, 0.1);
-  color: #dc2626;
-}
-
-.project-detail-status-badge.is-stop-run:hover:not(:disabled) {
-  background: rgba(220, 38, 38, 0.16);
-}
-
-.project-detail-status-badge.is-stop-run:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.project-detail-status-badge.is-stop-all {
-  background: rgba(220, 38, 38, 0.06);
-  color: #b91c1c;
-}
-
-.project-detail-status-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: currentColor;
-  flex: 0 0 auto;
-}
-
-.project-detail-status-queue {
-  color: rgba(37, 99, 235, 0.75);
-  font-weight: 500;
 }
 
 .project-detail-bottom-bar-wrap {
@@ -1528,21 +917,6 @@ button.project-detail-icon-btn:hover {
 
 .project-detail-bottom-bar-wrap > * {
   pointer-events: auto;
-}
-
-.project-detail-run-bar {
-  display: inline-flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 8px;
-  width: fit-content;
-  max-width: calc(100vw - 48px);
-  padding: 8px 12px;
-  border-radius: var(--radius-md);
-  border: 1px solid var(--color-border);
-  background: var(--color-surface);
-  box-shadow: var(--shadow-float);
-  box-sizing: border-box;
 }
 
 .project-detail-bulk-bar {
@@ -1655,44 +1029,6 @@ button.project-detail-icon-btn:hover {
   .project-detail-pending-banner {
     flex-direction: column;
     align-items: stretch;
-  }
-
-  .project-detail-stats-kpis {
-    grid-template-columns: 1fr;
-    gap: 10px;
-  }
-}
-
-@container project-detail-stats (max-width: 760px) {
-  .project-detail-stats-kpis {
-    grid-template-columns: 1fr;
-    gap: 10px;
-  }
-
-  .project-detail-stats-kpi {
-    padding: 14px 16px;
-  }
-
-  .project-detail-stats-card {
-    padding: 14px;
-  }
-
-  .project-detail-stats-card-head {
-    flex-wrap: wrap;
-  }
-
-  .project-detail-stats-card-meta {
-    font-size: 11px;
-  }
-}
-
-@container project-detail-stats (max-width: 420px) {
-  .project-detail-stats-kpi-value {
-    font-size: 18px;
-  }
-
-  .project-detail-stats-card-title {
-    font-size: 13px;
   }
 }
 </style>

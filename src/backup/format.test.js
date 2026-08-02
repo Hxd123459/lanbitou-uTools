@@ -4,8 +4,6 @@ import { describe, it } from 'node:test'
 import {
   normalizeBackupSortOrder,
   resolveBackupSortOrder,
-  mapTodoRunForBackup,
-  TODO_RUNS_BACKUP_FILE,
 } from './format.js'
 
 describe('normalizeBackupSortOrder', () => {
@@ -34,34 +32,5 @@ describe('resolveBackupSortOrder', () => {
 
   it('defaults to zero when neither incoming nor existing has sortOrder', () => {
     assert.equal(resolveBackupSortOrder({ id: 'p1' }), 0)
-  })
-})
-
-describe('mapTodoRunForBackup', () => {
-  it('maps run fields for todoRuns.json export', () => {
-    const mapped = mapTodoRunForBackup({
-      id: 'run-1',
-      todoId: 'todo-1',
-      projectId: 'proj-1',
-      status: 'finished',
-      summary: 'done',
-      lastRunId: 'ignored',
-      changedFiles: ['a.js'],
-      createTime: '2026-01-01 10:00:00',
-      updateTime: '2026-01-01 11:00:00',
-    })
-    assert.equal(mapped.id, 'run-1')
-    assert.equal(mapped.todoId, 'todo-1')
-    assert.equal(mapped.projectId, 'proj-1')
-    assert.equal(mapped.status, 'finished')
-    assert.deepEqual(mapped.changedFiles, ['a.js'])
-    assert.equal(mapped.provider, 'cursor')
-    assert.equal(Object.hasOwn(mapped, 'lastRunId'), false)
-  })
-})
-
-describe('TODO_RUNS_BACKUP_FILE', () => {
-  it('uses todoRuns.json as backup entry name', () => {
-    assert.equal(TODO_RUNS_BACKUP_FILE, 'todoRuns.json')
   })
 })

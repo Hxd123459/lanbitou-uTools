@@ -1,2 +1,0 @@
-[lanbitou-agent-bridge] windowsHideConsole: patched child_process
-[lanbitou-agent-bridge] listening on http://127.0.0.1:39281

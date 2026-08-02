@@ -91,7 +91,6 @@ const props = defineProps({
   visible: { type: Boolean, default: false },
   project: { type: Object, default: null },
   todos: { type: Array, default: () => [] },
-  runsById: { type: Object, default: () => ({}) },
 })
 
 const emit = defineEmits(['close', 'save-archive', 'toast'])
@@ -112,7 +111,6 @@ const runGenerate = async () => {
       template: template.value,
       project: props.project,
       todos: props.todos,
-      runsById: props.runsById,
     })
     draft.value = result.text
     hint.value = result.source === 'fallback' ? '已用规则拼接（AI 不可用或失败）' : '已由 AI 生成，可编辑后复制'

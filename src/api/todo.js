@@ -70,8 +70,3 @@ export async function fetchNotesForTodoSync(payload) {
   if (!isUtoolsMode()) return []
   return utoolsTodo.listNotesForTodoSync(payload)
 }
-
-export async function resetOrphanRunTodos() {
-  if (!isUtoolsMode()) return []
-  return utoolsTodo.resetOrphanRunTodos()
-}

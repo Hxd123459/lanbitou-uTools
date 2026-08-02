@@ -78,14 +78,14 @@ export function listCopyTemplates() {
 /**
  * @param {'daily'|'release'|'retro'} template
  */
-export async function generateTodoCopy({ template = 'daily', project, todos = [], runsById = {} } = {}) {
+export async function generateTodoCopy({ template = 'daily', project, todos = [] } = {}) {
   const key = TEMPLATES[template] ? template : 'daily'
   const conf = TEMPLATES[key]
   const list = Array.isArray(todos) ? todos : []
   if (!list.length) throw new Error('请先选择待办')
 
   const fallback = fallbackGenerate(key, project, list)
-  const userContent = buildUserContent(project, list, runsById)
+  const userContent = buildUserContent(project, list)
 
   if (!isUtoolsMode() || !isSedimentDraftAiAvailable()) {
     return { text: fallback, source: 'fallback', template: key, label: conf.label }

@@ -12,12 +12,10 @@ import {
   STRUCT_FOLDER_PREFIX,
   STRUCT_NOTE_PREFIX,
   TODO_PREFIX,
-  TODO_RUN_PREFIX,
 } from '../storage/utools/constants'
 import { dbGet, dbPostAttachment, dbPut } from '../storage/utools/dbClient'
 import { pinTypeToWeight } from '../storage/utools/pin'
 import { ensureTag } from '../storage/utools/tagRepository'
-import { normalizeImportedTodoRunStatus } from '../constants/todoRunStatus'
 import { formatDateTime, toUtoolsAttachmentType } from '../storage/utools/utils'
 import {
   ATTACHMENTS_DIR,
@@ -27,7 +25,6 @@ import {
   LB_TYPE_SEDIMENT,
   PROFILE_BACKUP_FILE,
   SEDIMENT_DIR,
-  TODO_RUNS_BACKUP_FILE,
   extensionToMime,
   isLanbitouBackup,
   joinZipPath,
@@ -354,8 +351,6 @@ async function importTodos(todos = [], summary) {
       sourceExcerpt: todo.sourceExcerpt || '',
       doneWhen: todo.doneWhen || '',
       sourceHash: todo.sourceHash || null,
-      runStatus: normalizeImportedTodoRunStatus(todo.runStatus),
-      lastRunId: todo.lastRunId || null,
       sortOrder: resolveBackupSortOrder(todo, existing?.sortOrder),
       createTime: todo.createTime || existing?.createTime || now,
       updateTime: todo.updateTime || now,
@@ -365,59 +360,6 @@ async function importTodos(todos = [], summary) {
   summary.todosAdded = added
   summary.todosUpdated = updated
   summary.todosSkipped = skipped
-}
-
-async function importTodoRuns(todoRuns = [], summary) {
-  let added = 0
-  let updated = 0
-  let skipped = 0
-  for (const run of todoRuns) {
-    const id = String(run?.id ?? '').trim()
-    const todoId = String(run?.todoId ?? '').trim()
-    const projectId = String(run?.projectId ?? '').trim()
-    if (!id || !todoId || !projectId) continue
-    const existing = await getDoc(TODO_RUN_PREFIX, id)
-    const now = formatDateTime()
-    if (existing) {
-      if (!isIncomingNewer(run.updateTime, existing.updateTime)) {
-        skipped += 1
-        continue
-      }
-      updated += 1
-    } else {
-      added += 1
-    }
-    await dbPut({
-      ...(existing || {}),
-      _id: `${TODO_RUN_PREFIX}${id}`,
-      id,
-      todoId,
-      projectId,
-      provider: String(run.provider || 'cursor'),
-      status: String(run.status || 'queued'),
-      prompt: String(run.prompt || ''),
-      log: String(run.log || ''),
-      summary: String(run.summary || ''),
-      changedFiles: Array.isArray(run.changedFiles)
-        ? run.changedFiles.map(String).filter(Boolean)
-        : [],
-      checklist: Array.isArray(run.checklist) ? run.checklist : [],
-      usage: run.usage || null,
-      agentId: run.agentId || null,
-      bridgeRunId: run.bridgeRunId || null,
-      baseRef: run.baseRef || null,
-      branchName: run.branchName || null,
-      reviewNote: String(run.reviewNote || ''),
-      error: String(run.error || ''),
-      startedAt: run.startedAt || null,
-      finishedAt: run.finishedAt || null,
-      createTime: run.createTime || existing?.createTime || now,
-      updateTime: run.updateTime || now,
-    })
-  }
-  summary.todoRunsAdded = added
-  summary.todoRunsUpdated = updated
-  summary.todoRunsSkipped = skipped
 }
 
 async function importProfiles(profiles = [], summary) {
@@ -629,9 +571,6 @@ export async function importLanbitouBackup(file) {
   const tags = entries['tags.json'] ? JSON.parse(decodeText(entries['tags.json'])) : []
   const projects = entries['projects.json'] ? JSON.parse(decodeText(entries['projects.json'])) : []
   const todos = entries['todos.json'] ? JSON.parse(decodeText(entries['todos.json'])) : []
-  const todoRuns = entries[TODO_RUNS_BACKUP_FILE]
-    ? JSON.parse(decodeText(entries[TODO_RUNS_BACKUP_FILE]))
-    : []
   const profiles = entries[PROFILE_BACKUP_FILE]
     ? JSON.parse(decodeText(entries[PROFILE_BACKUP_FILE]))
     : []
@@ -651,9 +590,6 @@ export async function importLanbitouBackup(file) {
     todosAdded: 0,
     todosUpdated: 0,
     todosSkipped: 0,
-    todoRunsAdded: 0,
-    todoRunsUpdated: 0,
-    todoRunsSkipped: 0,
     tags: 0,
     profiles: 0,
     errors: [],
@@ -701,15 +637,6 @@ export async function importLanbitouBackup(file) {
     await importTodos(Array.isArray(todos) ? todos : [], summary)
   } catch (error) {
     summary.errors.push({ path: 'todos.json', message: error?.message || '待办导入失败' })
-  }
-
-  try {
-    await importTodoRuns(Array.isArray(todoRuns) ? todoRuns : [], summary)
-  } catch (error) {
-    summary.errors.push({
-      path: TODO_RUNS_BACKUP_FILE,
-      message: error?.message || '执行记录导入失败',
-    })
   }
 
   return summary

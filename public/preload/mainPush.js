@@ -362,25 +362,4 @@ function setupLifecycle() {
 setupMainPush()
 setupLifecycle()
 setupAttachmentServices()
-try {
-  const agentBridge = require('./agentBridge.js')
-  if (typeof window !== 'undefined') {
-    window.services = window.services || {}
-    window.services.agent = {
-      ensureStarted: () => agentBridge.ensureStarted(),
-      startResident: () => agentBridge.startResident(),
-      getStatus: () => agentBridge.getStatus(),
-      request: (method, urlPath, body, headers, options) =>
-        agentBridge.request(method, urlPath, body, headers, options),
-      pickDirectory: () => agentBridge.pickDirectory(),
-      pathExists: (target) => agentBridge.pathExists(target),
-      revealInFolder: (target) => agentBridge.revealInFolder(target),
-      openBridgeFolder: () => agentBridge.openBridgeFolder(),
-      healthCheck: () => agentBridge.healthCheck(),
-      port: agentBridge.DEFAULT_PORT,
-    }
-  }
-} catch (error) {
-  console.warn('[烂笔头] agentBridge 加载失败', error)
-}
 console.log('[烂笔头] preload mainPush.js 已加载')

@@ -14,7 +14,6 @@
       @toggle-archive="handleToggleArchive"
       @open-tag="handleOpenTag"
       @reorder="handleReorderProjects"
-      @toast="notifyToast"
     />
 
     <ProjectDetailView
@@ -28,38 +27,19 @@
       :syncing="syncing"
       :sync-phase="syncPhase"
       :pending-sync-count="pendingSyncCount"
-      :queue-length="queueLength"
-      :running-title="runningTitle"
-      :run-control-active="runControlActive"
-      :run-details="runByTodoId"
-      :continue-queued-todo-ids="continueQueuedTodoIds"
-      :load-diff="loadDiffForTodo"
       @back="backToList"
       @edit="openEditModal"
       @sync="handleSync"
       @open-pending-sync="openPendingSyncPreview"
       @open-add="openAddModal"
       @delete-todo="handleDeleteTodo"
+      @toggle-todo="handleToggleTodo"
       @open-source="handleOpenSource"
       @open-tag="handleOpenTag"
       @open-sediment-folder="handleOpenSedimentFolder"
       @update-todo-title="handleUpdateTodoTitle"
-      @enqueue-selected="handleEnqueueSelected"
-      @run-todo="handleRunTodo"
       @generate-selected="openGenerateModal"
-      @cancel-run="cancelActive"
-      @cancel-all="cancelAll"
-      @accept-todo="handleAcceptTodo"
-      @reject-todo="(todo) => rejectTodo(todo, { requeue: false })"
-      @retry-todo="(todo) => continueTodo(todo, '')"
-      @dismiss-failed="dismissFailed"
-      @cancel-queued-todo="cancelQueuedTodo"
-      @stop-todo="handleStopTodo"
-      @load-run="loadRunForTodo"
-      @continue-todo="handleContinueTodo"
-      @checklist-change="handleChecklistChange"
       @reorder-todos="handleReorderTodos"
-      @toast="notifyToast"
     />
 
     <ProjectFormModal
@@ -81,7 +61,6 @@
       :visible="generateVisible"
       :project="currentProject"
       :todos="generateTodos"
-      :runs-by-id="runByTodoId"
       @close="generateVisible = false"
       @toast="notifyToast"
       @save-archive="handleSaveGenerateArchive"
@@ -121,21 +100,13 @@ import {
 } from '../../api/todo'
 import { fetchAllTags, fetchNotesByIds } from '../../api/note'
 import {
-  agentExtract,
-  ensureAgentBridge,
-  isAgentBridgeAvailable,
-} from '../../api/agentBridge'
-import {
   createNoteInFolder,
   createStructFolder,
   fetchStructFolder,
   renameStructItem,
 } from '../../api/structFolder'
 import { extractTodosFromNotes, isTodoExtractAiAvailable } from '../../ai/todoExtractService'
-import { useTodoRunQueue } from '../../composables/useTodoRunQueue'
-import { buildTodoSourceHash, normalizeTodoTitle } from '../../storage/utools/todoRepository'
 import { formatDateTime } from '../../storage/utools/utils'
-import { loadAiSettings } from '../../storage/utools/aiSettings'
 import { MAX_PROJECTS } from '../../constants/todoLimits'
 import {
   clearPendingTodoSync,
@@ -199,89 +170,6 @@ const notifyError = (error) => {
 
 const notifyToast = (text) => {
   emit('toast', text)
-}
-
-const patchTodoLocal = (updated) => {
-  if (!updated?.id) return
-  const list = todos.value
-  const index = list.findIndex((item) => item.id === updated.id)
-  if (index >= 0) {
-    todos.value = list.map((item, i) => (i === index ? updated : item))
-  } else {
-    todos.value = [updated, ...list]
-  }
-}
-
-const {
-  queueLength,
-  continueQueuedTodoIds,
-  runControlActive,
-  runningTitle,
-  runByTodoId,
-  enqueue,
-  continueTodo,
-  updateQueuedContinueFeedback,
-  acceptTodo,
-  updateRunChecklist,
-  rejectTodo,
-  dismissFailed,
-  cancelQueuedTodo,
-  stopTodo,
-  cancelActive,
-  cancelAll,
-  cancelOnLeave,
-  loadRunForTodo,
-  loadDiffForTodo,
-  preloadRunsForProject,
-  ensureOrphanRunsReset,
-} = useTodoRunQueue({
-  getProject: () => currentProject.value,
-  getTodos: () => todos.value,
-  patchTodoLocal,
-  onToast: notifyToast,
-  onError: notifyError,
-})
-
-const handleAcceptTodo = async (payload) => {
-  const todo = payload?.todo || payload
-  try {
-    await acceptTodo(todo, {
-      reviewNote: payload?.reviewNote || '',
-      checklist: payload?.checklist,
-    })
-  } catch (error) {
-    notifyError(error)
-  }
-}
-
-const handleStopTodo = async (todo) => {
-  if (!todo) return
-  try {
-    await stopTodo(todo)
-  } catch (error) {
-    notifyError(error)
-  }
-}
-
-const handleContinueTodo = async ({ todo, feedback }) => {
-  if (!todo) return
-  if (todo.runStatus === 'queued') {
-    updateQueuedContinueFeedback(todo, feedback)
-    return
-  }
-  try {
-    await continueTodo(todo, feedback)
-  } catch (error) {
-    notifyError(error)
-  }
-}
-
-const handleChecklistChange = async ({ todo, checklist }) => {
-  try {
-    await updateRunChecklist(todo, checklist)
-  } catch {
-    /* ignore */
-  }
 }
 
 const openGenerateModal = () => {
@@ -383,25 +271,6 @@ const handleFormSubmit = async (payload) => {
   }
 }
 
-const handleEnqueueSelected = async () => {
-  try {
-    const selected = detailViewRef.value?.getSelectedTodos?.() || []
-    await enqueue(selected.filter((t) => !t.done))
-    detailViewRef.value?.clearSelection?.()
-  } catch (error) {
-    notifyError(error)
-  }
-}
-
-const handleRunTodo = async (todo) => {
-  try {
-    if (!todo || todo.done) return
-    await enqueue([todo])
-  } catch (error) {
-    notifyError(error)
-  }
-}
-
 const loadTags = async () => {
   try {
     const list = await fetchAllTags()
@@ -444,7 +313,6 @@ const loadTodos = async () => {
     todos.value = []
     return
   }
-  await ensureOrphanRunsReset()
   const keepListVisible = todos.value.length > 0
   if (!keepListVisible) loadingTodos.value = true
   try {
@@ -459,7 +327,6 @@ const loadTodos = async () => {
       }
       return todo
     })
-    void preloadRunsForProject(currentProjectId.value)
   } catch (error) {
     todos.value = []
     notifyError(error)
@@ -760,39 +627,6 @@ const cacheSyncResult = (project, candidates, source) => {
   refreshPendingSyncCount()
 }
 
-const mapCursorExtractCandidates = (items, notes, existingHashes) => {
-  const noteMap = new Map((notes || []).map((note) => [String(note.id), note]))
-  const hashSet = existingHashes instanceof Set ? existingHashes : new Set(existingHashes || [])
-  const seen = new Set()
-  const result = []
-
-  for (const item of items || []) {
-    const title = normalizeTodoTitle(item?.title)
-    if (!title) continue
-    const sourceNoteId = item?.sourceNoteId ? String(item.sourceNoteId).trim() : ''
-    const note = sourceNoteId ? noteMap.get(sourceNoteId) : null
-    const sourceHash = sourceNoteId
-      ? buildTodoSourceHash(sourceNoteId, title)
-      : `manual::${title.toLowerCase()}`
-    if (seen.has(sourceHash)) continue
-    seen.add(sourceHash)
-
-    result.push({
-      title,
-      doneWhen: String(item?.doneWhen || '').trim().slice(0, 120),
-      sourceNoteId: sourceNoteId || null,
-      noteTitle: note?.title || '',
-      sourceTagId: note?.tagId || null,
-      sourceTagName: '',
-      sourceExcerpt: String(item?.excerpt || item?.reason || '').trim().slice(0, 60),
-      sourceHash,
-      exists: hashSet.has(sourceHash),
-      selected: !hashSet.has(sourceHash),
-    })
-  }
-  return result
-}
-
 const enrichCandidates = (list) =>
   (list || []).map((item) => ({
     ...item,
@@ -805,21 +639,6 @@ const extractWithLocalAi = async (notes, existingHashes) => {
   syncPhase.value = '正在用本地 AI 提取待办…'
   const candidates = await extractTodosFromNotes({ notes, existingHashes })
   return enrichCandidates(candidates)
-}
-
-const extractWithCursor = async (project, notes, existingHashes) => {
-  syncPhase.value = '正在启动 Agent 桥…'
-  await ensureAgentBridge()
-  syncPhase.value = 'Cursor 结合仓库提取中（可能较久，请稍候）…'
-  notifyToast('正在用 Cursor 结合代码仓库提取…')
-  const extracted = await agentExtract({
-    cwd: project.localPath,
-    notes,
-    provider: 'cursor',
-  })
-  return enrichCandidates(
-    mapCursorExtractCandidates(extracted?.items || [], notes, existingHashes),
-  )
 }
 
 const handleSync = async () => {
@@ -845,22 +664,9 @@ const handleSync = async () => {
     return
   }
 
-  const preferCursor =
-    Boolean(project.localPath) && isAgentBridgeAvailable()
-  const canLocalAi = isTodoExtractAiAvailable()
-
-  if (!preferCursor && !canLocalAi) {
-    notifyToast('请先在设置中配置 AI，或关联本地路径使用 Cursor 提取')
+  if (!isTodoExtractAiAvailable()) {
+    notifyToast('请先在设置中配置 AI')
     return
-  }
-  if (preferCursor) {
-    const settings = loadAiSettings()
-    if (!String(settings.cursorApiKey || settings.apiKey || '').trim()) {
-      if (!canLocalAi) {
-        notifyToast('请先在设置中填写 Cursor API Key')
-        return
-      }
-    }
   }
 
   const projectIdAtStart = project.id
@@ -881,31 +687,8 @@ const handleSync = async () => {
     }
 
     const existingHashes = await fetchSourceHashesByProject(projectIdAtStart)
-    let enriched = []
-    let usedCursor = false
+    const enriched = await extractWithLocalAi(notes, existingHashes)
 
-    const settings = loadAiSettings()
-    const hasCursorKey = Boolean(
-      String(settings.cursorApiKey || settings.apiKey || '').trim(),
-    )
-    const tryCursor = preferCursor && hasCursorKey
-
-    if (tryCursor) {
-      try {
-        enriched = await extractWithCursor(project, notes, existingHashes)
-        usedCursor = true
-      } catch (error) {
-        if (!canLocalAi) throw error
-        notifyToast(
-          `Cursor 提取失败，改用本地 AI：${error?.message || '未知错误'}`,
-        )
-        enriched = await extractWithLocalAi(notes, existingHashes)
-      }
-    } else {
-      enriched = await extractWithLocalAi(notes, existingHashes)
-    }
-
-    // 仍以启动时的事情为准缓存，避免用户已切到别的事情
     const targetProject =
       projects.value.find((item) => item.id === projectIdAtStart) || project
 
@@ -925,11 +708,7 @@ const handleSync = async () => {
       return
     }
 
-    cacheSyncResult(
-      targetProject,
-      enriched,
-      usedCursor ? 'cursor' : 'local',
-    )
+    cacheSyncResult(targetProject, enriched, 'local')
 
     const stillOnSameProject = currentProjectId.value === projectIdAtStart
     if (stillOnSameProject) {
@@ -996,12 +775,8 @@ const handleSyncConfirm = async (selectedItems) => {
 
 watch(
   () => props.active,
-  (isActive, wasActive) => {
-    if (isActive) {
-      refreshAll()
-    } else if (wasActive) {
-      void cancelOnLeave()
-    }
+  (isActive) => {
+    if (isActive) refreshAll()
   },
   { immediate: true },
 )

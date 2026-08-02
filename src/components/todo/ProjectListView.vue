@@ -6,7 +6,6 @@
         <p class="project-list-desc">围绕一件事收集待办，可绑定标签自动同步</p>
       </div>
       <div class="project-list-header-actions">
-        <AgentBridgeStatus @toast="emit('toast', $event)" />
         <AppButton
           type="button"
           class="btn btn-icon-text"
@@ -236,7 +235,6 @@ import { computed, ref, watch } from 'vue'
 import { motion } from 'motion-v'
 import { VueDraggable } from 'vue-draggable-plus'
 import AppButton from '../motion/AppButton.vue'
-import AgentBridgeStatus from './AgentBridgeStatus.vue'
 import { useMotionPresets } from '../../composables/useMotionPresets'
 import { MAX_PROJECTS } from '../../constants/todoLimits'
 import { formatDateTime } from '../../storage/utools/utils'
@@ -257,7 +255,6 @@ const emit = defineEmits([
   'toggle-archive',
   'open-tag',
   'reorder',
-  'toast',
 ])
 
 const { presets } = useMotionPresets()
