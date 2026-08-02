@@ -21,8 +21,6 @@ const DEFAULT_SETTINGS = {
   provider: 'utools',
   model: '',
   autoTagEnabled: false,
-  mimicWritingStyle: true,
-  humanizeDraft: true,
   /** 测试阶段默认关闭，避免启动/记笔记时悄悄烧 token */
   autoProfileAnalysis: false,
 }
@@ -60,14 +58,6 @@ export function loadAiSettings() {
   const apiKey = crypto?.getItem(API_KEY_KEY) || ''
 
   const autoTagEnabled = saved?.autoTagEnabled === true
-  const mimicWritingStyle =
-    saved?.mimicWritingStyle === undefined
-      ? DEFAULT_SETTINGS.mimicWritingStyle
-      : saved.mimicWritingStyle === true
-  const humanizeDraft =
-    saved?.humanizeDraft === undefined
-      ? DEFAULT_SETTINGS.humanizeDraft
-      : saved.humanizeDraft === true
   const autoProfileAnalysis =
     saved?.autoProfileAnalysis === undefined
       ? DEFAULT_SETTINGS.autoProfileAnalysis
@@ -79,8 +69,6 @@ export function loadAiSettings() {
     baseUrl,
     apiKey,
     autoTagEnabled,
-    mimicWritingStyle,
-    humanizeDraft,
     autoProfileAnalysis,
   }
 }
@@ -91,8 +79,6 @@ export function saveAiSettings({
   baseUrl,
   apiKey,
   autoTagEnabled,
-  mimicWritingStyle,
-  humanizeDraft,
   autoProfileAnalysis,
 }) {
   const storage = getStorage()
@@ -122,14 +108,6 @@ export function saveAiSettings({
         : String(prev.baseUrl ?? AI_PROVIDERS[nextProvider]?.defaultBaseUrl ?? ''),
     autoTagEnabled:
       autoTagEnabled === undefined ? prev.autoTagEnabled === true : autoTagEnabled === true,
-    mimicWritingStyle:
-      mimicWritingStyle === undefined
-        ? prev.mimicWritingStyle !== false
-        : mimicWritingStyle === true,
-    humanizeDraft:
-      humanizeDraft === undefined
-        ? prev.humanizeDraft !== false
-        : humanizeDraft === true,
     autoProfileAnalysis:
       autoProfileAnalysis === undefined
         ? prev.autoProfileAnalysis === true
@@ -145,14 +123,6 @@ export function saveAiSettings({
 
 export function saveAutoTagEnabled(enabled) {
   saveAiSettings({ autoTagEnabled: enabled === true })
-}
-
-export function saveMimicWritingStyle(enabled) {
-  saveAiSettings({ mimicWritingStyle: enabled === true })
-}
-
-export function saveHumanizeDraft(enabled) {
-  saveAiSettings({ humanizeDraft: enabled === true })
 }
 
 export function saveAutoProfileAnalysis(enabled) {

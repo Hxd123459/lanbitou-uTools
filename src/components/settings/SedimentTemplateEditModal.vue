@@ -49,7 +49,29 @@
 
           <div class="sediment-template-modal-field">
             <div class="sediment-template-modal-label-row">
-              <span class="sediment-template-modal-label">提示词</span>
+              <span class="sediment-template-modal-label-group">
+                <span class="sediment-template-modal-label">提示词</span>
+                <AppTooltip :text="promptTipsText" placement="below">
+                  <button
+                    type="button"
+                    class="sediment-template-help-btn"
+                    aria-label="提示词编写指引"
+                    tabindex="-1"
+                  >
+                    <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
+                      <circle cx="8" cy="8" r="7" fill="none" stroke="currentColor" stroke-width="1.5" />
+                      <path
+                        d="M5.8 6.1a2.2 2.2 0 0 1 4.2.8c0 1.2-1.1 1.7-1.7 2.1-.4.3-.6.5-.6 1"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="1.4"
+                        stroke-linecap="round"
+                      />
+                      <circle cx="8" cy="12" r="0.85" fill="currentColor" />
+                    </svg>
+                  </button>
+                </AppTooltip>
+              </span>
               <button
                 v-if="!isEdit"
                 type="button"
@@ -60,13 +82,6 @@
               </button>
             </div>
 
-            <div class="sediment-template-prompt-guide" role="note" aria-label="提示词编写指引">
-              <p class="sediment-template-prompt-guide-title">怎么写更稳定？</p>
-              <ul class="sediment-template-prompt-guide-list">
-                <li v-for="(tip, index) in promptTips" :key="index">{{ tip }}</li>
-              </ul>
-            </div>
-
             <textarea
               v-model="form.instruction"
               class="sediment-template-modal-textarea"
@@ -75,6 +90,72 @@
               :placeholder="instructionPlaceholder"
               spellcheck="false"
             />
+          </div>
+
+          <div class="sediment-template-modal-field">
+            <div class="sediment-template-modal-label-row">
+              <span class="sediment-template-modal-label-group">
+                <span class="sediment-template-modal-label">本模板行为</span>
+                <AppTooltip text="仅对使用本模板整理时生效" placement="below">
+                  <button
+                    type="button"
+                    class="sediment-template-help-btn"
+                    aria-label="本模板行为说明"
+                    tabindex="-1"
+                  >
+                    <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
+                      <circle cx="8" cy="8" r="7" fill="none" stroke="currentColor" stroke-width="1.5" />
+                      <path
+                        d="M8 4.6v5"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="1.6"
+                        stroke-linecap="round"
+                      />
+                      <circle cx="8" cy="11.6" r="0.85" fill="currentColor" />
+                    </svg>
+                  </button>
+                </AppTooltip>
+              </span>
+            </div>
+
+            <div class="sediment-template-option">
+              <label class="sediment-template-toggle-row">
+                <span class="sediment-template-toggle-text">
+                  <span class="sediment-template-toggle-title">模仿我的文风</span>
+                </span>
+                <span class="sediment-template-switch" :class="{ 'is-on': form.mimicWritingStyle }">
+                  <input
+                    v-model="form.mimicWritingStyle"
+                    type="checkbox"
+                    class="sediment-template-switch-input"
+                    aria-label="模仿我的文风"
+                  />
+                  <span class="sediment-template-switch-track" aria-hidden="true">
+                    <span class="sediment-template-switch-thumb" />
+                  </span>
+                </span>
+              </label>
+            </div>
+
+            <div class="sediment-template-option">
+              <label class="sediment-template-toggle-row">
+                <span class="sediment-template-toggle-text">
+                  <span class="sediment-template-toggle-title">整理后去 AI 味</span>
+                </span>
+                <span class="sediment-template-switch" :class="{ 'is-on': form.humanizeDraft }">
+                  <input
+                    v-model="form.humanizeDraft"
+                    type="checkbox"
+                    class="sediment-template-switch-input"
+                    aria-label="整理后去 AI 味"
+                  />
+                  <span class="sediment-template-switch-track" aria-hidden="true">
+                    <span class="sediment-template-switch-thumb" />
+                  </span>
+                </span>
+              </label>
+            </div>
           </div>
 
           <p v-if="errorText" class="sediment-template-modal-error">{{ errorText }}</p>
@@ -104,6 +185,7 @@
 <script setup>
 import { computed, nextTick, ref, watch } from 'vue'
 import { AnimatePresence, motion } from 'motion-v'
+import AppTooltip from '../common/AppTooltip.vue'
 import {
   SEDIMENT_TEMPLATE_EXAMPLES,
   SEDIMENT_TEMPLATE_INSTRUCTION_PLACEHOLDER,
@@ -128,10 +210,18 @@ const props = defineProps({
 const emit = defineEmits(['close', 'submit'])
 
 const titleInputRef = ref(null)
-const form = ref({ title: '', instruction: '' })
+const form = ref({
+  title: '',
+  instruction: '',
+  mimicWritingStyle: true,
+  humanizeDraft: true,
+})
 const errorText = ref('')
-const promptTips = SEDIMENT_TEMPLATE_PROMPT_TIPS
 const instructionPlaceholder = SEDIMENT_TEMPLATE_INSTRUCTION_PLACEHOLDER
+const promptTipsText = [
+  '怎么写更稳定？',
+  ...SEDIMENT_TEMPLATE_PROMPT_TIPS.map((tip, index) => `${index + 1}. ${tip}`),
+].join('\n')
 
 const isEdit = computed(() => Boolean(props.initial?.id))
 
@@ -145,6 +235,8 @@ watch(
     form.value = {
       title: String(props.initial?.title || ''),
       instruction: String(props.initial?.instruction || ''),
+      mimicWritingStyle: props.initial?.mimicWritingStyle !== false,
+      humanizeDraft: props.initial?.humanizeDraft !== false,
     }
     errorText.value = ''
     await nextTick()
@@ -158,6 +250,8 @@ const applyTodosExample = () => {
   form.value = {
     title: example.title,
     instruction: example.instruction,
+    mimicWritingStyle: true,
+    humanizeDraft: false,
   }
   errorText.value = ''
 }
@@ -170,7 +264,12 @@ const handleSubmit = () => {
     return
   }
   errorText.value = ''
-  emit('submit', { title, instruction })
+  emit('submit', {
+    title,
+    instruction,
+    mimicWritingStyle: form.value.mimicWritingStyle === true,
+    humanizeDraft: form.value.humanizeDraft === true,
+  })
 }
 </script>
 
@@ -222,6 +321,13 @@ const handleSubmit = () => {
   margin-bottom: 6px;
 }
 
+.sediment-template-modal-label-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+
 .sediment-template-modal-label {
   display: block;
   margin-bottom: 6px;
@@ -232,6 +338,25 @@ const handleSubmit = () => {
 
 .sediment-template-modal-label-row .sediment-template-modal-label {
   margin-bottom: 0;
+}
+
+.sediment-template-help-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--color-secondary-text);
+  cursor: help;
+}
+
+.sediment-template-help-btn:hover {
+  color: var(--color-primary);
+  background: rgba(24, 24, 27, 0.06);
 }
 
 .sediment-template-example-btn {
@@ -247,33 +372,6 @@ const handleSubmit = () => {
 
 .sediment-template-example-btn:hover {
   text-decoration: underline;
-}
-
-.sediment-template-prompt-guide {
-  margin-bottom: 8px;
-  padding: 10px 12px;
-  border: 1px solid rgba(37, 99, 235, 0.14);
-  border-radius: 10px;
-  background: rgba(37, 99, 235, 0.04);
-}
-
-.sediment-template-prompt-guide-title {
-  margin: 0 0 6px;
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--color-primary);
-}
-
-.sediment-template-prompt-guide-list {
-  margin: 0;
-  padding-left: 16px;
-  font-size: 11px;
-  line-height: 1.55;
-  color: var(--color-secondary-text);
-}
-
-.sediment-template-prompt-guide-list li + li {
-  margin-top: 2px;
 }
 
 .sediment-template-modal-input,
@@ -305,6 +403,78 @@ const handleSubmit = () => {
   margin: 0 0 12px;
   font-size: 12px;
   color: var(--color-error);
+}
+
+.sediment-template-option + .sediment-template-option {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--color-border);
+}
+
+.sediment-template-toggle-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  cursor: pointer;
+}
+
+.sediment-template-toggle-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.sediment-template-toggle-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-primary);
+}
+
+.sediment-template-switch {
+  position: relative;
+  display: inline-flex;
+  flex: 0 0 auto;
+}
+
+.sediment-template-switch-input {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+}
+
+.sediment-template-switch-track {
+  position: relative;
+  display: block;
+  width: 44px;
+  height: 26px;
+  border-radius: 999px;
+  background: #d4d4d8;
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+
+.sediment-template-switch.is-on .sediment-template-switch-track {
+  background: #18181b;
+}
+
+.sediment-template-switch-thumb {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.18);
+  transition: transform 0.2s ease;
+}
+
+.sediment-template-switch.is-on .sediment-template-switch-thumb {
+  transform: translateX(18px);
 }
 
 .sediment-template-modal-actions {

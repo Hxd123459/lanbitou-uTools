@@ -1,6 +1,5 @@
 import { NOTE_PREFIX } from '../storage/utools/constants'
 import { dbAllDocs } from '../storage/utools/dbClient'
-import { loadAiSettings } from '../storage/utools/aiSettings'
 import { PROFILE_TYPES, loadProfile } from '../storage/utools/profileRepository'
 
 const MAX_SAMPLES = 5
@@ -29,9 +28,9 @@ function truncateSample(text, maxLen = MAX_SAMPLE_CHARS) {
   return `${value.slice(0, maxLen)}…`
 }
 
-export function isMimicWritingStyleEnabled() {
-  const settings = loadAiSettings()
-  return settings.mimicWritingStyle !== false
+export function isMimicWritingStyleEnabled(enabled) {
+  if (enabled !== undefined) return enabled === true
+  return false
 }
 
 export async function collectFragmentStyleSamples({ excludeIds = [], limit = MAX_SAMPLES } = {}) {
@@ -68,8 +67,11 @@ export function buildWritingStylePromptBlock(samples = []) {
 ${examples}`
 }
 
-export async function resolveWritingStylePromptSection({ excludeIds = [] } = {}) {
-  if (!isMimicWritingStyleEnabled()) return ''
+export async function resolveWritingStylePromptSection({
+  excludeIds = [],
+  enabled = false,
+} = {}) {
+  if (!isMimicWritingStyleEnabled(enabled)) return ''
 
   try {
     const profile = await loadProfile(PROFILE_TYPES.writingStyle)

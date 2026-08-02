@@ -116,6 +116,20 @@
               </motion.button>
             </div>
           </div>
+          <div class="sediment-template-card-flags" aria-label="本模板行为">
+            <span
+              v-if="item.mimicWritingStyle"
+              class="sediment-template-flag"
+            >模仿文风</span>
+            <span
+              v-if="item.humanizeDraft"
+              class="sediment-template-flag"
+            >去 AI 味</span>
+            <span
+              v-if="!item.mimicWritingStyle && !item.humanizeDraft"
+              class="sediment-template-flag is-muted"
+            >无额外行为</span>
+          </div>
           <p class="sediment-template-card-instruction">{{ item.instruction }}</p>
         </template>
       </article>
@@ -162,7 +176,12 @@ const {
 } = useSedimentTemplates()
 
 const modalOpen = ref(false)
-const editing = ref({ title: '', instruction: '' })
+const editing = ref({
+  title: '',
+  instruction: '',
+  mimicWritingStyle: true,
+  humanizeDraft: true,
+})
 const saving = ref(false)
 const deletingId = ref(null)
 const deleteSaving = ref(false)
@@ -177,7 +196,12 @@ const cardMotion = computed(() => {
 
 const openCreate = () => {
   cancelDelete()
-  editing.value = { title: '', instruction: '' }
+  editing.value = {
+    title: '',
+    instruction: '',
+    mimicWritingStyle: true,
+    humanizeDraft: true,
+  }
   modalOpen.value = true
 }
 
@@ -192,14 +216,24 @@ const closeModal = () => {
   modalOpen.value = false
 }
 
-const handleSubmit = async ({ title, instruction }) => {
+const handleSubmit = async ({ title, instruction, mimicWritingStyle, humanizeDraft }) => {
   saving.value = true
   inlineError.value = ''
   try {
     if (editing.value?.id) {
-      updateSedimentTemplate(editing.value.id, { title, instruction })
+      updateSedimentTemplate(editing.value.id, {
+        title,
+        instruction,
+        mimicWritingStyle,
+        humanizeDraft,
+      })
     } else {
-      createSedimentTemplate({ title, instruction })
+      createSedimentTemplate({
+        title,
+        instruction,
+        mimicWritingStyle,
+        humanizeDraft,
+      })
     }
     modalOpen.value = false
   } catch (error) {
@@ -307,6 +341,32 @@ const confirmDelete = async (item) => {
   justify-content: space-between;
   gap: 8px;
   margin-bottom: 8px;
+}
+
+.sediment-template-card-flags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.sediment-template-flag {
+  display: inline-flex;
+  align-items: center;
+  height: 22px;
+  padding: 0 8px;
+  border-radius: 999px;
+  background: rgba(24, 24, 27, 0.06);
+  color: var(--color-secondary-text);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1;
+}
+
+.sediment-template-flag.is-muted {
+  background: transparent;
+  border: 1px dashed var(--color-border);
+  color: #a1a1aa;
 }
 
 .sediment-template-card-actions {

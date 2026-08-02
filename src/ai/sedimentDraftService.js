@@ -4,6 +4,7 @@ import {
   getSedimentTemplateInstruction,
   getSedimentTemplateTitle,
   LEGACY_BUILTIN_LABELS,
+  resolveSedimentTemplateDraftOptions,
 } from '../storage/utools/sedimentTemplates'
 import { isUtoolsAiAvailable } from './aiService'
 import { resolveWritingStylePromptSection } from './writingStyleService'
@@ -354,6 +355,7 @@ export function generateSedimentDraft({
   let cancelled = false
   let innerCancel = () => {}
   let resolvedStyleSection = ''
+  const draftOptions = resolveSedimentTemplateDraftOptions(preset)
 
   const finish = async () => {
     if (cancelled) return
@@ -361,6 +363,7 @@ export function generateSedimentDraft({
     // 二次重写：打散 AI 生成的均匀节奏，失败时原样返回
     const finalText = await humanizeDraftText(accumulated, {
       styleSection: resolvedStyleSection,
+      enabled: draftOptions.humanizeDraft,
     })
     if (cancelled) return
 
@@ -392,7 +395,10 @@ export function generateSedimentDraft({
 
   ;(async () => {
     try {
-      const styleSection = await resolveWritingStylePromptSection({ excludeIds })
+      const styleSection = await resolveWritingStylePromptSection({
+        excludeIds,
+        enabled: draftOptions.mimicWritingStyle,
+      })
       resolvedStyleSection = styleSection
       const systemPrompt = buildSystemPrompt(preset, customPrompt, styleSection, draftMode)
 

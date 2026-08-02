@@ -128,36 +128,6 @@
           :transition="autoTagCardMotion.transition"
         >
           <label class="ai-settings-toggle-row">
-            <span class="ai-settings-label">AI 整理时模仿我的文风</span>
-            <span class="ai-switch" :class="{ 'is-on': form.mimicWritingStyle }">
-              <input
-                v-model="form.mimicWritingStyle"
-                type="checkbox"
-                class="ai-switch-input"
-                aria-label="AI 整理时模仿我的文风"
-                @change="handleMimicStyleToggle"
-              />
-              <span class="ai-switch-track" aria-hidden="true">
-                <span class="ai-switch-thumb" />
-              </span>
-            </span>
-          </label>
-          <p class="ai-settings-hint">
-            从你的手写碎片中抽取样本，让 AI 整理初稿时更接近你的表达习惯。样本不足时自动跳过。
-          </p>
-        </motion.div>
-      </div>
-
-      <div class="ai-settings-side">
-        <slot name="side" />
-
-        <motion.div
-          class="ai-settings-card ai-settings-card--auto-tag"
-          :initial="autoTagCardMotion.initial"
-          :animate="autoTagCardMotion.animate"
-          :transition="{ ...autoTagCardMotion.transition, delay: 0.02 }"
-        >
-          <label class="ai-settings-toggle-row">
             <span class="ai-settings-label">AI 自动打标签</span>
             <span
               class="ai-switch"
@@ -179,33 +149,14 @@
           <p v-if="autoTagStatusMessage" class="ai-settings-auto-tag-status">
             {{ autoTagStatusMessage }}
           </p>
-        </motion.div>
-
-        <motion.div
-          class="ai-settings-card ai-settings-card--auto-tag"
-          :initial="autoTagCardMotion.initial"
-          :animate="autoTagCardMotion.animate"
-          :transition="{ ...autoTagCardMotion.transition, delay: 0.04 }"
-        >
-          <label class="ai-settings-toggle-row">
-            <span class="ai-settings-label">AI 整理后自动去 AI 味</span>
-            <span class="ai-switch" :class="{ 'is-on': form.humanizeDraft }">
-              <input
-                v-model="form.humanizeDraft"
-                type="checkbox"
-                class="ai-switch-input"
-                aria-label="AI 整理后自动去 AI 味"
-                @change="handleHumanizeDraftToggle"
-              />
-              <span class="ai-switch-track" aria-hidden="true">
-                <span class="ai-switch-thumb" />
-              </span>
-            </span>
-          </label>
-          <p class="ai-settings-hint">
-            初稿生成后自动多做一轮改写：打散均匀的句子节奏、去掉排比和总结套路，降低被 AI 检测的概率。会增加一次模型调用，整理耗时略长。
+          <p v-else class="ai-settings-hint">
+            记录碎片时自动推荐标签。文风模仿与去 AI 味请在「整理模板」中按模板开启。
           </p>
         </motion.div>
+      </div>
+
+      <div class="ai-settings-side">
+        <slot name="side" />
       </div>
     </div>
   </component>
@@ -223,8 +174,6 @@ import {
   loadAiSettings,
   saveAiSettings,
   saveAutoTagEnabled,
-  saveHumanizeDraft,
-  saveMimicWritingStyle,
   saveProviderAndAutoTagEnabled,
 } from '../../storage/utools/aiSettings'
 
@@ -287,8 +236,6 @@ const form = reactive({
   baseUrl: '',
   apiKey: '',
   autoTagEnabled: false,
-  mimicWritingStyle: true,
-  humanizeDraft: true,
 })
 
 const saving = ref(false)
@@ -309,8 +256,6 @@ const hydrate = () => {
   form.baseUrl = saved.baseUrl
   form.apiKey = saved.apiKey
   form.autoTagEnabled = saved.autoTagEnabled
-  form.mimicWritingStyle = saved.mimicWritingStyle !== false
-  form.humanizeDraft = saved.humanizeDraft !== false
 }
 
 const setProviderStatus = (message, type = 'info') => {
@@ -361,24 +306,6 @@ const getConnectionParams = () => ({
   baseUrl: form.baseUrl,
   apiKey: form.apiKey,
 })
-
-const handleMimicStyleToggle = () => {
-  try {
-    saveMimicWritingStyle(form.mimicWritingStyle)
-  } catch (error) {
-    form.mimicWritingStyle = !form.mimicWritingStyle
-    console.warn('[烂笔头] 文风模仿设置保存失败', error)
-  }
-}
-
-const handleHumanizeDraftToggle = () => {
-  try {
-    saveHumanizeDraft(form.humanizeDraft)
-  } catch (error) {
-    form.humanizeDraft = !form.humanizeDraft
-    console.warn('[烂笔头] 去AI味设置保存失败', error)
-  }
-}
 
 const handleAutoTagToggle = async () => {
   const next = form.autoTagEnabled
@@ -454,6 +381,11 @@ onMounted(hydrate)
   min-width: 0;
 }
 
+/* 画像变高时只撑右列，左列控制区不被连带挤开 */
+.ai-settings-layout--split .ai-settings-side {
+  align-self: stretch;
+}
+
 .ai-settings-subtitle {
   margin: 0 0 8px;
   font-size: 16px;
@@ -496,10 +428,6 @@ onMounted(hydrate)
 .ai-settings-layout--split .ai-settings-card {
   max-width: none;
   width: 100%;
-}
-
-.ai-settings-card--auto-tag {
-  margin-top: 0;
 }
 
 @media (max-width: 900px) {

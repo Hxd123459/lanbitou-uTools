@@ -93,7 +93,7 @@ onBeforeUnmount(() => {
 <style>
 .app-tooltip {
   position: fixed;
-  z-index: 320;
+  z-index: 2000;
   max-width: min(360px, 80vw);
   padding: 6px 10px;
   border-radius: 6px;

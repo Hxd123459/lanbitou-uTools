@@ -23,9 +23,9 @@ function buildHumanizeSystemPrompt(styleSection = '') {
   return `${HUMANIZE_SYSTEM_BASE}\n\n${style}`
 }
 
-export function isHumanizeDraftEnabled() {
-  const settings = loadAiSettings()
-  return settings.humanizeDraft !== false
+export function isHumanizeDraftEnabled(enabled) {
+  if (enabled !== undefined) return enabled === true
+  return false
 }
 
 async function requestHumanize(system, user) {
@@ -66,10 +66,10 @@ function isAcceptableRewrite(original, rewritten) {
  * 对 AI 草稿做一轮"去 AI 味"重写。
  * 开关关闭、文本过短或重写失败时，原样返回，绝不阻断草稿流程。
  */
-export async function humanizeDraftText(text, { styleSection = '' } = {}) {
+export async function humanizeDraftText(text, { styleSection = '', enabled = false } = {}) {
   const original = String(text ?? '').trim()
   if (!original || original.length < MIN_HUMANIZE_CHARS) return original
-  if (!isHumanizeDraftEnabled()) return original
+  if (!isHumanizeDraftEnabled(enabled)) return original
 
   try {
     const system = buildHumanizeSystemPrompt(styleSection)
