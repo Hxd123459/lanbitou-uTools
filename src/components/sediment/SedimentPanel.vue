@@ -269,6 +269,7 @@
                   <span
                     class="folder-name"
                     :class="{ 'folder-name--todo': isTodoLinkedFolder(item) }"
+                    :title="item.name"
                   >
                     {{ item.name }}
                   </span>
@@ -1571,13 +1572,18 @@ defineExpose({
 
 .folder-name {
   width: 100%;
+  max-height: calc(1.35em * 2);
   color: var(--color-primary);
   font-size: 12px;
   font-weight: 500;
   line-height: 1.35;
   overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  word-break: break-word;
+  white-space: normal;
+  text-align: center;
 }
 
 .folder-name--todo {
