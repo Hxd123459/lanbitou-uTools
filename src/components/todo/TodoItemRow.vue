@@ -27,6 +27,7 @@
         <circle cx="15" cy="17" r="1.4" />
       </svg>
     </button>
+
     <button
       type="button"
       class="todo-item-check"
@@ -54,27 +55,20 @@
     </button>
 
     <div class="todo-item-main">
-      <input
+      <textarea
         v-if="editing"
         ref="editInputRef"
         v-model="editTitle"
         class="todo-item-edit-input"
-        type="text"
+        rows="2"
         maxlength="240"
         :disabled="busy"
-        @keydown.enter.prevent="commitEdit"
+        @keydown.ctrl.enter.prevent="commitEdit"
+        @keydown.meta.enter.prevent="commitEdit"
         @keydown.esc.prevent="cancelEdit"
         @blur="commitEdit"
       />
-      <div v-else class="todo-item-title-row">
-        <p class="todo-item-title" @dblclick="startEdit">{{ todo.title }}</p>
-        <span
-          class="todo-status-text"
-          :class="todo.done ? 'is-done' : 'is-idle'"
-        >
-          {{ todo.done ? '已完成' : '未完成' }}
-        </span>
-      </div>
+      <p v-else class="todo-item-title" @dblclick="startEdit">{{ todo.title }}</p>
 
       <div v-if="todo.doneWhen || todo.sourceExcerpt" class="todo-item-meta">
         <span v-if="todo.doneWhen" class="todo-item-excerpt" :title="todo.doneWhen">
@@ -85,48 +79,8 @@
         </span>
       </div>
 
-      <div v-if="!editing" class="todo-item-actions">
+      <div v-if="!editing && todo.sourceNoteId" class="todo-item-actions">
         <button
-          type="button"
-          class="todo-action-btn"
-          :class="{ 'is-primary': !todo.done }"
-          :disabled="busy"
-          @click="emit('toggle-done', todo)"
-        >
-          <svg
-            v-if="!todo.done"
-            viewBox="0 0 24 24"
-            width="14"
-            height="14"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="1.8"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            aria-hidden="true"
-          >
-            <path d="m5 12 4 4L19 6" />
-          </svg>
-          <svg
-            v-else
-            viewBox="0 0 24 24"
-            width="14"
-            height="14"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="1.8"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            aria-hidden="true"
-          >
-            <path d="M3 12a9 9 0 1 0 9-9" />
-            <path d="M3 4v5h5" />
-          </svg>
-          <span>{{ todo.done ? '取消完成' : '完成' }}</span>
-        </button>
-
-        <button
-          v-if="todo.sourceNoteId"
           type="button"
           class="todo-action-btn"
           :disabled="busy"
@@ -142,6 +96,45 @@
     </div>
 
     <div v-if="!editing" class="todo-item-corner-actions">
+      <button
+        type="button"
+        class="icon-btn"
+        :class="{ 'is-revert': todo.done }"
+        :title="todo.done ? '回退' : '完成'"
+        :aria-label="todo.done ? '回退为未完成' : '完成'"
+        :disabled="busy"
+        @click="emit('toggle-done', todo)"
+      >
+        <svg
+          v-if="todo.done"
+          viewBox="0 0 24 24"
+          width="14"
+          height="14"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          aria-hidden="true"
+        >
+          <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+          <path d="M3 3v5h5" />
+        </svg>
+        <svg
+          v-else
+          viewBox="0 0 24 24"
+          width="14"
+          height="14"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          aria-hidden="true"
+        >
+          <path d="m5 12 4 4L19 6" />
+        </svg>
+      </button>
       <button
         type="button"
         class="icon-btn"
@@ -340,19 +333,13 @@ const commitEdit = () => {
   min-width: 0;
 }
 
-.todo-item-title-row {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px;
-  padding-right: 4px;
-}
-
 .todo-item-title {
   margin: 0;
+  padding-right: 4px;
   font-size: 14px;
   line-height: 1.45;
   color: var(--color-text);
+  white-space: pre-wrap;
   word-break: break-word;
   cursor: text;
 }
@@ -362,34 +349,10 @@ const commitEdit = () => {
   color: var(--color-secondary-text);
 }
 
-.todo-status-text {
-  display: inline-flex;
-  align-items: center;
-  flex: 0 0 auto;
-  height: 22px;
-  padding: 0 8px;
-  border-radius: 999px;
-  font-size: 11px;
-  font-weight: 600;
-  line-height: 1;
-  white-space: nowrap;
-  background: rgba(100, 116, 139, 0.12);
-  color: #64748b;
-}
-
-.todo-status-text.is-done {
-  background: rgba(22, 163, 74, 0.12);
-  color: #15803d;
-}
-
-.todo-status-text.is-idle {
-  background: rgba(100, 116, 139, 0.12);
-  color: #64748b;
-}
-
 .todo-item-edit-input {
   width: 100%;
   box-sizing: border-box;
+  min-height: 56px;
   padding: 6px 10px;
   border: 1px solid var(--color-border);
   border-radius: 8px;
@@ -398,6 +361,8 @@ const commitEdit = () => {
   font-family: inherit;
   font-size: 14px;
   line-height: 1.45;
+  resize: vertical;
+  white-space: pre-wrap;
 }
 
 .todo-item-edit-input:focus {
@@ -424,7 +389,7 @@ const commitEdit = () => {
 }
 
 .todo-item-actions {
-  margin-top: 10px;
+  margin-top: 8px;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -435,27 +400,21 @@ const commitEdit = () => {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  height: 28px;
+  height: 26px;
   padding: 0 8px;
-  border: 1px solid var(--color-border);
+  border: 1px solid transparent;
   border-radius: 7px;
-  background: var(--color-bg);
+  background: transparent;
   color: var(--color-secondary-text);
   font-family: inherit;
   font-size: 12px;
   cursor: pointer;
 }
 
-.todo-action-btn.is-primary {
-  border-color: rgba(37, 99, 235, 0.35);
-  background: rgba(37, 99, 235, 0.1);
-  color: var(--color-accent);
-}
-
 .todo-action-btn:hover:not(:disabled) {
-  border-color: var(--btn-icon-border-hover);
-  background: var(--btn-icon-bg-hover);
-  color: var(--btn-icon-color-hover);
+  border-color: var(--color-border);
+  background: rgba(24, 24, 27, 0.04);
+  color: var(--color-text);
 }
 
 .todo-action-btn:disabled {
@@ -500,6 +459,15 @@ const commitEdit = () => {
 .icon-btn:hover:not(:disabled) {
   background: rgba(24, 24, 27, 0.06);
   color: var(--color-text);
+}
+
+.icon-btn.is-revert {
+  color: #b45309;
+}
+
+.icon-btn.is-revert:hover:not(:disabled) {
+  background: rgba(180, 83, 9, 0.1);
+  color: #92400e;
 }
 
 .icon-btn-danger:hover:not(:disabled) {

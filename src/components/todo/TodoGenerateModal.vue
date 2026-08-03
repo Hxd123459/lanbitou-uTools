@@ -26,23 +26,9 @@
           :transition="{ duration: 0.22 }"
         >
           <header class="todo-gen-header">
-            <h3>生成说明</h3>
+            <h3>{{ activeLabel || '生成说明' }}</h3>
             <p>已选 {{ todos.length }} 条待办</p>
           </header>
-
-          <div class="todo-gen-templates" role="tablist">
-            <button
-              v-for="item in templates"
-              :key="item.id"
-              type="button"
-              class="todo-gen-tpl"
-              :class="{ 'is-active': template === item.id }"
-              :disabled="generating"
-              @click="template = item.id"
-            >
-              {{ item.label }}
-            </button>
-          </div>
 
           <textarea
             v-model="draft"
@@ -68,7 +54,7 @@
               type="button"
               class="todo-review-btn is-primary"
               :disabled="generating || !draft || !canWriteArchive"
-              @click="emit('save-archive', { template, text: draft })"
+              @click="emit('save-archive', { template, text: draft, label: activeLabel })"
             >
               写入沉淀
             </button>
@@ -86,24 +72,34 @@ import {
   generateTodoCopy,
   listCopyTemplates,
 } from '../../ai/todoCopyGenerateService'
+import { useSedimentTemplates } from '../../composables/useSedimentTemplates'
 
 const props = defineProps({
   visible: { type: Boolean, default: false },
   project: { type: Object, default: null },
   todos: { type: Array, default: () => [] },
+  initialTemplate: { type: String, default: '' },
 })
 
 const emit = defineEmits(['close', 'save-archive', 'toast'])
 
-const templates = listCopyTemplates()
-const template = ref('daily')
+useSedimentTemplates()
+const templates = computed(() => listCopyTemplates())
+const template = ref('')
 const draft = ref('')
 const generating = ref(false)
 const hint = ref('')
 
 const canWriteArchive = computed(() => Boolean(props.project?.sedimentFolderId))
+const activeLabel = computed(
+  () => templates.value.find((item) => item.id === template.value)?.label || '生成说明',
+)
 
 const runGenerate = async () => {
+  if (!template.value) {
+    hint.value = '未指定模板'
+    return
+  }
   generating.value = true
   hint.value = ''
   try {
@@ -134,15 +130,15 @@ watch(
   () => props.visible,
   (visible) => {
     if (!visible) return
-    template.value = 'daily'
+    const list = templates.value
+    const preferred = String(props.initialTemplate || '').trim()
+    const exists = list.some((item) => item.id === preferred)
+    template.value = exists ? preferred : (list[0]?.id || preferred)
     draft.value = ''
+    hint.value = ''
     void runGenerate()
   },
 )
-
-watch(template, () => {
-  if (props.visible) void runGenerate()
-})
 </script>
 
 <style scoped>
@@ -187,28 +183,6 @@ watch(template, () => {
   color: var(--color-secondary-text);
 }
 
-.todo-gen-templates {
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-
-.todo-gen-tpl {
-  height: 28px;
-  padding: 0 12px;
-  border-radius: 999px;
-  border: 1px solid var(--color-border);
-  background: transparent;
-  font: inherit;
-  font-size: 12px;
-  cursor: pointer;
-}
-
-.todo-gen-tpl.is-active {
-  border-color: var(--color-accent);
-  color: var(--color-accent);
-}
-
 .todo-gen-textarea {
   width: 100%;
   min-height: 220px;
@@ -247,9 +221,14 @@ watch(template, () => {
 }
 
 .todo-review-btn.is-primary {
-  background: var(--color-accent);
-  border-color: var(--color-accent);
+  background: #18181b;
+  border-color: #18181b;
   color: #fff;
+}
+
+.todo-review-btn.is-primary:hover:not(:disabled) {
+  background: #27272a;
+  border-color: #27272a;
 }
 
 .todo-review-btn:disabled {

@@ -50,16 +50,31 @@ export async function listFolder(parentId = 0) {
     .map(toFolderItem)
 }
 
-export async function createFolder({ parentId = 0, name }) {
+export async function createFolder({ parentId = 0, name, sort } = {}) {
   const id = createId()
   const now = formatDateTime()
+  const parent = normalizeParentId(parentId)
+  // 最多两级嵌套：父路径长度已达 2 则禁止再建
+  if (parent) {
+    const parentStack = await getFolderPathStack(parent)
+    if (parentStack.length >= 2) {
+      throw new Error('文件夹最多支持两级嵌套')
+    }
+  }
+  let sortValue = 0
+  if (sort === 'append') {
+    const siblings = await listFolder(parent ?? 0)
+    sortValue = siblings.reduce((max, item) => Math.max(max, item.sort ?? 0), -1) + 1
+  } else if (typeof sort === 'number' && Number.isFinite(sort)) {
+    sortValue = sort
+  }
   const doc = {
     id,
-    parentId: normalizeParentId(parentId),
+    parentId: parent,
     name: String(name ?? '').trim() || '未命名文件夹',
     type: 'folder',
     noteId: null,
-    sort: 0,
+    sort: sortValue,
     createTime: now,
     updateTime: now,
   }

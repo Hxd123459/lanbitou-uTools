@@ -79,6 +79,15 @@
           </span>
         </li>
       </ol>
+      <button
+        v-if="currentTodoProjectId"
+        type="button"
+        class="breadcrumb-goto-todo"
+        title="打开关联待办"
+        @click="openTodoProjectById(currentTodoProjectId)"
+      >
+        去待办
+      </button>
     </nav>
 
     <p v-if="loading" class="sediment-state">加载中…</p>
@@ -209,7 +218,10 @@
               >
                 <span
                   class="folder-icon-wrap"
-                  :class="{ 'folder-icon-wrap--note': item.type === 'note' }"
+                  :class="{
+                    'folder-icon-wrap--note': item.type === 'note',
+                    'folder-icon-wrap--todo': isTodoLinkedFolder(item),
+                  }"
                   aria-hidden="true"
                 >
                   <svg
@@ -241,20 +253,26 @@
                     <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
                     <polyline points="14 2 14 8 20 8" />
                   </svg>
+                  <span v-if="isTodoLinkedFolder(item)" class="folder-todo-badge">待办</span>
                 </span>
               </motion.button>
               <AnimatePresence mode="wait">
-                <motion.span
+                <motion.div
                   v-if="actionMenuItemId !== item.id"
-                  key="name"
-                  class="folder-name"
+                  key="meta"
+                  class="folder-card-meta"
                   :initial="presets.swapLabel.initial"
                   :animate="presets.swapLabel.animate"
                   :exit="presets.swapLabel.exit"
                   :transition="presets.swapLabel.transition"
                 >
-                  {{ item.name }}
-                </motion.span>
+                  <span
+                    class="folder-name"
+                    :class="{ 'folder-name--todo': isTodoLinkedFolder(item) }"
+                  >
+                    {{ item.name }}
+                  </span>
+                </motion.div>
                 <motion.div
                   v-else
                   key="actions"
@@ -401,14 +419,15 @@
               key="folder-create-btn"
               type="button"
               class="folder-create"
-              title="新建文件夹"
-              :disabled="folderSaving"
+              :class="{ 'is-disabled': !canCreateFolder }"
+              :title="canCreateFolder ? '新建文件夹' : '最多支持两级文件夹嵌套'"
+              :disabled="folderSaving || !canCreateFolder"
               :initial="{ opacity: 0, scale: 0.86 }"
               :animate="{ opacity: 1, scale: 1 }"
               :exit="{ opacity: 0, scale: 0.86 }"
               :transition="{ duration: 0.2, ease: 'easeOut' }"
-              :while-hover="presets.button.hover"
-              :while-tap="presets.button.tap"
+              :while-hover="canCreateFolder ? presets.button.hover : undefined"
+              :while-tap="canCreateFolder ? presets.button.tap : undefined"
               @click="startCreateFolder"
             >
               <span class="folder-create-icon" aria-hidden="true">
@@ -475,6 +494,7 @@ import {
   renameStructItem,
   updateStructSort,
 } from '../../api/structFolder'
+import { fetchProjects } from '../../api/project'
 import { archiveFragmentNotes } from '../../api/note'
 import { findStructFolderItemByNoteId, updateStructNote } from '../../api/structNote'
 import {
@@ -495,7 +515,13 @@ const props = defineProps({
   },
 })
 
-const emit = defineEmits(['error', 'fragments-archived', 'fragment-restored', 'moved-to-recycle'])
+const emit = defineEmits([
+  'error',
+  'fragments-archived',
+  'fragment-restored',
+  'moved-to-recycle',
+  'open-todo-project',
+])
 
 const { presets } = useMotionPresets()
 
@@ -506,6 +532,9 @@ const actionToolbarMotion = {
   transition: { duration: 0.18, ease: 'easeOut' },
 }
 
+/** 根目录为 0；最多两级嵌套 → pathStack.length < 2 才可新建 */
+const MAX_FOLDER_DEPTH = 2
+
 const items = ref([])
 const pathStack = ref([])
 const loading = ref(false)
@@ -513,6 +542,18 @@ const folderSaving = ref(false)
 const creatingFolder = ref(false)
 const draftFolderName = ref('')
 const folderNameInputRef = ref(null)
+/** 事情关联的沉淀文件夹 id，用于末尾排序与「待办」标识 */
+const todoFolderIdSet = ref(new Set())
+/** folderId → projectId，供「去待办」跳转 */
+const todoFolderProjectMap = ref(new Map())
+
+const canCreateFolder = computed(() => pathStack.value.length < MAX_FOLDER_DEPTH)
+
+const currentTodoProjectId = computed(() => {
+  const folderId = String(currentParentId.value || '').trim()
+  if (!folderId || folderId === '0') return ''
+  return todoFolderProjectMap.value.get(folderId) || ''
+})
 
 const createNoteVisible = ref(false)
 const createNoteInitialPathStack = ref([])
@@ -629,13 +670,60 @@ const setNamedDragImage = (event, item) => {
   requestAnimationFrame(() => ghost.remove())
 }
 
+const isTodoLinkedFolder = (item) =>
+  item?.type === 'folder' && todoFolderIdSet.value.has(String(item.id))
+
+/** 根目录下：待办关联文件夹固定排到末尾，避免插队挡住常用文件夹 */
+const partitionTodoFoldersLast = (list) => {
+  if (!Array.isArray(list) || !list.length || !todoFolderIdSet.value.size) return list || []
+  const rest = []
+  const todoLinked = []
+  for (const item of list) {
+    if (isTodoLinkedFolder(item)) todoLinked.push(item)
+    else rest.push(item)
+  }
+  return [...rest, ...todoLinked]
+}
+
+const refreshTodoFolderIds = async () => {
+  try {
+    const projects = await fetchProjects({ includeArchived: true })
+    const next = new Set()
+    const map = new Map()
+    for (const project of projects || []) {
+      const folderId = String(project?.sedimentFolderId || '').trim()
+      const projectId = String(project?.id || '').trim()
+      if (!folderId || !projectId) continue
+      next.add(folderId)
+      map.set(folderId, projectId)
+    }
+    todoFolderIdSet.value = next
+    todoFolderProjectMap.value = map
+  } catch {
+    todoFolderIdSet.value = new Set()
+    todoFolderProjectMap.value = new Map()
+  }
+}
+
+const openTodoProjectById = (projectId) => {
+  const id = String(projectId || '').trim()
+  if (!id) {
+    emit('error', new Error('未找到关联的待办事情'))
+    return
+  }
+  emit('open-todo-project', { projectId: id })
+}
+
 const loadCurrentList = async () => {
   const token = ++loadToken
   loading.value = true
   try {
+    await refreshTodoFolderIds()
+    if (token !== loadToken) return
     const list = await fetchFolderList(currentParentId.value)
     if (token !== loadToken) return
-    items.value = list
+    const isRoot = !currentParentId.value || currentParentId.value === 0
+    items.value = isRoot ? partitionTodoFoldersLast(list) : list
   } catch (error) {
     if (token !== loadToken) return
     items.value = []
@@ -649,6 +737,7 @@ const loadCurrentList = async () => {
 
 const enterFolder = (folder) => {
   if (folder.type !== 'folder') return
+  if (pathStack.value.length >= MAX_FOLDER_DEPTH) return
   pathStack.value.push({ id: folder.id, name: folder.name })
   loadCurrentList()
 }
@@ -685,6 +774,7 @@ const focusFolderNameInput = async () => {
 }
 
 const startCreateFolder = async () => {
+  if (!canCreateFolder.value) return
   creatingFolder.value = true
   draftFolderName.value = ''
   await focusFolderNameInput()
@@ -702,7 +792,7 @@ const cancelCreateFolder = () => {
 
 const confirmCreateFolder = async () => {
   const name = draftFolderName.value.trim()
-  if (!name || folderSaving.value) {
+  if (!name || folderSaving.value || !canCreateFolder.value) {
     cancelCreateFolder()
     return
   }
@@ -1099,9 +1189,32 @@ defineExpose({
   margin: 0 0 14px;
   padding: 6px 10px;
   flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
   border-radius: 10px;
   background: rgba(24, 24, 27, 0.035);
   border: 1px solid rgba(24, 24, 27, 0.045);
+}
+
+.breadcrumb-goto-todo {
+  flex: 0 0 auto;
+  height: 26px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: #0f766e;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.breadcrumb-goto-todo:hover {
+  background: rgba(13, 148, 136, 0.12);
 }
 
 .sediment-state {
@@ -1119,6 +1232,8 @@ defineExpose({
   margin: 0;
   padding: 0;
   list-style: none;
+  min-width: 0;
+  flex: 1 1 auto;
 }
 
 .breadcrumb-root {
@@ -1402,6 +1517,7 @@ defineExpose({
 }
 
 .folder-icon-wrap {
+  position: relative;
   width: 72px;
   height: 64px;
   display: inline-flex;
@@ -1425,6 +1541,34 @@ defineExpose({
   box-shadow: none;
 }
 
+.folder-icon-wrap--todo {
+  color: #0f766e;
+  border-color: rgba(15, 118, 110, 0.28);
+  background: rgba(15, 118, 110, 0.06);
+}
+
+.folder-todo-badge {
+  position: absolute;
+  right: -6px;
+  bottom: -5px;
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 16px;
+  padding: 0 5px;
+  border-radius: 999px;
+  border: 1px solid rgba(15, 118, 110, 0.35);
+  background: #f0fdfa;
+  color: #0f766e;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: 0.02em;
+  pointer-events: none;
+  white-space: nowrap;
+}
+
 .folder-name {
   width: 100%;
   color: var(--color-primary);
@@ -1436,11 +1580,36 @@ defineExpose({
   white-space: nowrap;
 }
 
+.folder-name--todo {
+  color: #0f766e;
+}
+
+.folder-card-meta {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
 .folder-create {
   border: 0;
   background: transparent;
   padding: 0;
   cursor: pointer;
+}
+
+.folder-create.is-disabled,
+.folder-create:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.folder-create.is-disabled:hover .folder-create-icon,
+.folder-create:disabled:hover .folder-create-icon {
+  border-color: var(--btn-dashed-border);
+  background: rgba(255, 255, 255, 0.55);
+  color: var(--color-secondary-text);
 }
 
 .folder-create-icon {

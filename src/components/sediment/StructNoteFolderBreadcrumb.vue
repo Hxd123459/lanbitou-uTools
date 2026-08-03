@@ -104,6 +104,9 @@
                     :key="folder.id"
                     type="button"
                     class="breadcrumb-folder-option"
+                    :class="{ 'is-disabled': !canEnterSubfolder }"
+                    :disabled="!canEnterSubfolder"
+                    :title="canEnterSubfolder ? undefined : '最多支持两级文件夹'"
                     role="option"
                     @click="enterFolderFromMenu(folder)"
                   >
@@ -113,7 +116,7 @@
                     <span>{{ folder.name }}</span>
                   </button>
 
-                  <div v-if="creatingFolder" class="breadcrumb-folder-create">
+                  <div v-if="creatingFolder && canCreateFolder" class="breadcrumb-folder-create">
                     <input
                       ref="folderNameInputRef"
                       v-model="draftFolderName"
@@ -131,6 +134,9 @@
                     v-else
                     type="button"
                     class="breadcrumb-folder-create-btn"
+                    :class="{ 'is-disabled': !canCreateFolder }"
+                    :disabled="!canCreateFolder"
+                    :title="canCreateFolder ? '新建文件夹' : '最多支持两级文件夹嵌套'"
                     @click="startCreateFolder"
                   >
                     <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -192,6 +198,11 @@ const currentParentId = computed(() => {
   return last?.id ?? 0
 })
 
+/** 根=0；最多两级嵌套，pathStack.length >= 2 时不可再建 */
+const MAX_FOLDER_DEPTH = 2
+const canCreateFolder = computed(() => props.pathStack.length < MAX_FOLDER_DEPTH)
+const canEnterSubfolder = computed(() => props.pathStack.length < MAX_FOLDER_DEPTH)
+
 const breadcrumbs = computed(() => [
   { id: null, label: '沉淀' },
   ...props.pathStack.map((item) => ({ id: item.id, label: item.name })),
@@ -233,6 +244,7 @@ const toggleFolderMenu = async () => {
 
 const enterFolderFromMenu = async (folder) => {
   if (folder.type !== 'folder') return
+  if (!canEnterSubfolder.value) return
   emit('update:pathStack', [...props.pathStack, { id: folder.id, name: folder.name }])
   creatingFolder.value = false
   draftFolderName.value = ''
@@ -241,6 +253,7 @@ const enterFolderFromMenu = async (folder) => {
 }
 
 const startCreateFolder = async () => {
+  if (!canCreateFolder.value) return
   creatingFolder.value = true
   draftFolderName.value = ''
   await nextTick()
@@ -260,7 +273,7 @@ const onFolderInputBlur = () => {
 
 const confirmCreateFolder = async () => {
   const name = draftFolderName.value.trim()
-  if (!name || folderCreating.value) {
+  if (!name || folderCreating.value || !canCreateFolder.value) {
     cancelCreateFolder()
     return
   }
@@ -475,6 +488,17 @@ defineExpose({
   background: rgba(24, 24, 27, 0.05);
 }
 
+.breadcrumb-folder-option.is-disabled,
+.breadcrumb-folder-option:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.breadcrumb-folder-option.is-disabled:hover,
+.breadcrumb-folder-option:disabled:hover {
+  background: transparent;
+}
+
 .breadcrumb-folder-option span,
 .breadcrumb-folder-create-btn span {
   min-width: 0;
@@ -508,6 +532,18 @@ defineExpose({
 .breadcrumb-folder-create-btn {
   margin-top: 2px;
   color: var(--color-accent);
+}
+
+.breadcrumb-folder-create-btn.is-disabled,
+.breadcrumb-folder-create-btn:disabled {
+  color: #a1a1aa;
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.breadcrumb-folder-create-btn.is-disabled:hover,
+.breadcrumb-folder-create-btn:disabled:hover {
+  background: transparent;
 }
 
 .breadcrumb-sep {

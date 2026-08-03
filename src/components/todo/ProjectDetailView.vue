@@ -102,32 +102,29 @@
 
     <div class="project-detail-toolbar">
       <div class="project-detail-links">
-        <AppTooltip
-          class="project-detail-icon-tip"
-          :class="{ 'is-muted': !project?.sedimentFolderId }"
-          :text="`沉淀文件夹：${sedimentFolderName || (project?.sedimentFolderId ? '已关联' : '保存事情后自动创建')}`"
+        <button
+          v-if="project?.sedimentFolderId"
+          type="button"
+          class="project-detail-folder-chip"
+          :title="sedimentFolderName || '沉淀文件夹'"
+          aria-label="打开沉淀文件夹"
+          @click="emit('open-sediment-folder')"
         >
-          <button
-            v-if="project?.sedimentFolderId"
-            type="button"
-            class="project-detail-icon-btn"
-            aria-label="沉淀文件夹"
-            @click="emit('open-sediment-folder')"
-          >
-            <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-              <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z" />
-            </svg>
-          </button>
-          <span
-            v-else
-            class="project-detail-icon-btn is-static"
-            aria-label="沉淀文件夹"
-          >
-            <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-              <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z" />
-            </svg>
-          </span>
-        </AppTooltip>
+          <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z" />
+          </svg>
+          <span>文件夹</span>
+        </button>
+        <span
+          v-else
+          class="project-detail-folder-chip is-muted"
+          title="保存事情后自动创建"
+        >
+          <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z" />
+          </svg>
+          <span>文件夹</span>
+        </span>
       </div>
 
       <div class="project-detail-toolbar-right">
@@ -199,7 +196,7 @@
           :animation="180"
           :disabled="busy || sortSaving || statusFilter !== 'all' || selectedCount > 0"
           handle=".todo-sort-handle"
-          filter=".todo-item-check, .todo-item-actions, input, textarea"
+          filter=".todo-item-check, .todo-item-actions, .todo-item-corner-actions, input, textarea"
           :prevent-on-filter="false"
           ghost-class="todo-sort-ghost"
           chosen-class="todo-sort-chosen"
@@ -237,24 +234,65 @@
             :exit="presets.reveal.exit"
             :transition="presets.reveal.transition"
           >
-            <motion.button
-              type="button"
-              class="project-detail-bulk-btn"
-              :disabled="busy"
-              :while-hover="presets.button.hover"
-              :while-tap="presets.button.tap"
-              :transition="presets.button.transition"
-              @click="emit('generate-selected')"
-            >
-              <span class="project-detail-bulk-btn-icon" aria-hidden="true">
-                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-                  <path d="M14 2v6h6M16 13H8M16 17H8M10 9H8" />
-                </svg>
-              </span>
-              <span class="project-detail-bulk-btn-label">生成说明</span>
-            </motion.button>
-            <div class="project-detail-bulk-actions">
+            <div class="project-detail-bulk-group">
+              <motion.button
+                type="button"
+                class="project-detail-bulk-btn"
+                :disabled="busy"
+                :while-hover="presets.button.hover"
+                :while-tap="presets.button.tap"
+                :transition="presets.button.transition"
+                @click="emit('bulk-complete')"
+              >
+                <span class="project-detail-bulk-btn-icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="m5 12 4 4L19 6" />
+                  </svg>
+                </span>
+                <span class="project-detail-bulk-btn-label">批量完成</span>
+              </motion.button>
+              <motion.button
+                type="button"
+                class="project-detail-bulk-btn"
+                :disabled="busy || !sortableTodos.length"
+                :while-hover="presets.button.hover"
+                :while-tap="presets.button.tap"
+                :transition="presets.button.transition"
+                @click="selectAllCurrent"
+              >
+                <span class="project-detail-bulk-btn-icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                    <rect x="3" y="3" width="18" height="18" rx="3" />
+                    <path d="m8 12 2.5 2.5L16 9" />
+                  </svg>
+                </span>
+                <span class="project-detail-bulk-btn-label">全选</span>
+              </motion.button>
+            </div>
+
+            <div v-if="todoTemplates.length" class="project-detail-bulk-group">
+              <motion.button
+                v-for="tpl in todoTemplates"
+                :key="tpl.id"
+                type="button"
+                class="project-detail-bulk-btn"
+                :disabled="busy"
+                :while-hover="presets.button.hover"
+                :while-tap="presets.button.tap"
+                :transition="presets.button.transition"
+                @click="emit('generate-selected', tpl.id)"
+              >
+                <span class="project-detail-bulk-btn-icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                    <path d="M14 2v6h6M16 13H8M16 17H8M10 9H8" />
+                  </svg>
+                </span>
+                <span class="project-detail-bulk-btn-label">{{ tpl.title }}</span>
+              </motion.button>
+            </div>
+
+            <div class="project-detail-bulk-group">
               <motion.button
                 type="button"
                 class="project-detail-bulk-btn project-detail-bulk-btn--clear"
@@ -279,6 +317,25 @@
                 </span>
                 <span class="project-detail-bulk-btn-label">清空已选</span>
               </motion.button>
+              <motion.button
+                type="button"
+                class="project-detail-bulk-btn project-detail-bulk-btn--danger"
+                :disabled="busy"
+                :while-hover="presets.button.hover"
+                :while-tap="presets.button.tap"
+                :transition="presets.button.transition"
+                @click="emit('bulk-delete')"
+              >
+                <span class="project-detail-bulk-btn-icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="3 6 5 6 21 6" />
+                    <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+                    <path d="M10 11v6M14 11v6" />
+                    <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
+                  </svg>
+                </span>
+                <span class="project-detail-bulk-btn-label">删除</span>
+              </motion.button>
             </div>
           </motion.div>
         </div>
@@ -292,9 +349,10 @@ import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { AnimatePresence, motion } from 'motion-v'
 import { VueDraggable } from 'vue-draggable-plus'
 import AppButton from '../motion/AppButton.vue'
-import AppTooltip from '../common/AppTooltip.vue'
 import TodoItemRow from './TodoItemRow.vue'
 import { useMotionPresets } from '../../composables/useMotionPresets'
+import { useSedimentTemplates } from '../../composables/useSedimentTemplates'
+import { TEMPLATE_KIND_TODO } from '../../storage/utools/sedimentTemplates'
 import { fetchStructFolder } from '../../api/structFolder'
 
 const props = defineProps({
@@ -321,10 +379,16 @@ const emit = defineEmits([
   'update-todo-title',
   'toggle-todo',
   'generate-selected',
+  'bulk-complete',
+  'bulk-delete',
   'reorder-todos',
 ])
 
 const { presets } = useMotionPresets()
+const { templates: allTemplates } = useSedimentTemplates()
+const todoTemplates = computed(() =>
+  (allTemplates.value || []).filter((item) => item.kind === TEMPLATE_KIND_TODO),
+)
 
 const selectedIds = ref(new Set())
 const statusFilter = ref('all')
@@ -368,7 +432,10 @@ const statusCounts = computed(() => {
 
 const filteredTodos = computed(() => {
   const list = Array.isArray(props.todos) ? props.todos : []
-  if (statusFilter.value === 'all') return list
+  // 始终返回新数组，且读取 done，避免完成态原地更新后 sortable 不同步
+  if (statusFilter.value === 'all') {
+    return list.map((todo) => todo)
+  }
   return list.filter((todo) => todoStatusKey(todo) === statusFilter.value)
 })
 
@@ -478,6 +545,12 @@ const getSelectedTodos = () => {
 
 const clearSelection = () => {
   selectedIds.value = new Set()
+}
+
+const selectAllCurrent = () => {
+  selectedIds.value = new Set(
+    sortableTodos.value.map((todo) => String(todo?.id ?? '')).filter(Boolean),
+  )
 }
 
 const setStatusFilter = (key) => {
@@ -719,42 +792,36 @@ defineExpose({ getSelectedTodos, clearSelection, scrollToTodo })
   flex: 0 0 auto;
 }
 
-.project-detail-links :deep(.project-detail-icon-tip) {
+.project-detail-folder-chip {
   display: inline-flex;
   align-items: center;
-}
-
-.project-detail-icon-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 28px;
-  height: 28px;
-  padding: 0;
+  gap: 6px;
+  height: 34px;
+  padding: 0 12px;
   border: 0;
-  border-radius: 6px;
-  background: transparent;
+  border-radius: 999px;
+  background: rgba(24, 24, 27, 0.05);
   color: var(--color-secondary-text);
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 500;
   cursor: pointer;
+  box-sizing: border-box;
 }
 
-.project-detail-icon-btn.is-static {
-  cursor: default;
-}
-
-.project-detail-links :deep(.project-detail-icon-tip:hover) .project-detail-icon-btn,
-.project-detail-icon-btn:hover {
-  color: var(--color-text);
-  background: rgba(24, 24, 27, 0.06);
-}
-
-button.project-detail-icon-btn:hover {
+.project-detail-folder-chip:hover {
   color: var(--color-accent);
-  background: rgba(37, 99, 235, 0.06);
+  background: rgba(37, 99, 235, 0.08);
 }
 
-.project-detail-links :deep(.project-detail-icon-tip.is-muted) .project-detail-icon-btn {
-  color: rgba(24, 24, 27, 0.35);
+.project-detail-folder-chip.is-muted {
+  cursor: default;
+  color: rgba(24, 24, 27, 0.38);
+}
+
+.project-detail-folder-chip.is-muted:hover {
+  color: rgba(24, 24, 27, 0.38);
+  background: rgba(24, 24, 27, 0.05);
 }
 
 .project-detail-scope {
@@ -922,10 +989,10 @@ button.project-detail-icon-btn:hover {
 .project-detail-bulk-bar {
   display: inline-flex;
   align-items: stretch;
-  gap: 8px;
+  gap: 0;
   width: fit-content;
   max-width: calc(100vw - 48px);
-  padding: 8px 10px;
+  padding: 6px;
   border-radius: var(--radius-md);
   border: 1px solid var(--color-border);
   background: var(--color-surface);
@@ -933,11 +1000,14 @@ button.project-detail-icon-btn:hover {
   box-sizing: border-box;
 }
 
-.project-detail-bulk-actions {
+.project-detail-bulk-group {
   display: inline-flex;
   align-items: stretch;
-  gap: 8px;
-  padding-left: 8px;
+  gap: 2px;
+  padding: 0 4px;
+}
+
+.project-detail-bulk-group + .project-detail-bulk-group {
   border-left: 1px solid var(--color-border);
 }
 
@@ -977,6 +1047,14 @@ button.project-detail-icon-btn:hover {
 .project-detail-bulk-btn--clear:hover:not(:disabled) {
   color: var(--color-text);
   background: rgba(24, 24, 27, 0.08);
+}
+
+.project-detail-bulk-btn--danger {
+  color: var(--color-error);
+}
+
+.project-detail-bulk-btn--danger:hover:not(:disabled) {
+  background: rgba(220, 38, 38, 0.08);
 }
 
 .project-detail-bulk-btn-icon {

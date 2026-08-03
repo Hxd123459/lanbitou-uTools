@@ -13,8 +13,11 @@ import {
   STRUCT_NOTE_PREFIX,
   TODO_PREFIX,
 } from '../storage/utools/constants'
-import { dbGet, dbPostAttachment, dbPut } from '../storage/utools/dbClient'
+import { dbGet, dbPostAttachment, dbPut, dbRemove } from '../storage/utools/dbClient'
 import { pinTypeToWeight } from '../storage/utools/pin'
+import {
+  importSedimentTemplatesFromBackup,
+} from '../storage/utools/sedimentTemplates'
 import { ensureTag } from '../storage/utools/tagRepository'
 import { formatDateTime, toUtoolsAttachmentType } from '../storage/utools/utils'
 import {
@@ -25,6 +28,7 @@ import {
   LB_TYPE_SEDIMENT,
   PROFILE_BACKUP_FILE,
   SEDIMENT_DIR,
+  TEMPLATES_BACKUP_FILE,
   extensionToMime,
   isLanbitouBackup,
   joinZipPath,
@@ -198,6 +202,15 @@ async function restoreNoteAttachments(entryIndex, noteId, imagesMeta = [], files
     const bytes = normalizeImageBytes(fileBytes)
     if (!bytes?.length) continue
     const attachmentId = buildAttachmentId(noteId, item.id)
+    // 覆盖导入时同 id 附件已存在，先删再写，避免 Document update conflict
+    try {
+      const existingAtt = await dbGet(attachmentId)
+      if (existingAtt && !existingAtt.error) {
+        await dbRemove(existingAtt)
+      }
+    } catch {
+      /* 附件可能不存在 */
+    }
     dbPostAttachment(
       attachmentId,
       bytes,
@@ -378,6 +391,20 @@ async function importProfiles(profiles = [], summary) {
   summary.profiles = count
 }
 
+async function importTemplates(payload, summary) {
+  try {
+    const result = importSedimentTemplatesFromBackup(payload || {})
+    summary.templatesAdded = result.added
+    summary.templatesUpdated = result.updated
+    summary.templatesSkipped = result.skipped
+  } catch (error) {
+    summary.errors.push({
+      path: TEMPLATES_BACKUP_FILE,
+      message: error?.message || '整理模板导入失败',
+    })
+  }
+}
+
 async function importFolderTree(folders = [], summary, maps) {
   const sorted = sortFoldersForCreate(folders.filter((item) => item.type === 'folder'))
   for (const folder of sorted) {
@@ -389,7 +416,6 @@ async function importFolderTree(folders = [], summary, maps) {
         summary.foldersSkipped += 1
         continue
       }
-      summary.foldersUpdated += 1
     }
     const parentId =
       maps.folderIdMap.get(String(folder.parentId ?? '')) ?? normalizeParentId(folder.parentId)
@@ -406,7 +432,8 @@ async function importFolderTree(folders = [], summary, maps) {
       updateTime: folder.updateTime || now,
     })
     maps.folderIdMap.set(folderId, folderId)
-    if (!existingFolder) summary.foldersAdded += 1
+    if (existingFolder) summary.foldersUpdated += 1
+    else summary.foldersAdded += 1
   }
 }
 
@@ -422,7 +449,6 @@ async function importFragment(item, summary, maps) {
     summary.fragmentsSkipped += 1
     return
   }
-  if (existingFragment) summary.fragmentsUpdated += 1
 
   const tagName = String(meta.lb_tag || '').trim()
   let tagId = null
@@ -477,7 +503,8 @@ async function importFragment(item, summary, maps) {
     archivedByStructNoteId: meta.lb_archived ? meta.lb_archived_by || null : null,
   })
 
-  if (!existingFragment) summary.fragmentsAdded += 1
+  if (existingFragment) summary.fragmentsUpdated += 1
+  else summary.fragmentsAdded += 1
 }
 
 async function importSedimentNote(item, summary, maps) {
@@ -492,7 +519,6 @@ async function importSedimentNote(item, summary, maps) {
     summary.sedimentSkipped += 1
     return
   }
-  if (existingSediment) summary.sedimentUpdated += 1
 
   const tagName = String(meta.lb_tag || '').trim()
   let tagId = null
@@ -553,7 +579,8 @@ async function importSedimentNote(item, summary, maps) {
     maps.folderIdMap.set(folderItemId, folderItemId)
   }
 
-  if (!existingSediment) summary.sedimentAdded += 1
+  if (existingSediment) summary.sedimentUpdated += 1
+  else summary.sedimentAdded += 1
 }
 
 export async function importLanbitouBackup(file) {
@@ -574,6 +601,9 @@ export async function importLanbitouBackup(file) {
   const profiles = entries[PROFILE_BACKUP_FILE]
     ? JSON.parse(decodeText(entries[PROFILE_BACKUP_FILE]))
     : []
+  const templatesPayload = entries[TEMPLATES_BACKUP_FILE]
+    ? JSON.parse(decodeText(entries[TEMPLATES_BACKUP_FILE]))
+    : null
   const summary = {
     fragmentsAdded: 0,
     fragmentsUpdated: 0,
@@ -592,6 +622,9 @@ export async function importLanbitouBackup(file) {
     todosSkipped: 0,
     tags: 0,
     profiles: 0,
+    templatesAdded: 0,
+    templatesUpdated: 0,
+    templatesSkipped: 0,
     errors: [],
   }
 
@@ -605,6 +638,7 @@ export async function importLanbitouBackup(file) {
 
   await importTags(tags, summary)
   await importProfiles(profiles, summary)
+  await importTemplates(templatesPayload, summary)
   await importFolderTree(manifest.folders || [], summary, maps)
 
   const markdownEntries = collectMarkdownEntries(entries)

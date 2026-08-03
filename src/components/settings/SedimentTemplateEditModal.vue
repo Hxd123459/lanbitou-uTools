@@ -35,14 +35,53 @@
           </h3>
 
           <label class="sediment-template-modal-field">
-            <span class="sediment-template-modal-label">标题</span>
+            <span class="sediment-template-modal-label">类型</span>
+            <div class="sediment-template-kind-row" role="radiogroup" aria-label="模板类型">
+              <button
+                type="button"
+                class="sediment-template-kind-btn"
+                :class="{ 'is-active': form.kind === 'article' }"
+                :disabled="isEdit"
+                @click="form.kind = 'article'"
+              >
+                <motion.span
+                  v-if="form.kind === 'article'"
+                  layout-id="sedimentTemplateKind"
+                  class="sediment-template-kind-active-bg"
+                  :transition="kindLayoutTransition"
+                />
+                <span class="sediment-template-kind-label">文章</span>
+              </button>
+              <button
+                type="button"
+                class="sediment-template-kind-btn"
+                :class="{ 'is-active': form.kind === 'todo' }"
+                :disabled="isEdit"
+                @click="form.kind = 'todo'"
+              >
+                <motion.span
+                  v-if="form.kind === 'todo'"
+                  layout-id="sedimentTemplateKind"
+                  class="sediment-template-kind-active-bg"
+                  :transition="kindLayoutTransition"
+                />
+                <span class="sediment-template-kind-label">待办</span>
+              </button>
+            </div>
+            <span class="sediment-template-kind-hint">
+              {{ form.kind === 'todo' ? '用于待办多选操作栏，最多 4 个' : '用于沉淀整理' }}
+            </span>
+          </label>
+
+          <label class="sediment-template-modal-field">
+            <span class="sediment-template-modal-label">标题（最多 5 字）</span>
             <input
               ref="titleInputRef"
               v-model="form.title"
               type="text"
               class="sediment-template-modal-input"
-              maxlength="40"
-              placeholder="例如：整理成待办"
+              maxlength="5"
+              placeholder="例如：日报"
               spellcheck="false"
             />
           </label>
@@ -73,7 +112,7 @@
                 </AppTooltip>
               </span>
               <button
-                v-if="!isEdit"
+                v-if="!isEdit && form.kind === 'article'"
                 type="button"
                 class="sediment-template-example-btn"
                 @click="applyTodosExample"
@@ -92,7 +131,7 @@
             />
           </div>
 
-          <div class="sediment-template-modal-field">
+          <div v-if="form.kind === 'article'" class="sediment-template-modal-field">
             <div class="sediment-template-modal-label-row">
               <span class="sediment-template-modal-label-group">
                 <span class="sediment-template-modal-label">本模板行为</span>
@@ -191,6 +230,12 @@ import {
   SEDIMENT_TEMPLATE_INSTRUCTION_PLACEHOLDER,
   SEDIMENT_TEMPLATE_PROMPT_TIPS,
 } from '../../constants/sedimentTemplateGuide'
+import {
+  TEMPLATE_KIND_ARTICLE,
+  TEMPLATE_KIND_TODO,
+  TEMPLATE_TITLE_MAX,
+} from '../../storage/utools/sedimentTemplates'
+import { useMotionPresets } from '../../composables/useMotionPresets'
 
 const props = defineProps({
   visible: {
@@ -199,7 +244,7 @@ const props = defineProps({
   },
   initial: {
     type: Object,
-    default: () => ({ title: '', instruction: '' }),
+    default: () => ({ title: '', instruction: '', kind: TEMPLATE_KIND_ARTICLE }),
   },
   saving: {
     type: Boolean,
@@ -209,10 +254,14 @@ const props = defineProps({
 
 const emit = defineEmits(['close', 'submit'])
 
+const { presets } = useMotionPresets()
+const kindLayoutTransition = computed(() => presets.layoutSpring)
+
 const titleInputRef = ref(null)
 const form = ref({
   title: '',
   instruction: '',
+  kind: TEMPLATE_KIND_ARTICLE,
   mimicWritingStyle: true,
   humanizeDraft: true,
 })
@@ -233,8 +282,11 @@ watch(
       return
     }
     form.value = {
-      title: String(props.initial?.title || ''),
+      title: String(props.initial?.title || '').slice(0, TEMPLATE_TITLE_MAX),
       instruction: String(props.initial?.instruction || ''),
+      kind: props.initial?.kind === TEMPLATE_KIND_TODO
+        ? TEMPLATE_KIND_TODO
+        : TEMPLATE_KIND_ARTICLE,
       mimicWritingStyle: props.initial?.mimicWritingStyle !== false,
       humanizeDraft: props.initial?.humanizeDraft !== false,
     }
@@ -248,7 +300,9 @@ watch(
 const applyTodosExample = () => {
   const example = SEDIMENT_TEMPLATE_EXAMPLES.todos
   form.value = {
-    title: example.title,
+    ...form.value,
+    kind: TEMPLATE_KIND_ARTICLE,
+    title: String(example.title || '').slice(0, TEMPLATE_TITLE_MAX),
     instruction: example.instruction,
     mimicWritingStyle: true,
     humanizeDraft: false,
@@ -263,12 +317,21 @@ const handleSubmit = () => {
     errorText.value = '请填写标题和提示词'
     return
   }
+  if (title.length > TEMPLATE_TITLE_MAX) {
+    errorText.value = `模板名称最多 ${TEMPLATE_TITLE_MAX} 个字`
+    return
+  }
   errorText.value = ''
   emit('submit', {
     title,
     instruction,
-    mimicWritingStyle: form.value.mimicWritingStyle === true,
-    humanizeDraft: form.value.humanizeDraft === true,
+    kind: form.value.kind === TEMPLATE_KIND_TODO ? TEMPLATE_KIND_TODO : TEMPLATE_KIND_ARTICLE,
+    mimicWritingStyle: form.value.kind === TEMPLATE_KIND_TODO
+      ? false
+      : form.value.mimicWritingStyle === true,
+    humanizeDraft: form.value.kind === TEMPLATE_KIND_TODO
+      ? false
+      : form.value.humanizeDraft === true,
   })
 }
 </script>
@@ -311,6 +374,63 @@ const handleSubmit = () => {
 .sediment-template-modal-field {
   display: block;
   margin-bottom: 14px;
+}
+
+.sediment-template-kind-row {
+  display: inline-flex;
+  gap: 6px;
+  padding: 3px;
+  border-radius: 999px;
+  background: rgba(24, 24, 27, 0.05);
+}
+
+.sediment-template-kind-btn {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 28px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--color-secondary-text);
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  z-index: 0;
+}
+
+.sediment-template-kind-btn.is-active {
+  color: var(--color-primary);
+  font-weight: 600;
+}
+
+.sediment-template-kind-active-bg {
+  position: absolute;
+  inset: 0;
+  border-radius: 999px;
+  background: var(--color-surface);
+  box-shadow: 0 1px 2px rgba(24, 24, 27, 0.08);
+  z-index: -1;
+}
+
+.sediment-template-kind-label {
+  position: relative;
+  z-index: 1;
+}
+
+.sediment-template-kind-btn:disabled {
+  cursor: default;
+  opacity: 0.85;
+}
+
+.sediment-template-kind-hint {
+  display: block;
+  margin-top: 6px;
+  font-size: 12px;
+  color: var(--color-secondary-text);
 }
 
 .sediment-template-modal-label-row {

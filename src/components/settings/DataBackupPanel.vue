@@ -108,6 +108,8 @@ const formatBackupSummary = (summary) => {
     summary.projectsUpdated ? `更新 ${summary.projectsUpdated}` : '',
     `待办 +${summary.todosAdded}`,
     summary.todosUpdated ? `更新 ${summary.todosUpdated}` : '',
+    summary.templatesAdded ? `模板 +${summary.templatesAdded}` : '',
+    summary.templatesUpdated ? `模板更新 ${summary.templatesUpdated}` : '',
   ].filter(Boolean)
   if (summary.errors?.length) {
     parts.push(`失败 ${summary.errors.length}`)
@@ -149,7 +151,7 @@ const handleExport = async () => {
   resultText.value = ''
   try {
     const result = await exportAndDownloadLanbitouBackup()
-    resultText.value = `导出完成：碎片 ${result.stats.fragments}，沉淀 ${result.stats.sedimentNotes}，附件 ${result.stats.attachments}，事情 ${result.stats.projects}，待办 ${result.stats.todos}`
+    resultText.value = `导出完成：碎片 ${result.stats.fragments}，沉淀 ${result.stats.sedimentNotes}，附件 ${result.stats.attachments}，事情 ${result.stats.projects}，待办 ${result.stats.todos}，模板 ${result.stats.templates ?? 0}`
   } catch (error) {
     emit('error', error?.message || '导出失败')
   } finally {

@@ -16,13 +16,18 @@ function stripDoc(doc) {
 
 export function normalizeTodoTitle(title) {
   return String(title ?? '')
+    .replace(/\r\n/g, '\n')
+    .replace(/\r/g, '\n')
+    .split('\n')
+    .map((line) => line.replace(/[ \t\f\v]+/g, ' ').trim())
+    .join('\n')
+    .replace(/\n{3,}/g, '\n\n')
     .trim()
-    .replace(/\s+/g, ' ')
 }
 
 export function buildTodoSourceHash(noteId, title) {
   const nid = String(noteId ?? '').trim()
-  const normalized = normalizeTodoTitle(title).toLowerCase()
+  const normalized = normalizeTodoTitle(title).replace(/\s+/g, ' ').toLowerCase()
   return `${nid}::${normalized}`
 }
 

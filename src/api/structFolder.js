@@ -31,11 +31,11 @@ export async function fetchFolderList(parentId = 0) {
   return Array.isArray(data) ? data.map(mapStructItem) : []
 }
 
-export async function createStructFolder({ parentId = 0, name }) {
+export async function createStructFolder({ parentId = 0, name, sort } = {}) {
   if (isUtoolsMode()) {
-    return utoolsStruct.createFolder({ parentId, name })
+    return utoolsStruct.createFolder({ parentId, name, sort })
   }
-  return post('/struct/folder/createFolder', { parentId, name })
+  return post('/struct/folder/createFolder', { parentId, name, sort })
 }
 
 export async function fetchStructFolder(id) {

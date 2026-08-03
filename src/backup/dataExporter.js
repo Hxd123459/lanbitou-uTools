@@ -20,6 +20,9 @@ import {
 import { pinWeightToType } from '../storage/utools/pin'
 import { listTagDocs } from '../storage/utools/tagRepository'
 import {
+  exportSedimentTemplatesForBackup,
+} from '../storage/utools/sedimentTemplates'
+import {
   ATTACHMENTS_DIR,
   BACKUP_FORMAT,
   FRAGMENTS_DIR,
@@ -28,6 +31,7 @@ import {
   LB_VERSION,
   PROFILE_BACKUP_FILE,
   SEDIMENT_DIR,
+  TEMPLATES_BACKUP_FILE,
   joinZipPath,
   mimeToExtension,
   normalizeBackupSortOrder,
@@ -307,6 +311,7 @@ export async function exportLanbitouBackup({ includeDeleted = false } = {}) {
       loadTodos({ includeDeleted }),
       loadProfiles(),
     ])
+  const templateBackup = exportSedimentTemplatesForBackup()
 
   const tagNameById = new Map(tags.map((tag) => [String(tag.id), tag.tagName || '']))
   const folderById = new Map(folders.map((folder) => [String(folder.id), folder]))
@@ -392,6 +397,7 @@ export async function exportLanbitouBackup({ includeDeleted = false } = {}) {
       projects: projects.length,
       todos: todos.length,
       profiles: profiles.length,
+      templates: Array.isArray(templateBackup.templates) ? templateBackup.templates.length : 0,
     },
   }
 
@@ -456,6 +462,9 @@ export async function exportLanbitouBackup({ includeDeleted = false } = {}) {
   )
   files[PROFILE_BACKUP_FILE] = new TextEncoder().encode(
     JSON.stringify(profiles, null, 2),
+  )
+  files[TEMPLATES_BACKUP_FILE] = new TextEncoder().encode(
+    JSON.stringify(templateBackup, null, 2),
   )
 
   const zipped = zipSync(files, { level: 6 })

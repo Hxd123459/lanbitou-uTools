@@ -507,12 +507,13 @@ export async function localSemanticSearch(query) {
 export async function getNotesByIds(ids = []) {
   const idList = (Array.isArray(ids) ? ids : []).filter(Boolean).map(String)
   if (!idList.length) return []
-  const docs = await loadAllNoteDocs({ includeArchived: true })
-  const byId = new Map(docs.map((doc) => [String(doc.id), doc]))
-  return idList
-    .map((id) => byId.get(String(id)))
-    .filter(Boolean)
-    .map(toApiNote)
+  const notes = await Promise.all(
+    idList.map(async (id) => {
+      const doc = await getNoteDoc(id)
+      return doc ? toApiNote(doc) : null
+    }),
+  )
+  return notes.filter(Boolean)
 }
 
 export async function archiveFragmentsForStructNote(fragmentIds, structNoteId) {

@@ -1,15 +1,23 @@
 const FALLBACK_STATUS_ORDER = ['done', 'idle']
 
 const FALLBACK_STATUS_SECTION = {
+  todo_daily: {
+    done: '今日完成',
+    idle: '未完成',
+  },
   daily: {
     done: '今日完成',
+    idle: '未完成',
+  },
+  todo_release: {
+    done: '已完成',
     idle: '未完成',
   },
   release: {
     done: '已完成',
     idle: '未完成',
   },
-  retro: {
+  default: {
     done: '已完成',
     idle: '未完成',
   },
@@ -36,7 +44,7 @@ function groupTodosByDisplayStatus(todos) {
 
 function buildFallbackGroupedLines(template, todos, headingPrefix = '##') {
   const groups = groupTodosByDisplayStatus(todos)
-  const sections = FALLBACK_STATUS_SECTION[template] || FALLBACK_STATUS_SECTION.daily
+  const sections = FALLBACK_STATUS_SECTION[template] || FALLBACK_STATUS_SECTION.default
   const lines = []
   for (const key of FALLBACK_STATUS_ORDER) {
     const items = groups.get(key)
@@ -51,13 +59,17 @@ function buildFallbackGroupedLines(template, todos, headingPrefix = '##') {
   return lines
 }
 
-export function fallbackGenerate(template, project, todos) {
+export function fallbackGenerate(template, project, todos, label = '') {
   const title = project?.name || '事情'
-  if (template === 'daily') {
-    return [`# 日报 · ${title}`, '', ...buildFallbackGroupedLines('daily', todos), ''].join('\n')
-  }
-  if (template === 'release') {
-    return [`# 版本说明 · ${title}`, '', ...buildFallbackGroupedLines('release', todos, '###'), ''].join('\n')
-  }
-  return [`# 复盘 · ${title}`, '', ...buildFallbackGroupedLines('retro', todos), ''].join('\n')
+  const heading = String(label || '').trim() || '产出'
+  const key = String(template || '')
+  const isRelease = key === 'todo_release' || key === 'release'
+  const sectionKey = FALLBACK_STATUS_SECTION[key] ? key : 'default'
+  const prefix = isRelease ? '###' : '##'
+  return [
+    `# ${heading} · ${title}`,
+    '',
+    ...buildFallbackGroupedLines(sectionKey, todos, prefix),
+    '',
+  ].join('\n')
 }

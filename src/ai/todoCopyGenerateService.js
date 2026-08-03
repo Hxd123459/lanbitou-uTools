@@ -1,9 +1,12 @@
 import { isUtoolsMode } from '../storage/env'
 import { loadAiSettings, getResolvedBaseUrl, getResolvedModel } from '../storage/utools/aiSettings'
+import {
+  getSedimentTemplateById,
+  listTodoTemplates,
+} from '../storage/utools/sedimentTemplates'
 import { isSedimentDraftAiAvailable } from './sedimentDraftService'
 import { buildUserContent } from './todoCopyUserContent'
 import { fallbackGenerate } from './todoCopyFallback'
-import { TEMPLATES } from './todoCopyTemplates'
 
 const MAX_TOKENS = 2048
 
@@ -70,39 +73,47 @@ async function requestAnthropic({ baseUrl, apiKey, model, systemPrompt, userCont
   return String(block?.text || '').trim()
 }
 
-export { TEMPLATES } from './todoCopyTemplates'
+function resolveTodoTemplate(templateId) {
+  const key = String(templateId || '').trim()
+  const fromStore = key ? getSedimentTemplateById(key) : null
+  if (fromStore?.kind === 'todo') return fromStore
+  const list = listTodoTemplates()
+  return list.find((item) => item.id === key) || list[0] || null
+}
+
 export function listCopyTemplates() {
-  return Object.entries(TEMPLATES).map(([id, conf]) => ({ id, label: conf.label }))
+  return listTodoTemplates().map((item) => ({ id: item.id, label: item.title }))
 }
 
 /**
- * @param {'daily'|'release'|'retro'} template
+ * @param {string} template 待办模板 id
  */
-export async function generateTodoCopy({ template = 'daily', project, todos = [] } = {}) {
-  const key = TEMPLATES[template] ? template : 'daily'
-  const conf = TEMPLATES[key]
+export async function generateTodoCopy({ template, project, todos = [] } = {}) {
+  const conf = resolveTodoTemplate(template)
+  if (!conf) throw new Error('没有可用的待办模板')
   const list = Array.isArray(todos) ? todos : []
   if (!list.length) throw new Error('请先选择待办')
 
-  const fallback = fallbackGenerate(key, project, list)
+  const fallback = fallbackGenerate(conf.id, project, list, conf.title)
   const userContent = buildUserContent(project, list)
+  const systemPrompt = conf.instruction
 
   if (!isUtoolsMode() || !isSedimentDraftAiAvailable()) {
-    return { text: fallback, source: 'fallback', template: key, label: conf.label }
+    return { text: fallback, source: 'fallback', template: conf.id, label: conf.title }
   }
 
   try {
     const settings = loadAiSettings()
     let raw = ''
     if (settings.provider === 'utools') {
-      raw = await requestUtools(conf.system, userContent, settings.model)
+      raw = await requestUtools(systemPrompt, userContent, settings.model)
     } else if (settings.provider === 'openai') {
       if (!settings.apiKey) throw new Error('missing key')
       raw = await requestOpenAi({
         baseUrl: getResolvedBaseUrl(settings),
         apiKey: settings.apiKey,
         model: getResolvedModel(settings),
-        systemPrompt: conf.system,
+        systemPrompt,
         userContent,
       })
     } else if (settings.provider === 'anthropic') {
@@ -111,16 +122,16 @@ export async function generateTodoCopy({ template = 'daily', project, todos = []
         baseUrl: getResolvedBaseUrl(settings),
         apiKey: settings.apiKey,
         model: getResolvedModel(settings),
-        systemPrompt: conf.system,
+        systemPrompt,
         userContent,
       })
     }
     const cleaned = String(raw || '').trim()
     if (!cleaned || cleaned.length < 12) {
-      return { text: fallback, source: 'fallback', template: key, label: conf.label }
+      return { text: fallback, source: 'fallback', template: conf.id, label: conf.title }
     }
-    return { text: cleaned, source: 'ai', template: key, label: conf.label }
+    return { text: cleaned, source: 'ai', template: conf.id, label: conf.title }
   } catch {
-    return { text: fallback, source: 'fallback', template: key, label: conf.label }
+    return { text: fallback, source: 'fallback', template: conf.id, label: conf.title }
   }
 }

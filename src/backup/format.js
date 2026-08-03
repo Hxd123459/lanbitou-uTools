@@ -6,6 +6,7 @@ export const FRAGMENTS_DIR = '碎片'
 export const SEDIMENT_DIR = '沉淀'
 export const ATTACHMENTS_DIR = '_attachments'
 export const PROFILE_BACKUP_FILE = 'profiles.json'
+export const TEMPLATES_BACKUP_FILE = 'sediment-templates.json'
 
 export const LB_TYPE_FRAGMENT = 'fragment'
 export const LB_TYPE_SEDIMENT = 'sediment'

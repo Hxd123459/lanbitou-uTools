@@ -39,6 +39,8 @@
       @open-sediment-folder="handleOpenSedimentFolder"
       @update-todo-title="handleUpdateTodoTitle"
       @generate-selected="openGenerateModal"
+      @bulk-complete="handleBulkComplete"
+      @bulk-delete="handleBulkDelete"
       @reorder-todos="handleReorderTodos"
     />
 
@@ -61,7 +63,8 @@
       :visible="generateVisible"
       :project="currentProject"
       :todos="generateTodos"
-      @close="generateVisible = false"
+      :initial-template="generateTemplateId"
+      @close="closeGenerateModal"
       @toast="notifyToast"
       @save-archive="handleSaveGenerateArchive"
     />
@@ -151,6 +154,7 @@ const pendingSyncCount = ref(0)
 const detailViewRef = ref(null)
 const generateVisible = ref(false)
 const generateTodos = ref([])
+const generateTemplateId = ref('')
 
 const currentProject = computed(() =>
   projects.value.find((item) => item.id === currentProjectId.value) || null,
@@ -172,17 +176,72 @@ const notifyToast = (text) => {
   emit('toast', text)
 }
 
-const openGenerateModal = () => {
+const openGenerateModal = (templateId = '') => {
   const selected = detailViewRef.value?.getSelectedTodos?.() || []
   if (!selected.length) {
     notifyToast('请先选择待办')
     return
   }
   generateTodos.value = selected
+  generateTemplateId.value = String(templateId || '').trim()
   generateVisible.value = true
 }
 
-const handleSaveGenerateArchive = async ({ template, text }) => {
+const closeGenerateModal = () => {
+  generateVisible.value = false
+  generateTemplateId.value = ''
+}
+
+const handleBulkComplete = async () => {
+  const selected = detailViewRef.value?.getSelectedTodos?.() || []
+  const targets = selected.filter((item) => item?.id && !item.done)
+  if (!targets.length) {
+    notifyToast('所选待办均已完成')
+    return
+  }
+  actionBusy.value = true
+  try {
+    for (const todo of targets) {
+      const updated = await toggleTodoDone(todo.id)
+      const index = todos.value.findIndex((item) => item.id === updated.id)
+      if (index >= 0) todos.value[index] = { ...todos.value[index], ...updated }
+    }
+    detailViewRef.value?.clearSelection?.()
+    await loadTodoCounts()
+    notifyToast(`已完成 ${targets.length} 条`)
+  } catch (error) {
+    notifyError(error)
+    await loadTodos()
+  } finally {
+    actionBusy.value = false
+  }
+}
+
+const handleBulkDelete = async () => {
+  const selected = detailViewRef.value?.getSelectedTodos?.() || []
+  if (!selected.length) {
+    notifyToast('请先选择待办')
+    return
+  }
+  actionBusy.value = true
+  try {
+    const ids = new Set(selected.map((item) => String(item.id)))
+    for (const todo of selected) {
+      await deleteTodo(todo.id)
+    }
+    todos.value = todos.value.filter((item) => !ids.has(String(item.id)))
+    detailViewRef.value?.clearSelection?.()
+    await loadTodoCounts()
+    notifyToast(`已删除 ${selected.length} 条`)
+  } catch (error) {
+    notifyError(error)
+    await loadTodos()
+  } finally {
+    actionBusy.value = false
+  }
+}
+
+const handleSaveGenerateArchive = async ({ template, text, label }) => {
   const project = currentProject.value
   if (!project?.sedimentFolderId) {
     notifyToast('请先保存事情以关联沉淀文件夹')
@@ -190,18 +249,14 @@ const handleSaveGenerateArchive = async ({ template, text }) => {
   }
   try {
     const date = formatDateTime().slice(0, 10)
-    const titleMap = {
-      daily: `日报 · ${date}`,
-      release: `版本说明 · ${date}`,
-      retro: `复盘 · ${date}`,
-    }
+    const title = `${label || '产出'} · ${date}`
     await createNoteInFolder({
       parentId: project.sedimentFolderId,
-      title: titleMap[template] || `产出 · ${date}`,
+      title,
       content: String(text || '').trim(),
     })
     notifyToast('已写入沉淀文件夹')
-    generateVisible.value = false
+    closeGenerateModal()
   } catch (error) {
     notifyError(error)
   }
@@ -223,7 +278,12 @@ const ensureSedimentFolder = async (project) => {
     folderId = ''
   }
 
-  const createdId = await createStructFolder({ parentId: 0, name: folderName })
+  // 追加到当前层末尾，避免新待办文件夹插到最前打乱浏览习惯
+  const createdId = await createStructFolder({
+    parentId: 0,
+    name: folderName,
+    sort: 'append',
+  })
   const updated = await updateProject(project.id, { sedimentFolderId: createdId })
   const index = projects.value.findIndex((item) => item.id === updated.id)
   if (index >= 0) projects.value[index] = updated
@@ -499,21 +559,33 @@ const closeAddModal = () => {
   addVisible.value = false
 }
 
-const handleAddTodo = async (title) => {
+const handleAddTodo = async (titlesInput) => {
   if (!currentProjectId.value) return
+  const titles = (Array.isArray(titlesInput) ? titlesInput : [titlesInput])
+    .map((title) => String(title ?? '').trim())
+    .filter(Boolean)
+  if (!titles.length) return
+
   addSaving.value = true
   actionBusy.value = true
   try {
-    const created = await createTodo({
-      projectId: currentProjectId.value,
-      title,
-      createdBy: 'manual',
-    })
-    todos.value = [created, ...todos.value]
+    const createdList = []
+    // 倒序创建，保证列表中按录入顺序从上到下
+    for (let i = titles.length - 1; i >= 0; i -= 1) {
+      const created = await createTodo({
+        projectId: currentProjectId.value,
+        title: titles[i],
+        createdBy: 'manual',
+      })
+      createdList.unshift(created)
+    }
+    todos.value = [...createdList, ...todos.value]
     await loadTodoCounts()
     addVisible.value = false
+    notifyToast(createdList.length > 1 ? `已加入 ${createdList.length} 条待办` : '已加入待办')
   } catch (error) {
     notifyError(error)
+    await loadTodos()
   } finally {
     addSaving.value = false
     actionBusy.value = false
@@ -542,16 +614,16 @@ const handleToggleTodo = async (todo) => {
 
   const prev = todos.value[index]
   const optimistic = { ...prev, done: !prev.done }
-  todos.value[index] = optimistic
+  todos.value = todos.value.map((item, i) => (i === index ? optimistic : item))
 
   try {
     const updated = await toggleTodoDone(todo.id)
-    const i = todos.value.findIndex((item) => item.id === updated.id)
-    if (i >= 0) todos.value[i] = { ...todos.value[i], ...updated }
+    todos.value = todos.value.map((item) =>
+      item.id === updated.id ? { ...item, ...updated } : item,
+    )
     await loadTodoCounts()
   } catch (error) {
-    const i = todos.value.findIndex((item) => item.id === prev.id)
-    if (i >= 0) todos.value[i] = prev
+    todos.value = todos.value.map((item) => (item.id === prev.id ? prev : item))
     notifyError(error)
   }
 }
@@ -678,10 +750,14 @@ const handleSync = async () => {
       since: project.lastSyncedAt || null,
     })
     if (!notes.length) {
+      // 没有新增碎片也推进同步时间，避免反复空扫同一区间
+      const synced = await updateProject(projectIdAtStart, { lastSyncedAt: formatDateTime() })
+      const emptyIndex = projects.value.findIndex((item) => item.id === synced.id)
+      if (emptyIndex >= 0) projects.value[emptyIndex] = synced
       notifyToast(
         project.lastSyncedAt
-          ? '暂无新增碎片，没有待同步待办'
-          : '暂无碎片可同步',
+          ? '暂无新增碎片，已更新同步时间'
+          : '暂无碎片可同步，已记录同步时间',
       )
       return
     }
@@ -693,9 +769,11 @@ const handleSync = async () => {
       projects.value.find((item) => item.id === projectIdAtStart) || project
 
     if (!enriched.length) {
-      notifyToast(
-        `已扫描 ${notes.length} 条碎片，未识别到可执行待办（不会更新同步时间，可改写后再试）`,
-      )
+      // 已扫描内容但无待办，仍记录同步时间，后续从该时间点往后扫
+      const synced = await updateProject(projectIdAtStart, { lastSyncedAt: formatDateTime() })
+      const scannedIndex = projects.value.findIndex((item) => item.id === synced.id)
+      if (scannedIndex >= 0) projects.value[scannedIndex] = synced
+      notifyToast(`已扫描 ${notes.length} 条碎片，未识别到可执行待办，已更新同步时间`)
       return
     }
 
@@ -784,6 +862,15 @@ watch(
 defineExpose({
   reload: refreshAll,
   openTodoAt,
+  openProjectById: async (projectId) => {
+    const pid = String(projectId || '').trim()
+    if (!pid) return false
+    if (!projects.value.length) await loadProjects()
+    const project = projects.value.find((item) => String(item.id) === pid)
+    if (!project) return false
+    await openProject(project)
+    return true
+  },
 })
 </script>
 

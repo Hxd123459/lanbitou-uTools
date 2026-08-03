@@ -87,7 +87,6 @@ import { EditorContent, useEditor } from '@tiptap/vue-3'
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import {
   persistAttachmentRefsInMarkdown,
-  resolveAttachmentRefsInMarkdown,
   LB_ATT_SCHEME,
 } from '../../utils/attachmentMarkdown'
 import { getAttachmentBlobUrl } from '../../storage/utools/attachment'
@@ -258,6 +257,37 @@ const getImageCopyContext = () => ({
 })
 
 let lastEmittedMarkdown = ''
+let modelUpdateTimer = null
+let contentApplyToken = 0
+let dragHandleMounted = false
+
+const LARGE_DOC_SIZE = 6000
+
+const clearModelUpdateTimer = () => {
+  if (modelUpdateTimer == null) return
+  clearTimeout(modelUpdateTimer)
+  modelUpdateTimer = null
+}
+
+const emitMarkdownFromEditor = (currentEditor) => {
+  if (!currentEditor || currentEditor.isDestroyed) return
+  const markdown = persistAttachmentRefsInMarkdown(currentEditor.getMarkdown())
+  lastEmittedMarkdown = normalizeMarkdownForCompare(markdown)
+  emit('update:modelValue', markdown)
+}
+
+const scheduleContentApply = (currentEditor, markdown) => {
+  const token = ++contentApplyToken
+  const apply = () => {
+    if (token !== contentApplyToken || !currentEditor || currentEditor.isDestroyed) return
+    setEditorMarkdownContent(currentEditor, markdown, { emitUpdate: false })
+    lastEmittedMarkdown = normalizeMarkdownForCompare(markdown)
+  }
+  // 先让壳子/光标上屏，再解析长文 Markdown，避免打开卡死
+  requestAnimationFrame(() => {
+    requestAnimationFrame(apply)
+  })
+}
 
 const scrollSelectionIntoView = (currentEditor) => {
   const column = currentEditor.view.dom.closest('.struct-note-editor-column')
@@ -338,13 +368,19 @@ const editor = useEditor({
     currentEditor.storage.attachment = {
       pick: () => attachmentInputRef.value?.click(),
     }
-    setEditorMarkdownContent(currentEditor, props.modelValue, { emitUpdate: false })
-    lastEmittedMarkdown = normalizeMarkdownForCompare(props.modelValue)
+    scheduleContentApply(currentEditor, props.modelValue)
   },
   onUpdate: ({ editor: currentEditor }) => {
-    const markdown = persistAttachmentRefsInMarkdown(currentEditor.getMarkdown())
-    lastEmittedMarkdown = normalizeMarkdownForCompare(markdown)
-    emit('update:modelValue', markdown)
+    clearModelUpdateTimer()
+    const docSize = currentEditor.state.doc.content.size
+    if (docSize < LARGE_DOC_SIZE) {
+      emitMarkdownFromEditor(currentEditor)
+      return
+    }
+    modelUpdateTimer = setTimeout(() => {
+      modelUpdateTimer = null
+      emitMarkdownFromEditor(currentEditor)
+    }, 140)
   },
   onSelectionUpdate: ({ editor: currentEditor }) => {
     scrollSelectionIntoView(currentEditor)
@@ -358,11 +394,19 @@ const syncDragHandle = async () => {
   if (dragHandleApi) {
     unmountStructNoteDragHandle(currentEditor, dragHandleApi)
     dragHandleApi = null
+    dragHandleMounted = false
   }
 
   if (!currentEditor || currentEditor.isDestroyed || !handleEl) return
 
   dragHandleApi = mountStructNoteDragHandle(currentEditor, handleEl)
+  dragHandleMounted = true
+}
+
+const ensureDragHandle = async () => {
+  if (dragHandleMounted || dragHandleApi) return
+  await nextTick()
+  await syncDragHandle()
 }
 
 watch(
@@ -371,7 +415,9 @@ watch(
     if (!editor.value) return
     const normalized = normalizeMarkdownForCompare(value)
     if (normalized === lastEmittedMarkdown) return
-    const currentNormalized = normalizeMarkdownForCompare(editor.value.getMarkdown())
+    const currentNormalized = normalizeMarkdownForCompare(
+      persistAttachmentRefsInMarkdown(editor.value.getMarkdown()),
+    )
     if (normalized === currentNormalized) {
       lastEmittedMarkdown = normalized
       return
@@ -392,10 +438,17 @@ watch(
 )
 
 watch(
-  () => [editor.value, dragHandleRef.value],
-  async () => {
-    await nextTick()
-    await syncDragHandle()
+  () => editor.value,
+  async (currentEditor) => {
+    if (!currentEditor || currentEditor.isDestroyed) return
+    const root = currentEditor.view?.dom
+    if (!root || root.dataset.dragHandleBound === '1') return
+    root.dataset.dragHandleBound = '1'
+    const mountOnce = () => {
+      root.removeEventListener('pointerenter', mountOnce)
+      void ensureDragHandle()
+    }
+    root.addEventListener('pointerenter', mountOnce, { once: true })
   },
   { flush: 'post' },
 )
@@ -414,7 +467,7 @@ const setMarkdownContent = (value, { emitUpdate = true, preserveSelection = true
 
 const appendMarkdownChunk = (chunk) => {
   if (!editor.value || editor.value.isDestroyed) return
-  const addition = resolveAttachmentRefsInMarkdown(String(chunk ?? ''))
+  const addition = String(chunk ?? '')
   if (!addition) return
   try {
     editor.value.commands.insertContent(addition, { contentType: 'markdown' })
@@ -495,6 +548,11 @@ const clearFind = () => {
 
 const getFindState = () => getEditorFindState(editor.value)
 
+const flushPendingModelUpdate = () => {
+  clearModelUpdateTimer()
+  emitMarkdownFromEditor(editor.value)
+}
+
 defineExpose({
   focus,
   setMarkdownContent,
@@ -505,11 +563,15 @@ defineExpose({
   findPrevious,
   clearFind,
   getFindState,
+  flushPendingModelUpdate,
 })
 
 onBeforeUnmount(() => {
+  contentApplyToken += 1
+  clearModelUpdateTimer()
   unmountStructNoteDragHandle(editor.value, dragHandleApi)
   dragHandleApi = null
+  dragHandleMounted = false
   editor.value?.destroy()
 })
 </script>

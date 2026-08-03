@@ -19,7 +19,7 @@
           :initial="{ opacity: 0 }"
           :animate="{ opacity: 1 }"
           :exit="{ opacity: 0 }"
-          @click="emit('close')"
+          @click="handleClose"
         />
 
         <motion.form
@@ -30,19 +30,43 @@
           :transition="{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }"
           @submit.prevent="handleSubmit"
         >
-          <h3 class="todo-add-modal-title">待办内容</h3>
+          <div class="todo-add-modal-head">
+            <h3 class="todo-add-modal-title">添加待办</h3>
+            <p class="todo-add-modal-hint">可连续录入多条，最后一次加入</p>
+          </div>
+
+          <ul v-if="drafts.length" class="todo-add-draft-list" aria-label="待加入列表">
+            <li v-for="(item, index) in drafts" :key="item.id" class="todo-add-draft-item">
+              <span class="todo-add-draft-index">{{ index + 1 }}</span>
+              <p class="todo-add-draft-text">{{ item.title }}</p>
+              <button
+                type="button"
+                class="todo-add-draft-remove"
+                :disabled="saving"
+                title="移除"
+                aria-label="移除这条待办"
+                @click="removeDraft(index)"
+              >
+                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+                  <path d="M6 6l12 12M18 6L6 18" />
+                </svg>
+              </button>
+            </li>
+          </ul>
 
           <label class="todo-add-modal-field">
             <textarea
               ref="textareaRef"
               v-model="title"
               class="todo-add-modal-textarea"
-              rows="5"
+              rows="4"
               :maxlength="MAX_TITLE_LENGTH"
-              placeholder="输入待办内容…"
+              placeholder="输入待办内容…（支持换行）"
               :disabled="saving"
               spellcheck="false"
-              @keydown.esc.prevent="emit('close')"
+              @keydown.esc.prevent="handleClose"
+              @keydown.ctrl.enter.prevent="handleAddAnother"
+              @keydown.meta.enter.prevent="handleAddAnother"
             />
             <span class="todo-add-modal-count" :class="{ 'is-near': remaining <= 20 }">
               {{ title.length }}/{{ MAX_TITLE_LENGTH }}
@@ -54,16 +78,24 @@
               class="btn btn-icon-text todo-add-modal-btn"
               type="button"
               :disabled="saving"
-              @click="emit('close')"
+              @click="handleClose"
             >
               取消
             </AppButton>
             <AppButton
-              class="btn btn-primary todo-add-modal-btn"
+              class="btn btn-icon-text todo-add-modal-btn"
+              type="button"
+              :disabled="saving || !canAddAnother"
+              @click="handleAddAnother"
+            >
+              再加一条
+            </AppButton>
+            <AppButton
+              class="btn btn-primary todo-add-modal-btn todo-add-modal-btn--submit"
               type="submit"
               :disabled="saving || !canSubmit"
             >
-              {{ saving ? '添加中…' : '添加' }}
+              {{ submitLabel }}
             </AppButton>
           </div>
         </motion.form>
@@ -87,15 +119,63 @@ const props = defineProps({
 const emit = defineEmits(['close', 'submit'])
 
 const title = ref('')
+const drafts = ref([])
 const textareaRef = ref(null)
+let draftSeq = 0
 
-const canSubmit = computed(() => String(title.value || '').trim().length > 0)
 const remaining = computed(() => MAX_TITLE_LENGTH - String(title.value || '').length)
 
+const currentTitle = computed(() => String(title.value || '').trim())
+
+const canAddAnother = computed(() => currentTitle.value.length > 0)
+
+const pendingCount = computed(() => {
+  let count = drafts.value.length
+  if (currentTitle.value) count += 1
+  return count
+})
+
+const canSubmit = computed(() => pendingCount.value > 0)
+
+const submitLabel = computed(() => {
+  if (props.saving) return '加入中…'
+  if (pendingCount.value > 1) return `全部加入（${pendingCount.value}）`
+  return '加入'
+})
+
+const focusTextarea = async () => {
+  await nextTick()
+  textareaRef.value?.focus?.()
+}
+
+const handleClose = () => {
+  if (props.saving) return
+  emit('close')
+}
+
+const removeDraft = (index) => {
+  drafts.value = drafts.value.filter((_, i) => i !== index)
+}
+
+const pushCurrentToDrafts = () => {
+  const value = currentTitle.value
+  if (!value) return false
+  draftSeq += 1
+  drafts.value = [...drafts.value, { id: `draft-${draftSeq}`, title: value }]
+  title.value = ''
+  return true
+}
+
+const handleAddAnother = async () => {
+  if (!pushCurrentToDrafts()) return
+  await focusTextarea()
+}
+
 const handleSubmit = () => {
-  const value = String(title.value || '').trim()
-  if (!value) return
-  emit('submit', value)
+  const titles = drafts.value.map((item) => item.title)
+  if (currentTitle.value) titles.push(currentTitle.value)
+  if (!titles.length) return
+  emit('submit', titles)
 }
 
 watch(
@@ -103,8 +183,9 @@ watch(
   async (open) => {
     if (!open) return
     title.value = ''
-    await nextTick()
-    textareaRef.value?.focus?.()
+    drafts.value = []
+    draftSeq = 0
+    await focusTextarea()
   },
 )
 </script>
@@ -129,7 +210,7 @@ watch(
 .todo-add-modal-card {
   position: relative;
   z-index: 1;
-  width: min(420px, 100%);
+  width: min(460px, 100%);
   padding: 18px;
   border-radius: var(--radius-lg, 12px);
   border: 1px solid var(--color-border);
@@ -140,11 +221,84 @@ watch(
   gap: 14px;
 }
 
+.todo-add-modal-head {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
 .todo-add-modal-title {
   margin: 0;
   font-size: 16px;
   font-weight: 650;
   color: var(--color-primary);
+}
+
+.todo-add-modal-hint {
+  margin: 0;
+  font-size: 12px;
+  color: var(--color-secondary-text);
+}
+
+.todo-add-draft-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 220px;
+  overflow: auto;
+}
+
+.todo-add-draft-item {
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr) 28px;
+  align-items: start;
+  gap: 8px;
+  padding: 8px 8px 8px 10px;
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  background: rgba(24, 24, 27, 0.02);
+}
+
+.todo-add-draft-index {
+  margin-top: 1px;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-secondary-text);
+}
+
+.todo-add-draft-text {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--color-primary);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.todo-add-draft-remove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--color-secondary-text);
+  cursor: pointer;
+}
+
+.todo-add-draft-remove:hover:not(:disabled) {
+  background: rgba(220, 38, 38, 0.08);
+  color: var(--color-error);
+}
+
+.todo-add-draft-remove:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 .todo-add-modal-field {
@@ -155,7 +309,7 @@ watch(
 
 .todo-add-modal-textarea {
   width: 100%;
-  min-height: 120px;
+  min-height: 108px;
   padding: 10px 12px;
   border: 1px solid var(--color-border);
   border-radius: 10px;
@@ -166,6 +320,7 @@ watch(
   line-height: 1.55;
   resize: vertical;
   box-sizing: border-box;
+  white-space: pre-wrap;
 }
 
 .todo-add-modal-textarea:focus {
@@ -192,10 +347,15 @@ watch(
 .todo-add-modal-actions {
   display: flex;
   justify-content: flex-end;
+  flex-wrap: wrap;
   gap: 8px;
 }
 
 .todo-add-modal-btn {
   min-width: 72px;
+}
+
+.todo-add-modal-btn--submit {
+  min-width: 108px;
 }
 </style>

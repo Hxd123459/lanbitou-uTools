@@ -153,6 +153,7 @@ export async function listTagsWithCounts(countByTagId = new Map(), nameByTagId =
       tagId: tag.id,
       tagName: tag.tagName,
       noteCount: countByTagId.get(String(tag.id)) ?? 0,
+      createTime: tag.createTime || '',
     })
   })
 
@@ -162,11 +163,20 @@ export async function listTagsWithCounts(countByTagId = new Map(), nameByTagId =
       tagId,
       tagName: nameByTagId.get(tagId) || tagId,
       noteCount: count,
+      createTime: '',
     })
   })
 
+  // 固定按创建时间排序，避免 noteCount 变化导致位置跳动（用户靠位置记忆标签）
   return [...map.values()]
-    .sort((a, b) => b.noteCount - a.noteCount || a.tagName.localeCompare(b.tagName, 'zh-CN'))
+    .sort((a, b) => {
+      const timeA = String(a.createTime || '')
+      const timeB = String(b.createTime || '')
+      if (timeA && timeB && timeA !== timeB) return timeA.localeCompare(timeB)
+      if (timeA && !timeB) return -1
+      if (!timeA && timeB) return 1
+      return a.tagName.localeCompare(b.tagName, 'zh-CN')
+    })
     .map((item) => ({
       tagId: item.tagId,
       tagName: item.tagName,

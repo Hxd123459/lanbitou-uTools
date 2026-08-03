@@ -116,19 +116,25 @@
               </motion.button>
             </div>
           </div>
-          <div class="sediment-template-card-flags" aria-label="本模板行为">
+          <div class="sediment-template-card-flags" aria-label="本模板信息">
             <span
-              v-if="item.mimicWritingStyle"
               class="sediment-template-flag"
-            >模仿文风</span>
-            <span
-              v-if="item.humanizeDraft"
-              class="sediment-template-flag"
-            >去 AI 味</span>
-            <span
-              v-if="!item.mimicWritingStyle && !item.humanizeDraft"
-              class="sediment-template-flag is-muted"
-            >无额外行为</span>
+              :class="item.kind === 'todo' ? 'is-todo' : 'is-article'"
+            >{{ item.kind === 'todo' ? '待办' : '文章' }}</span>
+            <template v-if="item.kind !== 'todo'">
+              <span
+                v-if="item.mimicWritingStyle"
+                class="sediment-template-flag"
+              >模仿文风</span>
+              <span
+                v-if="item.humanizeDraft"
+                class="sediment-template-flag"
+              >去 AI 味</span>
+              <span
+                v-if="!item.mimicWritingStyle && !item.humanizeDraft"
+                class="sediment-template-flag is-muted"
+              >无额外行为</span>
+            </template>
           </div>
           <p class="sediment-template-card-instruction">{{ item.instruction }}</p>
         </template>
@@ -179,6 +185,7 @@ const modalOpen = ref(false)
 const editing = ref({
   title: '',
   instruction: '',
+  kind: 'article',
   mimicWritingStyle: true,
   humanizeDraft: true,
 })
@@ -199,6 +206,7 @@ const openCreate = () => {
   editing.value = {
     title: '',
     instruction: '',
+    kind: 'article',
     mimicWritingStyle: true,
     humanizeDraft: true,
   }
@@ -216,7 +224,7 @@ const closeModal = () => {
   modalOpen.value = false
 }
 
-const handleSubmit = async ({ title, instruction, mimicWritingStyle, humanizeDraft }) => {
+const handleSubmit = async ({ title, instruction, kind, mimicWritingStyle, humanizeDraft }) => {
   saving.value = true
   inlineError.value = ''
   try {
@@ -224,6 +232,7 @@ const handleSubmit = async ({ title, instruction, mimicWritingStyle, humanizeDra
       updateSedimentTemplate(editing.value.id, {
         title,
         instruction,
+        kind,
         mimicWritingStyle,
         humanizeDraft,
       })
@@ -231,6 +240,7 @@ const handleSubmit = async ({ title, instruction, mimicWritingStyle, humanizeDra
       createSedimentTemplate({
         title,
         instruction,
+        kind,
         mimicWritingStyle,
         humanizeDraft,
       })
@@ -367,6 +377,16 @@ const confirmDelete = async (item) => {
   background: transparent;
   border: 1px dashed var(--color-border);
   color: #a1a1aa;
+}
+
+.sediment-template-flag.is-article {
+  background: rgba(37, 99, 235, 0.1);
+  color: #1d4ed8;
+}
+
+.sediment-template-flag.is-todo {
+  background: rgba(15, 118, 110, 0.1);
+  color: #0f766e;
 }
 
 .sediment-template-card-actions {

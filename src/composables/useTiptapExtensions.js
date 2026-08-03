@@ -1,6 +1,5 @@
 import { Markdown } from '@tiptap/markdown'
 import CodeBlockLowlight from '@tiptap/extension-code-block-lowlight'
-import Image from '@tiptap/extension-image'
 import Placeholder from '@tiptap/extension-placeholder'
 import StarterKit from '@tiptap/starter-kit'
 import TaskItem from '@tiptap/extension-task-item'
@@ -8,6 +7,7 @@ import TaskList from '@tiptap/extension-task-list'
 import { common, createLowlight } from 'lowlight'
 import { MarkdownPasteExtension } from '../extensions/tiptapMarkdownPaste'
 import { createFragmentIntroBlockExtension } from '../extensions/tiptapFragmentIntroBlock'
+import { LazyAttachmentImage } from '../extensions/tiptapLazyAttachmentImage'
 import { OrderedListStyleExtension } from '../extensions/tiptapOrderedListStyle'
 import { SlashCommandExtension } from '../extensions/tiptapSlashCommand'
 import { StructNoteShortcutsExtension } from '../extensions/tiptapStructNoteShortcuts'
@@ -63,7 +63,7 @@ export function createTiptapExtensions(options = {}) {
 
   if (enableImage) {
     extensions.push(
-      Image.configure({
+      LazyAttachmentImage.configure({
         inline: false,
         allowBase64: false,
         HTMLAttributes: {

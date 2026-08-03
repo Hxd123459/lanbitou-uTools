@@ -245,6 +245,14 @@
               <div class="struct-note-title-divider" aria-hidden="true" />
             </template>
           </StructNoteMarkdownEditor>
+
+          <div
+            v-if="!fetching && !loadError"
+            class="note-view-wordcount"
+            aria-live="polite"
+          >
+            {{ contentCharCount }} 字
+          </div>
         </div>
       </motion.div>
     </AnimatePresence>
@@ -265,6 +273,7 @@ import { resolveIntroducedFragmentIds, normalizeIntroducedFragmentMethods, unmar
 import { useStructNoteFragmentInsert } from '../../composables/useStructNoteFragmentInsert'
 import { useIntroducedFragmentAttachments } from '../../composables/useIntroducedFragmentAttachments'
 import { useMotionPresets } from '../../composables/useMotionPresets'
+import { countWritingChars } from '../../storage/writingActivity'
 import StructNoteFolderBreadcrumb from './StructNoteFolderBreadcrumb.vue'
 import StructNoteMarkdownEditor from './StructNoteMarkdownEditor.vue'
 import StructNoteCopyButton from './StructNoteCopyButton.vue'
@@ -316,6 +325,7 @@ const fragmentsOpen = ref(false)
 const fragmentsMode = ref('compose')
 const sourceFragmentIds = ref([])
 const baselineFragmentIds = ref([])
+const fragmentsHydrated = ref(false)
 const restoringFragmentId = ref('')
 const restoredFragmentHint = ref(null)
 
@@ -356,6 +366,8 @@ let loadToken = 0
 
 const canSave = computed(() => draftContent.value.trim().length > 0)
 
+const contentCharCount = computed(() => countWritingChars(draftContent.value))
+
 const allFragmentsInserted = computed(() => {
   if (!localFragmentNotes.value.length) return false
   return localFragmentNotes.value.every((note) =>
@@ -372,13 +384,18 @@ const isFolderDirty = computed(
   () => currentParentId.value !== normalizeParentId(lastSaved.value.parentId),
 )
 
-const isFragmentsDirty = computed(() => {
-  const current = localFragmentNotes.value
+const resolveFragmentIdsForSave = () => {
+  if (!fragmentsHydrated.value) {
+    return sourceFragmentIds.value.map((id) => String(id)).filter(Boolean)
+  }
+  return localFragmentNotes.value
     .map((note) => String(note?.id ?? ''))
     .filter(Boolean)
-    .sort()
-    .join(',')
-  const baseline = [...baselineFragmentIds.value].sort().join(',')
+}
+
+const isFragmentsDirty = computed(() => {
+  const current = resolveFragmentIdsForSave().slice().sort().join(',')
+  const baseline = [...baselineFragmentIds.value].map(String).sort().join(',')
   return current !== baseline
 })
 
@@ -460,6 +477,15 @@ const syncLastSavedFromDraft = () => {
     content: draftContent.value.trim(),
     parentId: currentParentId.value,
   }
+}
+
+const applyInitialPathStack = () => {
+  if (!props.initialPathStack.length) return false
+  pathStack.value = props.initialPathStack.map((entry) => ({
+    id: entry.id,
+    name: entry.name,
+  }))
+  return true
 }
 
 const resolveFolderContext = async (item) => {
@@ -567,6 +593,7 @@ const loadSourceFragments = async (ids = [], { preserveInserted = false } = {}) 
   localFragmentNotes.value = normalizedIds.map((id) => byId.get(id)).filter(Boolean)
   baselineFragmentIds.value = normalizedIds
   fragmentsMode.value = localFragmentNotes.value.length ? 'source' : 'compose'
+  fragmentsHydrated.value = true
   if (preserveInserted && preservedInsertedIds) {
     insertedFragmentIds.value = preservedInsertedIds
   }
@@ -575,11 +602,14 @@ const loadSourceFragments = async (ids = [], { preserveInserted = false } = {}) 
   }
 }
 
+const ensureSourceFragmentsLoaded = async () => {
+  if (fragmentsHydrated.value) return
+  await loadSourceFragments(sourceFragmentIds.value)
+  syncFromIntroducedFragments(localFragmentNotes.value, insertedFragmentIds.value)
+}
+
 const persistSourceFragments = async (noteId) => {
-  const allFragmentIds = localFragmentNotes.value
-    .map((note) => note?.id)
-    .filter(Boolean)
-    .map(String)
+  const allFragmentIds = resolveFragmentIdsForSave()
   const previousSet = new Set(sourceFragmentIds.value.map(String))
   const newIds = allFragmentIds.filter((id) => !previousSet.has(id))
   const fragmentsChanged =
@@ -599,6 +629,7 @@ const persistSourceFragments = async (noteId) => {
       localFragmentNotes.value = []
       baselineFragmentIds.value = []
       fragmentsMode.value = 'compose'
+      fragmentsHydrated.value = true
     }
   }
 
@@ -642,6 +673,10 @@ const resolveTitleForSave = () => {
 
 const handleSave = async (isAuto = false) => {
   if (!canSave.value || saving.value || aiProcessing.value) return
+
+  contentEditorRef.value?.flushPendingModelUpdate?.()
+  await nextTick()
+
   if (!isDirty.value) return
 
   if (!isAuto) {
@@ -651,10 +686,7 @@ const handleSave = async (isAuto = false) => {
   const title = resolveTitleForSave()
   const noteId = props.noteItem.noteId ?? props.noteItem.id
   try {
-    const allFragmentIds = localFragmentNotes.value
-      .map((note) => note?.id)
-      .filter(Boolean)
-      .map(String)
+    const allFragmentIds = resolveFragmentIdsForSave()
 
     const introducedIds = [...insertedFragmentIds.value].map(String).filter(Boolean)
 
@@ -721,21 +753,32 @@ const fetchDetail = async () => {
     sourceFragmentIds.value = Array.isArray(data?.sourceFragmentIds)
       ? [...data.sourceFragmentIds]
       : []
-    await resolveFolderContext(props.noteItem)
+    baselineFragmentIds.value = sourceFragmentIds.value.map(String).filter(Boolean)
+    fragmentsMode.value = baselineFragmentIds.value.length ? 'source' : 'compose'
+    fragmentsHydrated.value = false
+    localFragmentNotes.value = []
     applyDraftFromNote()
-    await loadSourceFragments(sourceFragmentIds.value)
+    applyInitialPathStack()
     insertedFragmentIds.value = resolveIntroducedFragmentIds({
       sourceFragmentIds: sourceFragmentIds.value,
       introducedFragmentIds: data?.introducedFragmentIds,
       content: draftContent.value,
-      fragmentNotes: localFragmentNotes.value,
+      fragmentNotes: [],
     })
     introducedFragmentMethods.value = normalizeIntroducedFragmentMethods(
       data?.introducedFragmentMethods,
     )
-    syncFromIntroducedFragments(localFragmentNotes.value, insertedFragmentIds.value)
+    // 正文到手立刻挂编辑器，路径/碎片后台补
+    fetching.value = false
     await nextTick()
     titleInputRef.value?.focus()
+
+    void resolveFolderContext(props.noteItem).then(() => {
+      if (token !== loadToken) return
+    })
+    if (fragmentsOpen.value) {
+      void ensureSourceFragmentsLoaded()
+    }
   } catch {
     if (token !== loadToken) return
     loadError.value = true
@@ -799,6 +842,11 @@ watch([draftTitle, draftContent, pathStack, localFragmentNotes], () => {
   scheduleAutoSave()
 })
 
+watch(fragmentsOpen, (open) => {
+  if (!open || !props.visible) return
+  void ensureSourceFragmentsLoaded()
+})
+
 watch(
   () => props.visible,
   (open) => {
@@ -816,6 +864,7 @@ watch(
       resetIntroducedAttachments()
       fragmentsOpen.value = false
       fragmentsMode.value = 'compose'
+      fragmentsHydrated.value = false
       sourceFragmentIds.value = []
       baselineFragmentIds.value = []
       restoringFragmentId.value = ''
@@ -1029,6 +1078,15 @@ onBeforeUnmount(() => {
   flex: 1;
   min-height: 0;
   width: 100%;
+}
+
+.note-view-wordcount {
+  flex: 0 0 auto;
+  padding: 4px 24px 14px;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-secondary-text);
+  user-select: none;
 }
 
 .note-view-editor :deep(.struct-note-editor-layout) {

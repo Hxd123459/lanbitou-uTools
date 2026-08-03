@@ -1,7 +1,4 @@
-import {
-  persistAttachmentRefsInMarkdown,
-  resolveAttachmentRefsInMarkdown,
-} from './attachmentMarkdown'
+import { persistAttachmentRefsInMarkdown } from './attachmentMarkdown'
 
 const FRAG_BLOCK_RE =
   /<!--\s*aw-frag-start\s+ids=([^\s>]+)\s+method=([^\s>]+)(?:\s+at=([^\s>]+))?\s*-->([\s\S]*?)<!--\s*aw-frag-end\s+ids=\1\s*-->/g
@@ -56,12 +53,13 @@ export function splitFragmentMarkedMarkdown(markdown) {
 }
 
 export function buildEditorContentFromMarkdown(markdown, editor) {
-  const resolved = resolveAttachmentRefsInMarkdown(markdown || '')
-  if (!hasFragmentIntroMarkers(resolved)) {
-    return { content: resolved, contentType: 'markdown' }
+  // 保留 lb-att://，由 LazyAttachmentImage 视口内再读附件，避免打开长文时同步解压全部图
+  const source = String(markdown || '')
+  if (!hasFragmentIntroMarkers(source)) {
+    return { content: source, contentType: 'markdown' }
   }
 
-  const segments = splitFragmentMarkedMarkdown(resolved)
+  const segments = splitFragmentMarkedMarkdown(source)
   const docContent = []
 
   for (const segment of segments) {
@@ -105,9 +103,7 @@ export function buildEditorContentFromMarkdown(markdown, editor) {
 }
 
 export function normalizeMarkdownForCompare(markdown) {
-  return persistAttachmentRefsInMarkdown(
-    resolveAttachmentRefsInMarkdown(String(markdown ?? '')),
-  )
+  return persistAttachmentRefsInMarkdown(String(markdown ?? ''))
 }
 
 export function setEditorMarkdownContent(

@@ -25,7 +25,7 @@ function isConflictResult(result) {
 
 /**
  * uTools 更新文档必须带最新 _rev，否则报 Document update conflict。
- * 保存前始终从库中读取 _rev；冲突时重试一次。
+ * 保存前丢弃调用方传入的旧 _rev，始终从库中读取；冲突时最多重试 3 次。
  */
 export async function dbPut(doc) {
   const db = getDb()
@@ -37,15 +37,18 @@ export async function dbPut(doc) {
 
   const attempt = async () => {
     const payload = { ...doc }
+    delete payload._rev
     const existing = await dbGet(payload._id)
-    if (existing?._rev) {
+    if (existing?._rev && !existing?.error) {
       payload._rev = existing._rev
     }
     return run(payload)
   }
 
   let result = await attempt()
-  if (isConflictResult(result)) {
+  let retries = 0
+  while (isConflictResult(result) && retries < 3) {
+    retries += 1
     result = await attempt()
   }
 
@@ -70,14 +73,37 @@ export async function dbAllDocs(prefix) {
   return run(prefix)
 }
 
-export function dbPostAttachment(id, attachment, type) {
-  const db = getDb()
+function postAttachmentOnce(db, id, attachment, type) {
   let result = db.postAttachment(id, attachment, type)
   // 个别 MIME（如 OpenXML 长类型）会被 uTools 参数校验拒绝，回退通用类型再试
   if (result?.error && /params\s*"type"/i.test(result.message || '')) {
     if (type !== 'application/octet-stream') {
       result = db.postAttachment(id, attachment, 'application/octet-stream')
     }
+  }
+  return result
+}
+
+function removeAttachmentDocSync(db, id) {
+  try {
+    const existing = db.get(id)
+    if (!existing || existing.error) return
+    db.remove(existing)
+  } catch {
+    /* 附件可能已不存在 */
+  }
+}
+
+/**
+ * 同 id 附件已存在时 postAttachment 会报 Document update conflict。
+ * 冲突则删旧再写；导入/覆盖场景常见。
+ */
+export function dbPostAttachment(id, attachment, type) {
+  const db = getDb()
+  let result = postAttachmentOnce(db, id, attachment, type)
+  if (isConflictResult(result)) {
+    removeAttachmentDocSync(db, id)
+    result = postAttachmentOnce(db, id, attachment, type)
   }
   return wrapResult(result, '保存附件')
 }

@@ -133,10 +133,12 @@ const rootRef = ref(null)
 
 const options = computed(() => [
   { id: FRAGMENT_INTRO_RAW, label: '原文' },
-  ...templates.value.map((item) => ({
-    id: item.id,
-    label: item.title,
-  })),
+  ...templates.value
+    .filter((item) => item.kind !== 'todo')
+    .map((item) => ({
+      id: item.id,
+      label: item.title,
+    })),
 ])
 
 const isOptionSelected = (id) => {

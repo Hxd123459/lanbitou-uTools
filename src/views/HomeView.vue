@@ -465,6 +465,7 @@
         @fragments-archived="handleFragmentsArchived"
         @fragment-restored="handleFragmentRestored"
         @moved-to-recycle="handleMovedToRecycle"
+        @open-todo-project="handleSedimentOpenTodoProject"
       />
 
       <!-- 待办 -->
@@ -973,6 +974,17 @@ const handleTodoOpenSedimentFolder = async (payload) => {
   activeTab.value = 'sediment'
   await nextTick()
   await sedimentPanelRef.value?.openFolderById?.(folderId)
+}
+
+const handleSedimentOpenTodoProject = async (payload) => {
+  const projectId = String(payload?.projectId || '').trim()
+  if (!projectId) return
+  activeTab.value = 'todo'
+  await nextTick()
+  const ok = await todoPanelRef.value?.openProjectById?.(projectId)
+  if (ok === false) {
+    openToast('未找到对应事情', 'error', { duration: 1600 })
+  }
 }
 
 const handleGlobalSearchOpenTodo = async (payload) => {
