@@ -64,7 +64,8 @@
 }
 
 /* uTools 主窗口（未分离）时收起侧栏 */
-html[data-utools-compact='true'] {
+html[data-utools-compact='true'],
+html[data-sidebar-collapsed='true'] {
   --sidebar-width: 72px;
   --frame-width: min(988px, calc(100vw - var(--sidebar-width) - 16px));
 }

@@ -29,29 +29,58 @@ const props = defineProps({
   text: { type: String, default: '' },
   /** 气泡相对触发点的间距（px） */
   offset: { type: Number, default: 8 },
-  /** below | above */
+  /** below | above | right | left */
   placement: { type: String, default: 'below' },
 })
 
 const triggerRef = ref(null)
 const visible = ref(false)
-const pos = ref({ top: 0, left: 0 })
+const pos = ref({ top: 0, left: 0, transform: 'translate(-50%, 0)' })
 
 const tooltipStyle = computed(() => ({
   top: `${pos.value.top}px`,
   left: `${pos.value.left}px`,
+  transform: pos.value.transform,
 }))
 
 const updatePosition = () => {
   const el = triggerRef.value
   if (!el) return
   const rect = el.getBoundingClientRect()
-  const left = rect.left + rect.width / 2
-  const top =
-    props.placement === 'above'
-      ? rect.top - props.offset
-      : rect.bottom + props.offset
-  pos.value = { top, left }
+  const placement = props.placement
+
+  if (placement === 'right') {
+    pos.value = {
+      top: rect.top + rect.height / 2,
+      left: rect.right + props.offset,
+      transform: 'translate(0, -50%)',
+    }
+    return
+  }
+
+  if (placement === 'left') {
+    pos.value = {
+      top: rect.top + rect.height / 2,
+      left: rect.left - props.offset,
+      transform: 'translate(-100%, -50%)',
+    }
+    return
+  }
+
+  if (placement === 'above') {
+    pos.value = {
+      top: rect.top - props.offset,
+      left: rect.left + rect.width / 2,
+      transform: 'translate(-50%, -100%)',
+    }
+    return
+  }
+
+  pos.value = {
+    top: rect.bottom + props.offset,
+    left: rect.left + rect.width / 2,
+    transform: 'translate(-50%, 0)',
+  }
 }
 
 const show = async () => {
@@ -106,6 +135,5 @@ onBeforeUnmount(() => {
   word-break: break-all;
   pointer-events: none;
   box-shadow: 0 4px 14px rgba(0, 0, 0, 0.18);
-  transform: translate(-50%, 0);
 }
 </style>
