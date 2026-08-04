@@ -4,6 +4,10 @@
     :class="{ 'is-fragments-open': fragmentsOpen }"
   >
     <div class="struct-note-editor-zone">
+      <div class="struct-note-editor-overlay">
+        <slot name="overlay" />
+      </div>
+
       <div class="struct-note-editor-column">
         <slot />
       </div>
@@ -149,6 +153,18 @@ const panelTabModel = computed({
   display: flex;
   justify-content: center;
   overflow: visible;
+}
+
+.struct-note-editor-overlay {
+  position: absolute;
+  top: -4px;
+  right: 6px;
+  z-index: 5;
+  pointer-events: none;
+}
+
+.struct-note-editor-overlay > :deep(*) {
+  pointer-events: auto;
 }
 
 .struct-note-editor-column {

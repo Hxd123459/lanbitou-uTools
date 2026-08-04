@@ -36,6 +36,15 @@
           />
 
           <div class="note-view-header-actions">
+            <span class="note-view-save-status" aria-live="polite">
+              <span
+                v-if="saveHintText"
+                class="note-view-save-status-text"
+                :class="{ 'is-saving': saving }"
+              >
+                {{ saveHintText }}
+              </span>
+            </span>
             <StructNoteCopyButton
               :get-content="() => draftContent"
               :disabled="fetching || loadError || saving || aiProcessing"
@@ -43,159 +52,38 @@
             <motion.button
               type="button"
               class="btn btn-primary note-view-save-btn"
-              :class="{
-                'is-saving': saving,
-                'is-saved': saveStatus === 'saved' && !isDirty,
-              }"
+              :class="{ 'is-quiet-disabled': saveButtonDisabled && canSave }"
               :disabled="saveButtonDisabled"
+              :aria-label="saveHintText || '保存'"
               :while-hover="saveButtonDisabled ? undefined : presets.button.hover"
               :while-tap="saveButtonDisabled ? undefined : presets.button.tap"
               :transition="presets.button.transition"
               @click="handleSave(false)"
             >
-              <AnimatePresence mode="wait">
-                <motion.span
-                  v-if="saving"
-                  key="saving"
-                  class="note-view-save-label"
-                  :initial="presets.swapLabel.initial"
-                  :animate="presets.swapLabel.animate"
-                  :exit="presets.swapLabel.exit"
-                  :transition="presets.swapLabel.transition"
+              <span class="note-view-save-label">
+                <svg
+                  class="note-view-save-icon"
+                  viewBox="0 0 24 24"
+                  width="16"
+                  height="16"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.8"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
                 >
-                  <svg
-                    class="note-view-save-icon note-view-save-icon--spin"
-                    viewBox="0 0 24 24"
-                    width="16"
-                    height="16"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="2"
-                    stroke-linecap="round"
-                    aria-hidden="true"
-                  >
-                    <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" />
-                  </svg>
-                  保存中…
-                </motion.span>
-                <motion.span
-                  v-else-if="saveStatus === 'saved' && !isDirty"
-                  key="saved"
-                  class="note-view-save-label"
-                  :initial="presets.swapLabel.initial"
-                  :animate="presets.swapLabel.animate"
-                  :exit="presets.swapLabel.exit"
-                  :transition="presets.swapLabel.transition"
-                >
-                  <svg
-                    class="note-view-save-icon"
-                    viewBox="0 0 24 24"
-                    width="16"
-                    height="16"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="2.2"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    aria-hidden="true"
-                  >
-                    <path d="M5 12l5 5L20 7" />
-                  </svg>
-                  已保存
-                </motion.span>
-                <motion.span
-                  v-else
-                  key="idle"
-                  class="note-view-save-label"
-                  :initial="presets.swapLabel.initial"
-                  :animate="presets.swapLabel.animate"
-                  :exit="presets.swapLabel.exit"
-                  :transition="presets.swapLabel.transition"
-                >
-                  <svg
-                    class="note-view-save-icon"
-                    viewBox="0 0 24 24"
-                    width="16"
-                    height="16"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="1.8"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    aria-hidden="true"
-                  >
-                    <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" />
-                    <polyline points="17 21 17 13 7 13 7 21" />
-                    <polyline points="7 3 7 8 15 8" />
-                  </svg>
-                  保存
-                </motion.span>
-              </AnimatePresence>
+                  <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" />
+                  <polyline points="17 21 17 13 7 13 7 21" />
+                  <polyline points="7 3 7 8 15 8" />
+                </svg>
+                保存
+              </span>
             </motion.button>
           </div>
         </header>
 
         <div class="note-view-content-wrap">
-          <div
-            v-if="findOpen && !fetching && !loadError"
-            class="note-view-find-bar"
-            role="search"
-            aria-label="文内查找"
-          >
-            <span class="note-view-find-icon" aria-hidden="true">
-              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
-                <circle cx="11" cy="11" r="7" />
-                <path d="m20 20-3.5-3.5" />
-              </svg>
-            </span>
-            <input
-              ref="findInputRef"
-              v-model="findQuery"
-              class="note-view-find-input"
-              type="text"
-              placeholder="文内查找"
-              spellcheck="false"
-              autocomplete="off"
-              @keydown.enter.prevent="handleFindEnter"
-              @keydown.escape.prevent="closeFindBar"
-            />
-            <span class="note-view-find-count" aria-live="polite">
-              {{ findCountLabel }}
-            </span>
-            <button
-              type="button"
-              class="note-view-find-btn"
-              aria-label="上一个匹配"
-              :disabled="!findMatchCount"
-              @click="goFindPrevious"
-            >
-              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
-                <path d="M18 15l-6-6-6 6" />
-              </svg>
-            </button>
-            <button
-              type="button"
-              class="note-view-find-btn"
-              aria-label="下一个匹配"
-              :disabled="!findMatchCount"
-              @click="goFindNext"
-            >
-              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
-                <path d="M6 9l6 6 6-6" />
-              </svg>
-            </button>
-            <button
-              type="button"
-              class="note-view-find-btn note-view-find-btn--close"
-              aria-label="关闭查找"
-              @click="closeFindBar"
-            >
-              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
-                <path d="M6 6l12 12M18 6L6 18" />
-              </svg>
-            </button>
-          </div>
-
           <p v-if="loadError" class="note-view-error">加载失败，请稍后重试</p>
           <p v-else-if="fetching" class="note-view-loading">加载中…</p>
 
@@ -231,6 +119,67 @@
             @image-too-large="emit('error', new Error('单张图片不能超过 10MB'))"
             @file-too-large="emit('error', new Error('单个附件不能超过 10MB'))"
           >
+            <template #overlay>
+              <div
+                v-if="findOpen"
+                class="note-view-find-bar"
+                role="search"
+                aria-label="文内查找"
+              >
+                <span class="note-view-find-icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+                    <circle cx="11" cy="11" r="7" />
+                    <path d="m20 20-3.5-3.5" />
+                  </svg>
+                </span>
+                <input
+                  ref="findInputRef"
+                  v-model="findQuery"
+                  class="note-view-find-input"
+                  type="text"
+                  placeholder="文内查找"
+                  spellcheck="false"
+                  autocomplete="off"
+                  @keydown.enter.prevent="handleFindEnter"
+                  @keydown.escape.prevent="closeFindBar"
+                />
+                <span class="note-view-find-count" aria-live="polite">
+                  {{ findCountLabel }}
+                </span>
+                <button
+                  type="button"
+                  class="note-view-find-btn"
+                  aria-label="上一个匹配"
+                  :disabled="!findMatchCount"
+                  @click="goFindPrevious"
+                >
+                  <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+                    <path d="M18 15l-6-6-6 6" />
+                  </svg>
+                </button>
+                <button
+                  type="button"
+                  class="note-view-find-btn"
+                  aria-label="下一个匹配"
+                  :disabled="!findMatchCount"
+                  @click="goFindNext"
+                >
+                  <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+                    <path d="M6 9l6 6 6-6" />
+                  </svg>
+                </button>
+                <button
+                  type="button"
+                  class="note-view-find-btn note-view-find-btn--close"
+                  aria-label="关闭查找"
+                  @click="closeFindBar"
+                >
+                  <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+                    <path d="M6 6l12 12M18 6L6 18" />
+                  </svg>
+                </button>
+              </div>
+            </template>
             <template #prefix>
               <input
                 ref="titleInputRef"
@@ -410,6 +359,13 @@ const isDirty = computed(
 const saveButtonDisabled = computed(
   () => saving.value || aiProcessing.value || !canSave.value || (!isDirty.value && saveStatus.value === 'saved'),
 )
+
+/** 状态提示放复制按钮左侧，主按钮文案/图标保持稳定，避免写作时余光被抢 */
+const saveHintText = computed(() => {
+  if (saving.value) return '保存中'
+  if (saveStatus.value === 'saved' && !isDirty.value) return '已自动保存'
+  return ''
+})
 
 const findCountLabel = computed(() => {
   const q = findQuery.value.trim()
@@ -943,14 +899,51 @@ onBeforeUnmount(() => {
   gap: 8px;
 }
 
-.note-view-save-btn {
-  min-width: 108px;
+.note-view-save-status {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  min-width: 5.5em;
+  min-height: 1em;
 }
 
-.note-view-save-btn.is-saved:disabled {
-  opacity: var(--btn-disabled-opacity, 0.55);
+.note-view-save-status-text {
+  font-size: 12px;
+  line-height: 1;
+  color: var(--color-secondary-text);
+  opacity: 0.55;
+  letter-spacing: 0.02em;
+  animation: note-view-save-hint-in 0.5s ease;
+  pointer-events: none;
+  user-select: none;
+  white-space: nowrap;
+}
+
+.note-view-save-status-text.is-saving {
+  opacity: 0.45;
+}
+
+@keyframes note-view-save-hint-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 0.55;
+  }
+}
+
+.note-view-save-btn {
+  min-width: 88px;
+  transition: opacity 0.4s ease;
+}
+
+.note-view-save-btn:disabled {
   cursor: default;
-  filter: saturate(0.85);
+}
+
+/* 已保存/保存中：轻微降透明即可，避免 0.55 跳变抢余光 */
+.note-view-save-btn.is-quiet-disabled:disabled {
+  opacity: 0.82;
 }
 
 .note-view-save-label {
@@ -964,16 +957,6 @@ onBeforeUnmount(() => {
   flex: 0 0 auto;
 }
 
-.note-view-save-icon--spin {
-  animation: note-view-save-spin 0.85s linear infinite;
-}
-
-@keyframes note-view-save-spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-
 .note-view-content-wrap {
   position: relative;
   flex: 1;
@@ -984,10 +967,6 @@ onBeforeUnmount(() => {
 }
 
 .note-view-find-bar {
-  position: absolute;
-  top: 12px;
-  right: 24px;
-  z-index: 5;
   display: flex;
   align-items: center;
   gap: 6px;

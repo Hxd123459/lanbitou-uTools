@@ -24,6 +24,9 @@
     @restore="emit('restore', $event)"
     @update:selected-insert-preset="emit('update:selectedInsertPreset', $event)"
   >
+    <template v-if="$slots.overlay" #overlay>
+      <slot name="overlay" />
+    </template>
     <slot name="prefix" />
     <IntroducedFragmentAttachmentStrip
       v-if="introducedAttachments.length"
