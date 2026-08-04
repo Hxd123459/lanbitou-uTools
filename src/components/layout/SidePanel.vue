@@ -372,13 +372,14 @@ const navMotion = computed(() => ({
 <style scoped>
 .app-sidebar {
   position: relative;
+  z-index: 2;
   flex: 0 0 var(--sidebar-width);
   width: var(--sidebar-width);
   height: 100vh;
   display: flex;
   flex-direction: column;
   padding: 20px 12px 24px 16px;
-  overflow: hidden;
+  overflow: visible;
   background: var(--shell-sidebar-bg);
   transition:
     width 0.22s ease,
@@ -389,7 +390,7 @@ const navMotion = computed(() => ({
 .sidebar-collapse-btn {
   position: absolute;
   top: 50%;
-  right: 2px;
+  right: -10px;
   z-index: 5;
   display: inline-flex;
   align-items: center;
