@@ -410,7 +410,9 @@
           <NoteBulkActionBar
             ref="bulkActionBarRef"
             :busy="bulkActionBusy"
+            :can-select-all="bulkSelectableNoteIds.length > 0"
             @ask-ai="handleBulkAskAi"
+            @select-all="handleBulkSelectAll"
             @tag="openBulkTagMenu"
             @clear-tags="handleBulkClearTags"
             @clear="handleBulkClearSelection"
@@ -1076,6 +1078,19 @@ const handleBulkClearSelection = () => {
   clearTodoSourceFilter()
   onNoteSearch('')
   noteViewMode.value = 'list'
+}
+
+const bulkSelectableNoteIds = computed(() =>
+  displayedNotes.value
+    .map((note) => String(note?.id ?? ''))
+    .filter((id) => id && !isNoteBulkAiTagBusy(id)),
+)
+
+const handleBulkSelectAll = () => {
+  if (bulkActionBusy.value) return
+  const ids = bulkSelectableNoteIds.value
+  if (!ids.length) return
+  selectedNoteIds.value = new Set(ids)
 }
 
 const scrollNoteListToTop = () => {

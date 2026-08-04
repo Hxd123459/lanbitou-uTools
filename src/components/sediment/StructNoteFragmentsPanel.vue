@@ -690,8 +690,9 @@ watch(
 }
 
 .struct-note-fragments-inner {
-  --fragments-list-font-size: 11px;
-  --fragments-list-line-height: 1.55;
+  /* 与 NoteCard 正文一致（全部 tab 实际渲染字号） */
+  --fragments-list-font-size: 14px;
+  --fragments-list-line-height: 1.6;
   --fragments-list-tag-font: 11px;
   --fragments-list-time-font: 10px;
   --fragments-list-tile-size: 67px;

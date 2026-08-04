@@ -34,6 +34,34 @@
       <span class="note-bulk-btn-label">问 AI</span>
     </motion.button>
     <div class="note-bulk-actions">
+      <motion.button
+        type="button"
+        class="note-bulk-btn"
+        :disabled="busy || !canSelectAll"
+        :while-hover="presets.button.hover"
+        :while-tap="presets.button.tap"
+        :transition="presets.button.transition"
+        @click="$emit('select-all')"
+      >
+        <span class="note-bulk-btn-icon" aria-hidden="true">
+          <svg
+            viewBox="0 0 24 24"
+            width="18"
+            height="18"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.8"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <rect x="3" y="3" width="18" height="18" rx="3" />
+            <path d="m8 12 2.5 2.5L16 9" />
+          </svg>
+        </span>
+        <span class="note-bulk-btn-label">全选</span>
+      </motion.button>
+    </div>
+    <div class="note-bulk-actions">
       <span ref="tagAnchorRef" class="note-bulk-tag-anchor">
         <motion.button
           type="button"
@@ -179,9 +207,13 @@ defineProps({
     type: Boolean,
     default: false,
   },
+  canSelectAll: {
+    type: Boolean,
+    default: true,
+  },
 })
 
-defineEmits(['ask-ai', 'tag', 'clear-tags', 'sediment', 'delete', 'clear'])
+defineEmits(['ask-ai', 'select-all', 'tag', 'clear-tags', 'sediment', 'delete', 'clear'])
 
 const { presets } = useMotionPresets()
 

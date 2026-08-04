@@ -80,7 +80,12 @@ export async function generateNoteTitle(rawContent) {
   if (!text || !shouldAutoTagContent(text)) return null
 
   const settings = loadAiSettings()
-  const systemPrompt = buildTitlePrompt(await getAllTagNamesForAi())
+  const existingTagNames = await getAllTagNamesForAi()
+  const systemPrompt = buildTitlePrompt(existingTagNames)
+
+  console.log('[烂笔头][AI自动打标签] 现有标签列表', existingTagNames)
+  console.log('[烂笔头][AI自动打标签] system prompt\n', systemPrompt)
+  console.log('[烂笔头][AI自动打标签] user content\n', text)
 
   const acceptTitle = (value) => {
     const title = String(value ?? '').trim()
