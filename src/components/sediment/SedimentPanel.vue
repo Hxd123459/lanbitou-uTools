@@ -497,6 +497,7 @@ import {
 } from '../../api/structFolder'
 import { fetchProjects } from '../../api/project'
 import { archiveFragmentNotes } from '../../api/note'
+import { isArchiveFragmentsAfterSedimentEnabled } from '../../storage/utools/sedimentPrefs'
 import { findStructFolderItemByNoteId, updateStructNote } from '../../api/structNote'
 import {
   finalizeInlineImagesInMarkdown,
@@ -1094,7 +1095,7 @@ const handleCreateNote = async ({
       pathStack: savedPathStack,
     })
     let archivedIds = []
-    if (fragmentIds.length) {
+    if (fragmentIds.length && isArchiveFragmentsAfterSedimentEnabled()) {
       archivedIds = await archiveFragmentNotes(fragmentIds, structNoteId)
       if (archivedIds.length) {
         emit('fragments-archived', archivedIds)

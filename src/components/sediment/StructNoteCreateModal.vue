@@ -82,11 +82,16 @@
           :selected-insert-preset="selectedInsertPreset"
           :ai-processing="aiProcessing"
           :processing-fragment-id="processingFragmentId"
+          :ai-composing-label="aiComposingLabel"
+          :ai-elapsed-label="aiElapsedLabel"
+          :ai-progress-label="aiProgressLabel"
+          :ai-composing-preview="aiComposingPreview"
           :all-fragments-inserted="allFragmentsInserted"
           :introduced-attachments="introducedAttachments"
           :min-height="240"
           @insert="insertFragment"
           @insert-all="insertAllFragments"
+          @stop-ai="stopInsertProcessing"
           @cancel-fragment-intro="handleCancelFragmentIntro"
           @remove-introduced-attachment="removeIntroducedAttachmentByKey"
           @update:selected-insert-preset="selectedInsertPreset = $event"
@@ -176,6 +181,10 @@ const {
   selectedInsertPreset,
   aiProcessing,
   processingFragmentId,
+  aiComposingLabel,
+  aiElapsedLabel,
+  aiProgressLabel,
+  aiComposingPreview,
   insertFragment,
   insertAllFragments,
   stopInsertProcessing,

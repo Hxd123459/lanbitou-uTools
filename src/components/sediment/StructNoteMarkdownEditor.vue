@@ -21,6 +21,7 @@
     :processing-fragment-id="processingFragmentId"
     @insert="emit('insert', $event)"
     @insert-all="emit('insert-all')"
+    @stop-ai="emit('stop-ai')"
     @restore="emit('restore', $event)"
     @update:selected-insert-preset="emit('update:selectedInsertPreset', $event)"
   >
@@ -33,6 +34,14 @@
       :items="introducedAttachments"
       :disabled="disabled"
       @remove="emit('remove-introduced-attachment', $event)"
+    />
+    <StructNoteAiComposingBlock
+      :visible="aiProcessing"
+      :title="aiComposingLabel"
+      :elapsed-label="aiElapsedLabel"
+      :progress-label="aiProgressLabel"
+      :preview="aiComposingPreview"
+      @stop="emit('stop-ai')"
     />
     <div
       class="struct-note-md-editor"
@@ -114,6 +123,7 @@ import '../../assets/styles/struct-note-drag-handle.css'
 import '../../assets/styles/fragment-intro-block.css'
 import StructNoteEditorLayout from './StructNoteEditorLayout.vue'
 import IntroducedFragmentAttachmentStrip from './IntroducedFragmentAttachmentStrip.vue'
+import StructNoteAiComposingBlock from './StructNoteAiComposingBlock.vue'
 
 const props = defineProps({
   modelValue: {
@@ -196,6 +206,22 @@ const props = defineProps({
     type: String,
     default: '',
   },
+  aiComposingLabel: {
+    type: String,
+    default: 'AI 整理中',
+  },
+  aiElapsedLabel: {
+    type: String,
+    default: '0:00',
+  },
+  aiProgressLabel: {
+    type: String,
+    default: '',
+  },
+  aiComposingPreview: {
+    type: String,
+    default: '',
+  },
   introducedAttachments: {
     type: Array,
     default: () => [],
@@ -214,6 +240,7 @@ const emit = defineEmits([
   'update:selectedInsertPreset',
   'cancel-fragment-intro',
   'remove-introduced-attachment',
+  'stop-ai',
 ])
 
 const fragmentNotesModel = computed({

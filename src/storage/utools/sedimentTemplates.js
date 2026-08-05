@@ -1,8 +1,17 @@
 const STORAGE_KEY = 'lanbitou/sediment-templates'
 const VERSION_KEY = 'lanbitou/sediment-templates-version'
-const TEMPLATE_SEED_VERSION = 5
+const TEMPLATE_SEED_VERSION = 6
 
 const LEGACY_TODOS_MERGE_LINE = '3. 合并重复或相近的待办；无法判断完成状态时默认为未完成'
+
+/** v5→v6：旧版「整理成文」提示词（未自定义过的条目可升级） */
+const LEGACY_COMPOSE_INSTRUCTION_V5 = `将碎片整合为一篇连贯、可直接阅读的长文。
+
+输出格式（严格遵守）：
+1. 按逻辑分 2-4 段，段间空一行；可用 ## 小标题划分主题，不要使用一级标题 #
+2. 用完整句子与过渡语串联，不要罗列碎片编号
+3. 保留有价值细节，合并重复表述
+4. 信息不足处不编造，可略去无法支撑的结论`
 
 const DEFAULT_MIMIC_WRITING_STYLE = true
 const DEFAULT_HUMANIZE_DRAFT = true
@@ -32,11 +41,14 @@ export const BUILTIN_TEMPLATE_SEED = [
     title: '整理成文',
     instruction: `将碎片整合为一篇连贯、可直接阅读的长文。
 
+处理规则（严格遵守）：
+1. 先识别共同主题与时间脉络（输入含各条记录时间），按逻辑组织，不要按碎片编号罗列
+2. 合并重复表述，保留有价值细节与原意；信息不足处不编造，可略去无法支撑的结论
+3. 用完整句子与过渡语串联，读起来像一篇文章而非条目拼贴
+
 输出格式（严格遵守）：
-1. 按逻辑分 2-4 段，段间空一行；可用 ## 小标题划分主题，不要使用一级标题 #
-2. 用完整句子与过渡语串联，不要罗列碎片编号
-3. 保留有价值细节，合并重复表述
-4. 信息不足处不编造，可略去无法支撑的结论`,
+1. 按主题分 2-4 个小节，可用 ## 小标题，不要使用一级标题 #
+2. 段间空一行；语气自然，适合直接编辑后使用`,
     mimicWritingStyle: true,
     humanizeDraft: true,
   },
@@ -249,6 +261,15 @@ function applyTemplateMigrations(list, storage) {
     }
   })
   next = ensureBuiltinTodoTemplates(next)
+
+  if (version < 6) {
+    const composeSeed = BUILTIN_TEMPLATE_SEED.find((entry) => entry.id === 'compose')
+    next = next.map((item) => {
+      if (item?.id !== 'compose' || !composeSeed) return item
+      if (String(item.instruction || '').trim() !== LEGACY_COMPOSE_INSTRUCTION_V5) return item
+      return { ...item, instruction: composeSeed.instruction }
+    })
+  }
 
   const normalized = next.map(normalizeTemplate).filter(Boolean)
   storage.setItem(VERSION_KEY, TEMPLATE_SEED_VERSION)

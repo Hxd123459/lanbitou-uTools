@@ -47,6 +47,7 @@
       @update:selected-insert-preset="emit('update:selectedInsertPreset', $event)"
       @insert="emit('insert', $event)"
       @insert-all="emit('insert-all')"
+      @stop-ai="emit('stop-ai')"
       @restore="emit('restore', $event)"
     />
   </div>
@@ -112,6 +113,7 @@ const emit = defineEmits([
   'update:panelTab',
   'insert',
   'insert-all',
+  'stop-ai',
   'restore',
   'update:selectedInsertPreset',
 ])

@@ -55,10 +55,11 @@
               v-if="showFragmentTabs && panelTab === 'selected' && fragmentNotes.length"
               type="button"
               class="struct-note-fragments-insert-all"
-              :disabled="disabled || aiProcessing || allFragmentsInserted"
-              @click="emit('insert-all')"
+              :class="{ 'is-stop': aiProcessing }"
+              :disabled="disabled || (!aiProcessing && allFragmentsInserted)"
+              @click="aiProcessing ? emit('stop-ai') : emit('insert-all')"
             >
-              {{ aiProcessing ? '整理中…' : '全部插入' }}
+              {{ aiProcessing ? '停止' : '全部插入' }}
             </button>
             <motion.button
               type="button"
@@ -403,6 +404,7 @@ const emit = defineEmits([
   'update:panelTab',
   'insert',
   'insert-all',
+  'stop-ai',
   'restore',
   'update:selectedInsertPreset',
 ])
@@ -799,6 +801,17 @@ watch(
 .struct-note-fragments-insert-all:disabled {
   opacity: 0.55;
   cursor: not-allowed;
+}
+
+.struct-note-fragments-insert-all.is-stop {
+  border-color: rgba(37, 99, 235, 0.28);
+  background: rgba(37, 99, 235, 0.08);
+  color: #1d4ed8;
+}
+
+.struct-note-fragments-insert-all.is-stop:hover:not(:disabled) {
+  border-color: rgba(37, 99, 235, 0.4);
+  background: rgba(37, 99, 235, 0.12);
 }
 
 .struct-note-fragments-title {

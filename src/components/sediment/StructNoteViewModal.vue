@@ -102,6 +102,10 @@
             :selected-insert-preset="selectedInsertPreset"
             :ai-processing="aiProcessing"
             :processing-fragment-id="processingFragmentId"
+            :ai-composing-label="aiComposingLabel"
+            :ai-elapsed-label="aiElapsedLabel"
+            :ai-progress-label="aiProgressLabel"
+            :ai-composing-preview="aiComposingPreview"
             :all-fragments-inserted="allFragmentsInserted"
             :introduced-attachments="introducedAttachments"
             :fragments-mode="fragmentsMode"
@@ -112,6 +116,7 @@
             class="note-view-editor"
             @insert="insertFragment"
             @insert-all="insertAllFragments"
+            @stop-ai="stopInsertProcessing"
             @cancel-fragment-intro="handleCancelFragmentIntro"
             @remove-introduced-attachment="removeIntroducedAttachmentByKey"
             @update:selected-insert-preset="selectedInsertPreset = $event"
@@ -214,6 +219,7 @@ import { AnimatePresence, motion } from 'motion-v'
 import { getStructNote, updateStructNote, findStructFolderItemByNoteId } from '../../api/structNote'
 import { fetchFolderPathStack, moveStructItem } from '../../api/structFolder'
 import { fetchNotesByIds, restoreArchivedFragment, archiveFragmentNotes } from '../../api/note'
+import { isArchiveFragmentsAfterSedimentEnabled } from '../../storage/utools/sedimentPrefs'
 import {
   finalizeInlineImagesInMarkdown,
   hasPendingInlineImages,
@@ -295,6 +301,10 @@ const {
   selectedInsertPreset,
   aiProcessing,
   processingFragmentId,
+  aiComposingLabel,
+  aiElapsedLabel,
+  aiProgressLabel,
+  aiComposingPreview,
   insertFragment,
   insertAllFragments,
   stopInsertProcessing,
@@ -573,7 +583,7 @@ const persistSourceFragments = async (noteId) => {
     || allFragmentIds.some((id) => !previousSet.has(id))
 
   let archivedIds = []
-  if (newIds.length) {
+  if (newIds.length && isArchiveFragmentsAfterSedimentEnabled()) {
     archivedIds = await archiveFragmentNotes(newIds, noteId)
   }
 

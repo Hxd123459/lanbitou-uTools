@@ -9,7 +9,10 @@ import {
 import { isUtoolsAiAvailable } from './aiService'
 import { resolveWritingStylePromptSection } from './writingStyleService'
 import { humanizeDraftText } from './humanizeService'
-import { getFragmentContent } from '../composables/useStructNoteFragments'
+import {
+  formatFragmentTime,
+  getFragmentContent,
+} from '../composables/useStructNoteFragments'
 
 export const SEDIMENT_DRAFT_PRESETS = Object.fromEntries(
   Object.entries(LEGACY_BUILTIN_LABELS).map(([id, label]) => [id, { id, label }]),
@@ -29,7 +32,7 @@ const DRAFT_SYSTEM_BASE = `你是烂笔头的笔记整理助手。根据用户�
 1. 第一行必须是 Markdown 一级标题，格式：# 标题（2-15字，概括主题）
 2. 第二行起是正文，使用 Markdown 格式（小标题、列表、引用等均可）
 3. 禁止输出思考过程、解释、寒暄或 JSON
-4. 不要重复罗列原始碎片编号，直接整合成文
+4. 不要重复罗列原始碎片编号，直接整合成文；输入中的「时间」可用于梳理脉络，勿编造未给出的时间
 5. 若碎片信息不足，基于已有内容尽力整理，不要编造事实`
 
 const FRAGMENT_INSERT_SYSTEM_BASE = `你是烂笔头的笔记整理助手。根据用户提供的碎片笔记，生成可直接插入长文正文的 Markdown 内容块。
@@ -39,8 +42,9 @@ const FRAGMENT_INSERT_SYSTEM_BASE = `你是烂笔头的笔记整理助手。根�
 2. 使用 Markdown 格式（小标题、列表、引用、待办等均可）
 3. 禁止输出思考过程、解释、寒暄或 JSON
 4. 不要重复罗列原始碎片编号，直接整合成文；不要遗漏任一条碎片中的有效信息
-5. 图片由系统单独处理，你只处理文字，不要输出图片语法
-6. 若碎片信息不足，基于已有内容尽力整理，不要编造事实`
+5. 输入中的「时间」可用于梳理脉络或标注节点，勿编造未给出的时间
+6. 图片由系统单独处理，你只处理文字，不要输出图片语法
+7. 若碎片信息不足，基于已有内容尽力整理，不要编造事实`
 
 const APPEND_DRAFT_SYSTEM_BASE = `你是烂笔头的笔记整理助手。用户已有一篇长文，请将提供的新碎片整理成可追加到文末的内容块。
 
@@ -49,7 +53,7 @@ const APPEND_DRAFT_SYSTEM_BASE = `你是烂笔头的笔记整理助手。用户�
 2. 使用 Markdown 格式（小标题、列表、引用、待办等均可），风格与已有正文尽量一致
 3. 禁止重复输出已有正文内容
 4. 禁止输出思考过程、解释、寒暄或 JSON
-5. 不要重复罗列原始碎片编号，直接整合成文
+5. 不要重复罗列原始碎片编号，直接整合成文；输入中的「时间」可用于梳理脉络，勿编造未给出的时间
 6. 若碎片信息不足，基于已有内容尽力整理，不要编造事实`
 
 function buildSystemPrompt(preset, customPrompt, styleSection = '', mode = 'generate') {
@@ -78,15 +82,37 @@ function fragmentLabel(note, index) {
   return text ? text.slice(0, 16) + (text.length > 16 ? '…' : '') : `碎片${index + 1}`
 }
 
-export function buildFragmentsUserMessage(fragments) {
+function fragmentTimeValue(note) {
+  return note?.createdAt || note?.createTime || ''
+}
+
+function fragmentTimeMs(note) {
+  const raw = fragmentTimeValue(note)
+  if (!raw) return Number.POSITIVE_INFINITY
+  const ms = new Date(String(raw).replace(' ', 'T')).getTime()
+  return Number.isNaN(ms) ? Number.POSITIVE_INFINITY : ms
+}
+
+/** 按创建时间升序，缺时间的放最后；稳定排序保留原相对顺序 */
+export function sortFragmentsByTime(fragments) {
   const list = Array.isArray(fragments) ? fragments : []
+  return list
+    .map((note, index) => ({ note, index, time: fragmentTimeMs(note) }))
+    .sort((a, b) => a.time - b.time || a.index - b.index)
+    .map((item) => item.note)
+}
+
+export function buildFragmentsUserMessage(fragments) {
+  const list = sortFragmentsByTime(fragments)
   if (!list.length) return '（无碎片内容）'
 
   return list
     .map((note, i) => {
       const label = fragmentLabel(note, i)
+      const time = formatFragmentTime(fragmentTimeValue(note))
+      const timeLine = time && time !== '----' ? `时间: ${time}\n` : '时间: 未知\n'
       const body = getFragmentContent(note).trim() || '（空）'
-      return `【碎片${i + 1}: ${label}】\n${body}`
+      return `【碎片${i + 1}: ${label}】\n${timeLine}${body}`
     })
     .join('\n\n')
 }

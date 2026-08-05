@@ -143,6 +143,25 @@
 
     <p v-if="inlineError" class="sediment-templates-inline-error">{{ inlineError }}</p>
 
+    <label class="sediment-prefs-toggle-row">
+      <span class="sediment-prefs-toggle-text">
+        <span class="sediment-prefs-toggle-title">整理后从碎片列表移除</span>
+        <span class="sediment-prefs-toggle-desc">保存长文时归档已引入的碎片；关闭后碎片仍留在列表中</span>
+      </span>
+      <span class="sediment-template-switch" :class="{ 'is-on': archiveAfterSediment }">
+        <input
+          v-model="archiveAfterSediment"
+          type="checkbox"
+          class="sediment-template-switch-input"
+          aria-label="整理后从碎片列表移除"
+          @change="handleArchiveToggle"
+        />
+        <span class="sediment-template-switch-track" aria-hidden="true">
+          <span class="sediment-template-switch-thumb" />
+        </span>
+      </span>
+    </label>
+
     <SedimentTemplateEditModal
       :visible="modalOpen"
       :initial="editing"
@@ -159,6 +178,10 @@ import { motion } from 'motion-v'
 import { useMotionPresets } from '../../composables/useMotionPresets'
 import { useSedimentTemplates } from '../../composables/useSedimentTemplates'
 import { SETTINGS_NAV_TARGETS } from '../../composables/useSettingsNavigation'
+import {
+  loadSedimentPrefs,
+  saveArchiveFragmentsAfterSediment,
+} from '../../storage/utools/sedimentPrefs'
 import SedimentTemplateEditModal from './SedimentTemplateEditModal.vue'
 import SettingsSectionHeading from './SettingsSectionHeading.vue'
 
@@ -193,6 +216,7 @@ const saving = ref(false)
 const deletingId = ref(null)
 const deleteSaving = ref(false)
 const inlineError = ref('')
+const archiveAfterSediment = ref(loadSedimentPrefs().archiveFragmentsAfterSediment)
 
 const cardMotion = computed(() => {
   const reveal = presets.value.reveal
@@ -200,6 +224,16 @@ const cardMotion = computed(() => {
     ? { initial: reveal.initial, animate: reveal.animate, transition: { ...reveal.transition, delay: 0.16 } }
     : { initial: reveal.initial, animate: reveal.initial, transition: reveal.transition }
 })
+
+const handleArchiveToggle = () => {
+  try {
+    saveArchiveFragmentsAfterSediment(archiveAfterSediment.value)
+    inlineError.value = ''
+  } catch (error) {
+    archiveAfterSediment.value = !archiveAfterSediment.value
+    inlineError.value = error instanceof Error ? error.message : '保存失败'
+  }
+}
 
 const openCreate = () => {
   cancelDelete()
@@ -503,5 +537,82 @@ const confirmDelete = async (item) => {
   margin: 10px 0 0;
   font-size: 12px;
   color: var(--color-error);
+}
+
+.sediment-prefs-toggle-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid var(--color-border);
+  cursor: pointer;
+}
+
+.sediment-prefs-toggle-text {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.sediment-prefs-toggle-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-primary);
+}
+
+.sediment-prefs-toggle-desc {
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--color-secondary-text);
+}
+
+.sediment-template-switch {
+  position: relative;
+  display: inline-flex;
+  flex: 0 0 auto;
+  margin-top: 2px;
+}
+
+.sediment-template-switch-input {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+}
+
+.sediment-template-switch-track {
+  position: relative;
+  display: block;
+  width: 44px;
+  height: 26px;
+  border-radius: 999px;
+  background: #d4d4d8;
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+
+.sediment-template-switch.is-on .sediment-template-switch-track {
+  background: #18181b;
+}
+
+.sediment-template-switch-thumb {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.18);
+  transition: transform 0.2s ease;
+  pointer-events: none;
+}
+
+.sediment-template-switch.is-on .sediment-template-switch-thumb {
+  transform: translateX(18px);
 }
 </style>
