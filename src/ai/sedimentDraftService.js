@@ -123,6 +123,7 @@ export function buildAppendUserMessage(existingContent, fragments) {
   return `【已有正文】\n${body}\n\n【待整理的新碎片】\n${fragmentsMessage}`
 }
 
+/** 碎片/追加模式：仅剥掉误输出的一级标题行，正文首行必须保留 */
 export function parseAppendContent(raw) {
   const text = String(raw ?? '').trim()
   if (!text) return ''
@@ -137,7 +138,7 @@ export function parseAppendContent(raw) {
       bodyStart = i + 1
       break
     }
-    bodyStart = i + 1
+    bodyStart = i
     break
   }
 

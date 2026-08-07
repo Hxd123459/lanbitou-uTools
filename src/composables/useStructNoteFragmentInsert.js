@@ -176,7 +176,7 @@ export function useStructNoteFragmentInsert({
           onDelta?.(accumulated)
         },
         onDone: ({ content }) => {
-          settle(resolve, parseAppendContent(content || ''))
+          settle(resolve, content || '')
         },
         onError: (error) => {
           settle(reject, error instanceof Error ? error : new Error('AI 整理失败'))

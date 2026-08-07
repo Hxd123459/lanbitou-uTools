@@ -146,7 +146,7 @@ export function useStructNoteAiDraft({
             content || parseDraftTitleAndContent(draftAccumulated).content || draftAccumulated
           draftContent.value = body
         } else {
-          const appendBody = parseAppendContent(content || draftAccumulated)
+          const appendBody = content || parseAppendContent(draftAccumulated)
           const finalContent = combineWithBase(baseContent, appendBody)
           draftContent.value = finalContent
         }
