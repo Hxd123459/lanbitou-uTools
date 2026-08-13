@@ -115,7 +115,7 @@
       <div v-if="!selectable && !note?.isPending" class="meta-right">
       <div class="meta-actions">
         <motion.button
-          v-if="!isEditing"
+          v-if="!isEditing && showPinActions"
           class="icon-btn"
           :class="{ 'is-active': isPinnedTop }"
           type="button"
@@ -143,7 +143,7 @@
           </svg>
         </motion.button>
         <motion.button
-          v-if="!isEditing"
+          v-if="!isEditing && showPinActions"
           class="icon-btn"
           :class="{ 'is-active': isPinnedBottom }"
           type="button"
@@ -753,6 +753,10 @@ const props = defineProps({
   tagAiLoading: {
     type: Boolean,
     default: false,
+  },
+  showPinActions: {
+    type: Boolean,
+    default: true,
   },
 })
 

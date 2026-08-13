@@ -83,48 +83,21 @@
             </p>
 
             <template v-for="item in results" :key="`${item.type}-${item.id}`">
-              <!-- 碎片：直接展示全文 + 高亮 -->
-              <article
+              <NoteCard
                 v-if="item.type === 'fragment'"
-                class="global-search-result is-fragment"
-              >
-                <div class="global-search-result-meta">
-                  <div class="global-search-result-meta-left">
-                    <span class="global-search-result-icon is-fragment" title="碎片" aria-hidden="true">
-                      <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-                        <path d="M4 5.5h7v7H4z" />
-                        <path d="M15 4h5v5.5L16.5 14H13V8.5L15 4z" />
-                        <path d="M8 15.5h7v5.5H8z" />
-                      </svg>
-                    </span>
-                    <span v-if="resultTagLabel(item)" class="global-search-result-tag">
-                      {{ resultTagLabel(item) }}
-                    </span>
-                  </div>
-                  <span v-if="item.createTime" class="global-search-result-time">
-                    {{ formatTime(item.createTime) }}
-                  </span>
-                </div>
-                <div
-                  v-if="item.content"
-                  class="global-search-result-full"
-                  v-html="highlightText(item.content || '')"
-                />
-                <div
-                  v-if="resultImages(item).length || resultFiles(item).length"
-                  class="global-search-result-attachments"
-                >
-                  <NoteImageGallery
-                    v-if="resultImages(item).length"
-                    :images="resultImages(item)"
-                  />
-                  <NoteFileList
-                    v-if="resultFiles(item).length"
-                    :attachments="resultFiles(item)"
-                    compact
-                  />
-                </div>
-              </article>
+                class="global-search-fragment-card"
+                :note="fragmentResultToNote(item)"
+                :highlight="highlightKeywords"
+                :show-pin-actions="false"
+                @edit-save="handleFragmentEditSave"
+                @delete="handleFragmentDelete"
+                @copied="handleCopied"
+                @copy-failed="handleCopyFailed"
+                @image-too-large="handleAttachmentTooLarge('image')"
+                @file-too-large="handleAttachmentTooLarge('file')"
+                @error="notifyFragmentError"
+                @tag-select="handleFragmentTagSelect"
+              />
 
               <!-- 沉淀：摘要 + 点击打开详情 -->
               <article
@@ -235,15 +208,28 @@
     @close="closeSedimentDetail"
     @error="onSedimentError"
   />
+
+  <CopyToast
+    :visible="showToast"
+    :text="toastText"
+    :type="toastType"
+    @close="closeToast"
+  />
 </template>
 
 <script setup>
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { AnimatePresence, motion } from 'motion-v'
 import { useMotionPresets } from '../../composables/useMotionPresets'
+import { useCopyNote } from '../../composables/useCopyNote'
 import { highlightPlainText } from '../../utils/searchHighlight'
 import { getAttachmentKind } from '../../utils/attachmentDisplay'
 import { findStructFolderItemByNoteId } from '../../api/structNote'
+import { deleteBlock } from '../../api/note'
+import { ApiError } from '../../api/http'
+import { useAssistantStore } from '../../stores/assistantStore'
+import CopyToast from '../feedback/CopyToast.vue'
+import NoteCard from '../note/NoteCard.vue'
 import NoteFileList from '../note/NoteFileList.vue'
 import NoteImageGallery from '../note/NoteImageGallery.vue'
 import StructNoteViewModal from '../sediment/StructNoteViewModal.vue'
@@ -256,6 +242,14 @@ const props = defineProps({
 const emit = defineEmits(['close', 'open-todo'])
 
 const { presets, reduced } = useMotionPresets()
+const {
+  showToast,
+  toastText,
+  toastType,
+  closeToast,
+  openToast,
+} = useCopyNote()
+const assistantStore = useAssistantStore()
 
 const scopeOptions = [
   { id: 'all', label: '全部' },
@@ -310,7 +304,124 @@ const formatTime = (value) => {
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`
 }
 
-const resultTagLabel = (item) => item.tagName || (item.type === 'fragment' ? item.title : '') || ''
+const fragmentResultToNote = (item) => {
+  if (!item?.id) {
+    return {
+      id: '',
+      title: '',
+      markdownContent: '',
+      createdAt: '',
+      attachments: [],
+    }
+  }
+  const attachments = Array.isArray(item.attachments) ? item.attachments : []
+  return {
+    id: item.id,
+    title: item.tagName || item.title || '',
+    tagId: item.tagId ?? null,
+    createdAt: item.createTime || '',
+    markdownContent: item.markdownContent || item.content || '',
+    text: item.content || '',
+    attachments,
+    images: attachments.filter((att) => getAttachmentKind(att) === 'image'),
+    pinWeightType: item.pinWeightType || 'DEFAULT',
+    aiNoteRecallId: item.aiNoteRecallId ?? null,
+  }
+}
+
+const refreshSearchResults = async () => {
+  try {
+    await query.value?.runSearch?.({ reset: true })
+  } catch (error) {
+    console.error('[烂笔头] 全局搜索刷新失败', error)
+  }
+}
+
+const notifyFragmentError = (error) => {
+  const message =
+    error instanceof Error
+      ? error.message
+      : typeof error === 'string'
+        ? error
+        : '操作失败，请稍后重试'
+  openToast(message, 'error', { duration: 2200 })
+}
+
+const handleFragmentEditSave = async ({
+  id,
+  title,
+  content,
+  tagId,
+  tagName,
+  retainedImageIds,
+  newImages,
+}) => {
+  if (!id) {
+    notifyFragmentError('无法保存：缺少笔记 ID')
+    throw new Error('missing note id')
+  }
+  try {
+    await assistantStore.updateNote(id, title, content, {
+      tagId,
+      tagName,
+      retainedImageIds,
+      newImages,
+    })
+    openToast('已保存修改', 'success')
+    await refreshSearchResults()
+  } catch (error) {
+    notifyFragmentError(error instanceof ApiError ? `[${error.code}] ${error.msg}` : error)
+    throw error
+  }
+}
+
+const handleFragmentDelete = async ({ id }) => {
+  if (!id) {
+    notifyFragmentError('无法删除：缺少笔记 ID')
+    return
+  }
+  try {
+    if (assistantStore.editingNoteId === id) {
+      assistantStore.setEditingNoteId(null)
+    }
+    await deleteBlock(id)
+    openToast('笔记已删除', 'success')
+    await refreshSearchResults()
+  } catch (error) {
+    notifyFragmentError(error instanceof ApiError ? `[${error.code}] ${error.msg}` : error)
+  }
+}
+
+const handleCopied = (payload) => {
+  const mode = payload?.mode || 'plain'
+  const messages = {
+    plain: '已复制纯文本',
+    rich: payload?.imageCount
+      ? `已复制（含 ${payload.imageCount} 张图片）`
+      : '已复制（含图片）',
+    'share-copy': '分享图已复制',
+    'share-save': '分享图已保存',
+  }
+  openToast(messages[mode] || '复制成功', 'success', { duration: 1600 })
+}
+
+const handleCopyFailed = () => {
+  openToast('复制失败', 'error', { duration: 1600 })
+}
+
+const handleAttachmentTooLarge = (kind) => {
+  openToast(
+    kind === 'file' ? '单个附件须小于 10 MB' : '单张图片须小于 10 MB',
+    'error',
+    { duration: 2200 },
+  )
+}
+
+const handleFragmentTagSelect = ({ tagId, tagName }) => {
+  if (!tagId || !tagName || !query.value?.selectedTag) return
+  query.value.selectedTag.value = { tagId, tagName }
+  query.value.scheduleSearch?.(true)
+}
 
 const resultSnippets = (item) => {
   if (Array.isArray(item.snippets) && item.snippets.length) return item.snippets
@@ -597,6 +708,10 @@ defineExpose({
 
 .global-search-result.is-fragment {
   cursor: default;
+}
+
+.global-search-fragment-card {
+  width: 100%;
 }
 
 .global-search-result:hover {

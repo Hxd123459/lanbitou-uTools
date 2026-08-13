@@ -237,11 +237,14 @@ function toFragmentResult(doc, tagNameById) {
     type: 'fragment',
     title: doc.title || tagName || '无标签',
     content,
+    markdownContent: String(raw ?? ''),
     snippets: [],
     attachments: [],
     tagName,
     tagId: doc.tagId ?? null,
     createTime: doc.createTime || '',
+    pinWeightType: doc.pinWeightType || 'DEFAULT',
+    aiNoteRecallId: doc.aiNoteRecallId ?? null,
     _sourceDoc: doc,
   }
 }
