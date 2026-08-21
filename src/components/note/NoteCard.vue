@@ -11,7 +11,6 @@
       'is-compact': compact,
     }"
     @click="onSelectableCardClick"
-    @dblclick="onCardDblClick"
   >
     <button
       v-if="selectable && !note?.isPending"
@@ -803,7 +802,6 @@ const isEditorFocused = ref(false)
 
 let listScrollEl = null
 let lastListScrollTop = 0
-let selectClickTimer = null
 
 const CARD_INTERACTIVE_SELECTOR =
   'a, button, input, textarea, label, .attachment-strip, .editor-attachment-strip, .gallery, .file-list, .tile, .note-select-control, .note-tag, .lightbox, [data-note-copy-menu], [data-note-share-menu]'
@@ -1078,6 +1076,7 @@ const clearSelectedTag = () => {
 }
 
 const enterEdit = async () => {
+  if (props.disableEdit) return
   if (props.note?.isPending || saving.value || isEditing.value) return
   resetDraftAttachments()
   draftContent.value = contentText.value
@@ -1471,7 +1470,6 @@ watch(
 )
 
 onBeforeUnmount(() => {
-  clearSelectClickTimer()
   unbindListScroll()
   resetDraftAttachments()
   document.removeEventListener('click', onCopyMenuDocumentClick, true)
@@ -1577,29 +1575,10 @@ const onTagClick = () => {
   emit('tag-select', { tagId, tagName })
 }
 
-const clearSelectClickTimer = () => {
-  if (selectClickTimer) {
-    clearTimeout(selectClickTimer)
-    selectClickTimer = null
-  }
-}
-
-const onCardDblClick = (event) => {
-  if (props.disableEdit) return
-  if (props.note?.isPending || saving.value || isEditing.value) return
-  if (event.target.closest(CARD_INTERACTIVE_SELECTOR)) return
-  clearSelectClickTimer()
-  enterEdit()
-}
-
 const onSelectableCardClick = (event) => {
   if (!props.selectable || props.note?.isPending) return
   if (event.target.closest(CARD_INTERACTIVE_SELECTOR)) return
-  clearSelectClickTimer()
-  selectClickTimer = setTimeout(() => {
-    selectClickTimer = null
-    emit('toggle-select')
-  }, 220)
+  emit('toggle-select')
 }
 
 function formatTime(dateValue) {
