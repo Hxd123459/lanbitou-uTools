@@ -1,4 +1,10 @@
-import { getResolvedBaseUrl, getResolvedModel } from '../storage/utools/aiSettings'
+import {
+  applyProviderRequestExtras,
+  getResolvedBaseUrl,
+  getResolvedModel,
+  isAnthropicProvider,
+  isOpenAiCompatible,
+} from '../storage/utools/aiSettings'
 import { PROFILE_TYPES, loadProfile } from '../storage/utools/profileRepository'
 import { isUtoolsAiAvailable } from './aiService'
 import { buildPersonaPromptText } from './profileExtractionService'
@@ -80,7 +86,7 @@ async function runToolCalls(toolCalls) {
   return outputs
 }
 
-async function runOpenAiAgent({ baseUrl, apiKey, model, messages }) {
+async function runOpenAiAgent({ provider, baseUrl, apiKey, model, messages }) {
   const tools = toOpenAiTools()
   let workingMessages = [...messages]
 
@@ -91,19 +97,21 @@ async function runOpenAiAgent({ baseUrl, apiKey, model, messages }) {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${apiKey}`,
       },
-      body: JSON.stringify({
-        model,
-        temperature: 0.5,
-        max_tokens: 2048,
-        messages: workingMessages,
-        tools,
-        tool_choice: 'auto',
-      }),
+      body: JSON.stringify(
+        applyProviderRequestExtras(provider, model, {
+          model,
+          temperature: 0.5,
+          max_tokens: 2048,
+          messages: workingMessages,
+          tools,
+          tool_choice: 'auto',
+        }),
+      ),
     })
 
     const payload = await response.json().catch(() => ({}))
     if (!response.ok) {
-      const msg = payload?.error?.message || `OpenAI 请求失败 (${response.status})`
+      const msg = payload?.error?.message || `AI 请求失败 (${response.status})`
       throw new Error(msg)
     }
 
@@ -112,7 +120,9 @@ async function runOpenAiAgent({ baseUrl, apiKey, model, messages }) {
 
     const toolCalls = extractToolCalls(message)
     if (!toolCalls.length) {
-      const content = String(message.content || '').trim()
+      const content = String(
+        message.content || message.reasoning_content || message.reasoning || '',
+      ).trim()
       if (!content) throw new Error('AI 未返回内容')
       return content
     }
@@ -157,7 +167,7 @@ async function runAnthropicAgent({ baseUrl, apiKey, model, messages }) {
 
     const payload = await response.json().catch(() => ({}))
     if (!response.ok) {
-      const msg = payload?.error?.message || `Anthropic 请求失败 (${response.status})`
+      const msg = payload?.error?.message || `AI 请求失败 (${response.status})`
       throw new Error(msg)
     }
 
@@ -308,10 +318,10 @@ export async function runChatWithNoteTools(settings, { history, userMessage }) {
   const { apiKey } = settings
   if (!apiKey) throw new Error('请先在设置中填写 API Key')
 
-  if (settings.provider === 'openai') {
-    return runOpenAiAgent({ baseUrl, apiKey, model, messages })
+  if (isOpenAiCompatible(settings.provider)) {
+    return runOpenAiAgent({ provider: settings.provider, baseUrl, apiKey, model, messages })
   }
-  if (settings.provider === 'anthropic') {
+  if (isAnthropicProvider(settings.provider)) {
     return runAnthropicAgent({ baseUrl, apiKey, model, messages })
   }
 

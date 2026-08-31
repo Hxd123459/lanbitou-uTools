@@ -1,5 +1,12 @@
 import { isUtoolsMode } from '../storage/env'
-import { loadAiSettings, getResolvedBaseUrl, getResolvedModel } from '../storage/utools/aiSettings'
+import {
+  applyProviderRequestExtras,
+  getResolvedBaseUrl,
+  getResolvedModel,
+  isAnthropicProvider,
+  isOpenAiCompatible,
+  loadAiSettings,
+} from '../storage/utools/aiSettings'
 import { buildTodoSourceHash, normalizeTodoTitle } from '../storage/utools/todoRepository'
 import { isUtoolsAiAvailable } from './aiService'
 import { isSedimentDraftAiAvailable } from './sedimentDraftService'
@@ -111,26 +118,28 @@ async function requestUtoolsJson(systemPrompt, userContent, model) {
   return String(result?.content || '').trim()
 }
 
-async function requestOpenAiJson({ baseUrl, apiKey, model, systemPrompt, userContent }) {
+async function requestOpenAiJson({ provider, baseUrl, apiKey, model, systemPrompt, userContent }) {
   const response = await fetch(`${baseUrl}/chat/completions`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       Authorization: `Bearer ${apiKey}`,
     },
-    body: JSON.stringify({
-      model,
-      temperature: 0.2,
-      max_tokens: EXTRACT_MAX_TOKENS,
-      messages: [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: userContent },
-      ],
-    }),
+    body: JSON.stringify(
+      applyProviderRequestExtras(provider, model, {
+        model,
+        temperature: 0.2,
+        max_tokens: EXTRACT_MAX_TOKENS,
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userContent },
+        ],
+      }),
+    ),
   })
   const payload = await response.json().catch(() => ({}))
   if (!response.ok) {
-    throw new Error(payload?.error?.message || `OpenAI 请求失败 (${response.status})`)
+    throw new Error(payload?.error?.message || `AI 请求失败 (${response.status})`)
   }
   return String(payload?.choices?.[0]?.message?.content || '').trim()
 }
@@ -153,7 +162,7 @@ async function requestAnthropicJson({ baseUrl, apiKey, model, systemPrompt, user
   })
   const payload = await response.json().catch(() => ({}))
   if (!response.ok) {
-    throw new Error(payload?.error?.message || `Anthropic 请求失败 (${response.status})`)
+    throw new Error(payload?.error?.message || `AI 请求失败 (${response.status})`)
   }
   const block = (payload?.content || []).find((item) => item.type === 'text')
   return String(block?.text || '').trim()
@@ -184,16 +193,17 @@ export async function extractTodosFromNotes({ notes, existingHashes } = {}) {
 
   if (settings.provider === 'utools') {
     raw = await requestUtoolsJson(SYSTEM_PROMPT, userContent, settings.model)
-  } else if (settings.provider === 'openai') {
+  } else if (isOpenAiCompatible(settings.provider)) {
     if (!settings.apiKey) throw new Error('请先在设置中填写 API Key')
     raw = await requestOpenAiJson({
+      provider: settings.provider,
       baseUrl: getResolvedBaseUrl(settings),
       apiKey: settings.apiKey,
       model: getResolvedModel(settings),
       systemPrompt: SYSTEM_PROMPT,
       userContent,
     })
-  } else if (settings.provider === 'anthropic') {
+  } else if (isAnthropicProvider(settings.provider)) {
     if (!settings.apiKey) throw new Error('请先在设置中填写 API Key')
     raw = await requestAnthropicJson({
       baseUrl: getResolvedBaseUrl(settings),

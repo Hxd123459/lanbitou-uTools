@@ -6,6 +6,8 @@ import {
   getResolvedBaseUrl,
   getResolvedModel,
   isAutoProfileAnalysisEnabled,
+  isOpenAiCompatible,
+  isThirdPartyConfigured,
 } from '../storage/utools/aiSettings'
 import {
   PROFILE_TYPES,
@@ -230,7 +232,7 @@ async function requestAnalysis(system, user) {
     system,
     user,
     maxTokens: ANALYSIS_MAX_TOKENS,
-    jsonMode: settings.provider === 'openai',
+    jsonMode: isOpenAiCompatible(settings.provider),
   })
 }
 
@@ -768,7 +770,7 @@ async function reduceCard(systemPrompt, findings) {
 
 function isAiConfigured(settings) {
   if (settings.provider === 'utools') return isUtoolsAiAvailable()
-  return !!settings.apiKey
+  return isThirdPartyConfigured(settings)
 }
 
 /**

@@ -562,7 +562,7 @@ import {
 import { onSubInputSearch } from '../composables/useUtoolsSubInputSearch'
 import { generateNoteTitle, isUtoolsAiAvailable, shouldAutoTagContent } from '../ai/aiService'
 import { isUtoolsMode } from '../storage/env'
-import { loadAiSettings } from '../storage/utools/aiSettings'
+import { isThirdPartyConfigured, loadAiSettings } from '../storage/utools/aiSettings'
 import { ApiError } from '../api/http'
 import {
   deleteBlock,
@@ -1232,7 +1232,7 @@ const isBulkAiTagAvailable = () => {
   if (!isUtoolsMode()) return false
   const settings = loadAiSettings()
   if (settings.provider === 'utools') return isUtoolsAiAvailable()
-  return Boolean(String(settings.apiKey ?? '').trim() && String(settings.baseUrl ?? '').trim())
+  return isThirdPartyConfigured(settings)
 }
 
 const markBulkAiTagProcessed = (id) => {

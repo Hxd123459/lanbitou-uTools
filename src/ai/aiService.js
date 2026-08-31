@@ -1,6 +1,10 @@
 import { getAllTagNamesForAi } from '../storage/utools/tagRepository'
-import { loadAiSettings } from '../storage/utools/aiSettings'
-import { generateTitleViaThirdParty, testThirdPartyConnection } from './thirdPartyAi'
+import { isThirdPartyProvider, loadAiSettings } from '../storage/utools/aiSettings'
+import {
+  formatAiRequestError,
+  generateTitleViaThirdParty,
+  testThirdPartyConnection,
+} from './thirdPartyAi'
 import { parseTitleResultFromAssistantMessage } from './titleParser'
 
 export function isUtoolsAiAvailable() {
@@ -116,7 +120,7 @@ export async function generateNoteTitle(rawContent) {
       return null
     }
 
-    if (settings.provider === 'openai' || settings.provider === 'anthropic') {
+    if (isThirdPartyProvider(settings.provider)) {
       return acceptTitle(
         await generateTitleViaThirdParty(settings, systemPrompt, text),
       )
@@ -156,5 +160,9 @@ export async function testAiConnection(partialSettings) {
     return true
   }
 
-  return testThirdPartyConnection(settings)
+  try {
+    return await testThirdPartyConnection(settings)
+  } catch (error) {
+    throw new Error(formatAiRequestError(error, settings))
+  }
 }

@@ -1,5 +1,13 @@
 import { isUtoolsMode } from '../storage/env'
-import { loadAiSettings, getResolvedBaseUrl, getResolvedModel } from '../storage/utools/aiSettings'
+import {
+  applyProviderRequestExtras,
+  getResolvedBaseUrl,
+  getResolvedModel,
+  isAnthropicProvider,
+  isOpenAiCompatible,
+  isThirdPartyConfigured,
+  loadAiSettings,
+} from '../storage/utools/aiSettings'
 import {
   getSedimentTemplateInstruction,
   getSedimentTemplateTitle,
@@ -174,7 +182,7 @@ export function isSedimentDraftAiAvailable() {
   if (!isUtoolsMode()) return false
   const settings = loadAiSettings()
   if (settings.provider === 'utools') return isUtoolsAiAvailable()
-  return Boolean(String(settings.apiKey ?? '').trim() && String(settings.baseUrl ?? '').trim())
+  return isThirdPartyConfigured(settings)
 }
 
 function simulateStream(text, onDelta, onDone) {
@@ -222,7 +230,7 @@ async function requestUtoolsDraft(systemPrompt, userContent, model) {
   return content
 }
 
-async function streamOpenAiDraft({ baseUrl, apiKey, model, systemPrompt, userContent, onDelta, onDone, onError }) {
+async function streamOpenAiDraft({ provider, baseUrl, apiKey, model, systemPrompt, userContent, onDelta, onDone, onError }) {
   let cancelled = false
   const cancel = () => {
     cancelled = true
@@ -235,21 +243,23 @@ async function streamOpenAiDraft({ baseUrl, apiKey, model, systemPrompt, userCon
         'Content-Type': 'application/json',
         Authorization: `Bearer ${apiKey}`,
       },
-      body: JSON.stringify({
-        model,
-        temperature: 0.5,
-        max_tokens: 4096,
-        stream: true,
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: userContent },
-        ],
-      }),
+      body: JSON.stringify(
+        applyProviderRequestExtras(provider, model, {
+          model,
+          temperature: 0.5,
+          max_tokens: 4096,
+          stream: true,
+          messages: [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: userContent },
+          ],
+        }),
+      ),
     })
 
     if (!response.ok) {
       const payload = await response.json().catch(() => ({}))
-      throw new Error(payload?.error?.message || `OpenAI 请求失败 (${response.status})`)
+      throw new Error(payload?.error?.message || `AI 请求失败 (${response.status})`)
     }
 
     const reader = response.body?.getReader()
@@ -317,7 +327,7 @@ async function streamAnthropicDraft({ baseUrl, apiKey, model, systemPrompt, user
 
     if (!response.ok) {
       const payload = await response.json().catch(() => ({}))
-      throw new Error(payload?.error?.message || `Anthropic 请求失败 (${response.status})`)
+      throw new Error(payload?.error?.message || `AI 请求失败 (${response.status})`)
     }
 
     const reader = response.body?.getReader()
@@ -436,12 +446,13 @@ export function generateSedimentDraft({
         return
       }
 
-      if (settings.provider === 'openai') {
+      if (isOpenAiCompatible(settings.provider)) {
         const baseUrl = getResolvedBaseUrl(settings)
         const model = getResolvedModel(settings)
         if (!settings.apiKey) throw new Error('请先在设置中填写 API Key')
 
         innerCancel = await streamOpenAiDraft({
+          provider: settings.provider,
           baseUrl,
           apiKey: settings.apiKey,
           model,
@@ -456,7 +467,7 @@ export function generateSedimentDraft({
         return
       }
 
-      if (settings.provider === 'anthropic') {
+      if (isAnthropicProvider(settings.provider)) {
         const baseUrl = getResolvedBaseUrl(settings)
         const model = getResolvedModel(settings)
         if (!settings.apiKey) throw new Error('请先在设置中填写 API Key')

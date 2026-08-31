@@ -32,6 +32,7 @@
         >
           <fieldset class="ai-settings-group">
             <legend class="ai-settings-label">服务来源</legend>
+            <p class="ai-settings-lead">点选运营商，只需填写 Key 和模型。接口地址已自动配置。</p>
             <div class="ai-provider-list">
               <label
                 v-for="item in providerOptions"
@@ -46,46 +47,132 @@
                   name="ai-provider"
                   :value="item.id"
                 />
+                <span class="ai-provider-icon-wrap">
+                  <img
+                    v-if="getProviderIcon(item.id)"
+                    :src="getProviderIcon(item.id)"
+                    class="ai-provider-icon"
+                    alt=""
+                    width="20"
+                    height="20"
+                  />
+                </span>
                 <span class="ai-provider-name">{{ item.label }}</span>
-                <span v-if="item.id === 'utools'" class="ai-provider-hint">使用 uTools 平台额度</span>
               </label>
             </div>
+            <p v-if="currentProvider.hint" class="ai-settings-hint">{{ currentProvider.hint }}</p>
           </fieldset>
 
           <template v-if="form.provider !== 'utools'">
             <label class="ai-settings-field">
-              <span class="ai-settings-label">API Key</span>
+              <span class="ai-settings-label-row">
+                <span class="ai-settings-label">API Key</span>
+                <button
+                  v-if="currentProvider.keyUrl"
+                  type="button"
+                  class="ai-settings-link"
+                  @click="openKeyUrl"
+                >
+                  去获取
+                </button>
+              </span>
               <input
                 v-model="form.apiKey"
                 type="password"
                 class="ai-settings-input"
-                placeholder="sk-..."
+                :placeholder="currentProvider.keyPlaceholder || 'sk-...'"
                 autocomplete="off"
                 spellcheck="false"
               />
             </label>
 
-            <label class="ai-settings-field">
-              <span class="ai-settings-label">Base URL</span>
+            <label v-if="currentProvider.requiresBaseUrl" class="ai-settings-field">
+              <span class="ai-settings-label">接口地址</span>
               <input
                 v-model="form.baseUrl"
                 type="url"
                 class="ai-settings-input"
-                :placeholder="currentProvider.defaultBaseUrl"
+                placeholder="https://api.example.com/v1"
                 spellcheck="false"
               />
             </label>
 
-            <label class="ai-settings-field">
+            <div class="ai-settings-field">
               <span class="ai-settings-label">模型</span>
-              <input
-                v-model="form.model"
-                type="text"
-                class="ai-settings-input"
-                :placeholder="currentProvider.defaultModel"
-                spellcheck="false"
-              />
-            </label>
+              <div ref="modelSelectRef" class="ai-model-select">
+                <div
+                  class="ai-model-combobox"
+                  :class="{ 'is-open': modelMenuOpen }"
+                >
+                  <input
+                    v-model="form.model"
+                    type="text"
+                    class="ai-model-input"
+                    :placeholder="modelPlaceholder"
+                    autocomplete="off"
+                    spellcheck="false"
+                    :aria-expanded="modelMenuOpen"
+                    aria-haspopup="listbox"
+                    @focus="openModelMenu"
+                    @input="openModelMenu"
+                  />
+                  <button
+                    v-if="modelOptions.length"
+                    type="button"
+                    class="ai-model-chevron-btn"
+                    tabindex="-1"
+                    aria-label="展开模型列表"
+                    @mousedown.prevent
+                    @click="toggleModelMenu"
+                  >
+                    <svg
+                      class="ai-model-trigger-chevron"
+                      :class="{ 'is-open': modelMenuOpen }"
+                      viewBox="0 0 24 24"
+                      width="14"
+                      height="14"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      aria-hidden="true"
+                    >
+                      <path d="M6 9l6 6 6-6" />
+                    </svg>
+                  </button>
+                </div>
+                <div
+                  v-if="modelMenuOpen && filteredModelOptions.length"
+                  class="ai-model-menu"
+                  role="listbox"
+                  aria-label="选择模型"
+                >
+                  <button
+                    v-for="option in filteredModelOptions"
+                    :key="option.id"
+                    type="button"
+                    class="ai-model-option"
+                    :class="{ 'is-selected': form.model === option.id }"
+                    role="option"
+                    :aria-selected="form.model === option.id"
+                    @mousedown.prevent
+                    @click="selectPresetModel(option.id)"
+                  >
+                    <span class="ai-model-option-main">
+                      <span class="ai-model-option-label">{{ option.label }}</span>
+                      <span class="ai-model-option-id">{{ option.id }}</span>
+                    </span>
+                    <span
+                      v-if="form.model === option.id"
+                      class="ai-model-option-check"
+                      aria-hidden="true"
+                    >
+                      ✓
+                    </span>
+                  </button>
+                </div>
+              </div>
+            </div>
           </template>
 
           <label v-else class="ai-settings-field">
@@ -163,14 +250,20 @@
 </template>
 
 <script setup>
-import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { motion } from 'motion-v'
+import { getProviderIcon } from '../../ai/providerIcons'
 import { testAiConnection } from '../../ai/aiService'
 import { useMotionPresets } from '../../composables/useMotionPresets'
 import AppButton from '../motion/AppButton.vue'
 import SettingsSectionHeading from './SettingsSectionHeading.vue'
 import {
   AI_PROVIDERS,
+  getProviderModelIds,
+  getProviderModelOptions,
+  getResolvedBaseUrl,
+  getResolvedModel,
+  listAiProviders,
   loadAiSettings,
   saveAiSettings,
   saveAutoTagEnabled,
@@ -224,11 +317,7 @@ const autoTagCardMotion = computed(() => {
     : { initial: reveal.initial, animate: reveal.initial, transition: reveal.transition }
 })
 
-const providerOptions = [
-  AI_PROVIDERS.utools,
-  AI_PROVIDERS.openai,
-  AI_PROVIDERS.anthropic,
-]
+const providerOptions = listAiProviders()
 
 const form = reactive({
   provider: 'utools',
@@ -244,18 +333,100 @@ const providerStatusMessage = ref('')
 const providerStatusType = ref('')
 const autoTagStatusMessage = ref('')
 const autoTagChecking = ref(false)
+const modelMenuOpen = ref(false)
+const modelSelectRef = ref(null)
+let hydrating = false
 
 const currentProvider = computed(
   () => AI_PROVIDERS[form.provider] || AI_PROVIDERS.utools,
 )
 
+const modelOptions = computed(() => getProviderModelOptions(form.provider))
+
+const modelPlaceholder = computed(() => {
+  if (form.provider === 'utools') return '留空则使用 uTools 默认模型'
+  return currentProvider.value.defaultModel || '选择或输入模型名称'
+})
+
+const filteredModelOptions = computed(() => {
+  const query = String(form.model || '').trim().toLowerCase()
+  if (!query) return modelOptions.value
+  const matched = modelOptions.value.filter(
+    (item) =>
+      item.id.toLowerCase().includes(query) || item.label.toLowerCase().includes(query),
+  )
+  return matched.length ? matched : modelOptions.value
+})
+
 const hydrate = () => {
+  hydrating = true
   const saved = loadAiSettings()
   form.provider = saved.provider
   form.model = saved.model
   form.baseUrl = saved.baseUrl
   form.apiKey = saved.apiKey
   form.autoTagEnabled = saved.autoTagEnabled
+  nextTick(() => {
+    hydrating = false
+  })
+}
+
+const applyProviderDefaults = (nextId, prevId) => {
+  const next = AI_PROVIDERS[nextId]
+  const prev = AI_PROVIDERS[prevId]
+  if (!next) return
+
+  if (next.requiresBaseUrl) {
+    const prevOfficial = String(prev?.defaultBaseUrl || '')
+    if (!form.baseUrl || form.baseUrl === prevOfficial) {
+      form.baseUrl = prevOfficial || form.baseUrl
+    }
+  } else {
+    form.baseUrl = next.defaultBaseUrl || ''
+  }
+
+  const nextModels = new Set(getProviderModelIds(nextId))
+  if (nextModels.size) {
+    if (!nextModels.has(form.model)) form.model = next.defaultModel || ''
+  } else if (!next.requiresBaseUrl) {
+    form.model = next.defaultModel || ''
+  }
+  modelMenuOpen.value = false
+}
+
+const closeModelMenu = () => {
+  modelMenuOpen.value = false
+}
+
+const openModelMenu = () => {
+  if (modelOptions.value.length) modelMenuOpen.value = true
+}
+
+const toggleModelMenu = () => {
+  if (!modelOptions.value.length) return
+  modelMenuOpen.value = !modelMenuOpen.value
+}
+
+const selectPresetModel = (name) => {
+  form.model = name
+  closeModelMenu()
+}
+
+const handleDocumentPointerDown = (event) => {
+  if (!modelMenuOpen.value) return
+  const root = modelSelectRef.value
+  if (root && event.target instanceof Node && root.contains(event.target)) return
+  closeModelMenu()
+}
+
+const openKeyUrl = () => {
+  const url = currentProvider.value.keyUrl
+  if (!url) return
+  if (typeof window.utools?.shellOpenExternal === 'function') {
+    window.utools.shellOpenExternal(url)
+    return
+  }
+  window.open(url, '_blank', 'noopener,noreferrer')
 }
 
 const setProviderStatus = (message, type = 'info') => {
@@ -263,15 +434,34 @@ const setProviderStatus = (message, type = 'info') => {
   providerStatusType.value = type
 }
 
+const getConnectionParams = () => ({
+  provider: form.provider,
+  model: getResolvedModel(form),
+  baseUrl: getResolvedBaseUrl(form),
+  apiKey: form.apiKey,
+})
+
+const validateForm = () => {
+  if (form.provider !== 'utools' && !String(form.apiKey || '').trim()) {
+    setProviderStatus('请填写 API Key', 'error')
+    return false
+  }
+  if (currentProvider.value.requiresBaseUrl && !String(form.baseUrl || '').trim()) {
+    setProviderStatus('请填写接口地址', 'error')
+    return false
+  }
+  if (form.provider !== 'utools' && !getResolvedModel(form)) {
+    setProviderStatus('请选择或填写模型', 'error')
+    return false
+  }
+  return true
+}
+
 const handleSave = async () => {
+  if (!validateForm()) return
   saving.value = true
   try {
-    saveAiSettings({
-      provider: form.provider,
-      model: form.model,
-      baseUrl: form.baseUrl,
-      apiKey: form.apiKey,
-    })
+    saveAiSettings(getConnectionParams())
     setProviderStatus('服务来源已保存', 'success')
   } catch (error) {
     setProviderStatus(error?.message || '保存失败', 'error')
@@ -281,6 +471,7 @@ const handleSave = async () => {
 }
 
 const handleTest = async () => {
+  if (!validateForm()) return
   testing.value = true
   setProviderStatus('')
   try {
@@ -299,13 +490,6 @@ const handleTest = async () => {
     testing.value = false
   }
 }
-
-const getConnectionParams = () => ({
-  provider: form.provider,
-  model: form.model,
-  baseUrl: form.baseUrl,
-  apiKey: form.apiKey,
-})
 
 const handleAutoTagToggle = async () => {
   const next = form.autoTagEnabled
@@ -337,13 +521,29 @@ const handleAutoTagToggle = async () => {
 }
 
 watch(
+  () => form.provider,
+  (next, prev) => {
+    if (hydrating || !prev || next === prev) return
+    applyProviderDefaults(next, prev)
+    setProviderStatus('')
+  },
+)
+
+watch(
   () => props.active,
   (active) => {
     if (active) hydrate()
   },
 )
 
-onMounted(hydrate)
+onMounted(() => {
+  hydrate()
+  document.addEventListener('pointerdown', handleDocumentPointerDown)
+})
+
+onBeforeUnmount(() => {
+  document.removeEventListener('pointerdown', handleDocumentPointerDown)
+})
 </script>
 
 <style scoped>
@@ -462,6 +662,13 @@ onMounted(hydrate)
   color: var(--color-secondary-text);
 }
 
+.ai-settings-lead {
+  margin: 0 0 10px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--color-secondary-text);
+}
+
 .ai-switch.is-busy {
   opacity: 0.6;
   pointer-events: none;
@@ -481,44 +688,215 @@ onMounted(hydrate)
   color: var(--color-primary);
 }
 
-.ai-provider-list {
+.ai-settings-label-row {
   display: flex;
-  flex-direction: column;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.ai-settings-label-row .ai-settings-label {
+  margin-bottom: 0;
+}
+
+.ai-settings-link {
+  padding: 0;
+  border: 0;
+  background: none;
+  font-family: inherit;
+  font-size: 12px;
+  color: var(--color-accent);
+  cursor: pointer;
+}
+
+.ai-settings-link:hover {
+  text-decoration: underline;
+}
+
+.ai-provider-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 8px;
 }
 
 .ai-provider-option {
+  position: relative;
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 10px 12px;
+  justify-content: flex-start;
+  gap: 8px;
+  min-height: 36px;
+  padding: 6px 10px;
   border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  background: var(--color-bg);
+  border-radius: var(--btn-radius);
+  background: var(--color-surface);
   cursor: pointer;
 }
 
+.ai-provider-option:hover {
+  background: rgba(24, 24, 27, 0.04);
+}
+
 .ai-provider-option.is-active {
-  border-color: rgba(24, 24, 27, 0.28);
-  background: var(--color-surface);
-  box-shadow: var(--shadow-card);
+  border-color: rgba(24, 24, 27, 0.4);
+  background: rgba(24, 24, 27, 0.05);
+}
+
+.ai-provider-option:focus-within {
+  box-shadow: var(--focus-ring);
 }
 
 .ai-provider-input {
-  flex: 0 0 auto;
-  accent-color: var(--color-primary);
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+}
+
+.ai-provider-icon-wrap {
+  display: block;
+  flex: 0 0 20px;
+  width: 20px;
+  height: 20px;
+  border-radius: 5px;
+  overflow: hidden;
+  background: #fff;
+}
+
+.ai-provider-icon {
+  display: block;
+  width: 20px;
+  height: 20px;
+  object-fit: cover;
+  object-position: center;
 }
 
 .ai-provider-name {
-  font-size: 14px;
+  min-width: 0;
+  font-size: 13px;
   font-weight: 500;
   color: var(--color-text);
 }
 
-.ai-provider-hint {
-  margin-left: auto;
-  font-size: 12px;
+.ai-provider-option.is-active .ai-provider-name {
+  font-weight: 600;
+}
+
+.ai-model-select {
+  position: relative;
+}
+
+.ai-model-combobox {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  height: 36px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--btn-radius);
+  background: var(--color-bg);
+  box-sizing: border-box;
+}
+
+.ai-model-combobox.is-open,
+.ai-model-combobox:focus-within {
+  border-color: rgba(24, 24, 27, 0.35);
+  box-shadow: var(--focus-ring);
+}
+
+.ai-model-input {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  padding: 0 8px 0 12px;
+  border: 0;
+  background: transparent;
+  color: var(--color-text);
+  font-family: inherit;
+  font-size: 13px;
+  outline: none;
+}
+
+.ai-model-chevron-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: 32px;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
   color: var(--color-secondary-text);
+  cursor: pointer;
+}
+
+.ai-model-trigger-chevron {
+  display: block;
+}
+
+.ai-model-trigger-chevron.is-open {
+  transform: rotate(180deg);
+}
+
+.ai-model-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  z-index: 12;
+  max-height: 240px;
+  overflow-y: auto;
+  padding: 6px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-float, 0 16px 40px rgba(24, 24, 27, 0.12));
+}
+
+.ai-model-option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--color-text);
+  font-family: inherit;
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.ai-model-option:hover,
+.ai-model-option.is-selected {
+  background: rgba(24, 24, 27, 0.06);
+}
+
+.ai-model-option-main {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.ai-model-option-label {
+  font-weight: 500;
+}
+
+.ai-model-option-id {
+  font-size: 11px;
+  color: var(--color-secondary-text);
+}
+
+.ai-model-option-check {
+  flex: 0 0 auto;
+  font-size: 12px;
+  color: var(--color-accent);
 }
 
 .ai-settings-field {
@@ -607,7 +985,7 @@ onMounted(hydrate)
   height: 20px;
   border-radius: 50%;
   background: #fff;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.18);
+  box-shadow: 0 1px 3px rgba(24, 24, 27, 0.18);
   transition: transform 0.2s ease;
 }
 

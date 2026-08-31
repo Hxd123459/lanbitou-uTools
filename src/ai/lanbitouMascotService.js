@@ -1,4 +1,10 @@
-import { loadAiSettings, getResolvedBaseUrl, getResolvedModel } from '../storage/utools/aiSettings'
+import {
+  isThirdPartyConfigured,
+  isThirdPartyProvider,
+  loadAiSettings,
+  getResolvedBaseUrl,
+  getResolvedModel,
+} from '../storage/utools/aiSettings'
 import { isUtoolsAiAvailable } from './aiService'
 import { callThirdPartyChat } from './thirdPartyAi'
 
@@ -79,11 +85,9 @@ export async function generateMascotFragmentFeedback(payload = {}) {
       if (reply) return reply
     }
 
-    if (settings.provider === 'openai' || settings.provider === 'anthropic') {
-      if (settings.apiKey) {
-        const reply = await requestThirdPartyFeedback(settings, SYSTEM_PROMPT, userPrompt)
-        if (reply) return reply
-      }
+    if (isThirdPartyProvider(settings.provider) && isThirdPartyConfigured(settings)) {
+      const reply = await requestThirdPartyFeedback(settings, SYSTEM_PROMPT, userPrompt)
+      if (reply) return reply
     }
   } catch (error) {
     console.warn('[烂笔头吉祥物] AI 反馈失败，使用兜底文案', error)

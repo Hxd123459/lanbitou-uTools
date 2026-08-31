@@ -1,5 +1,12 @@
 import { isUtoolsMode } from '../storage/env'
-import { loadAiSettings, getResolvedBaseUrl, getResolvedModel } from '../storage/utools/aiSettings'
+import {
+  applyProviderRequestExtras,
+  getResolvedBaseUrl,
+  getResolvedModel,
+  isAnthropicProvider,
+  isOpenAiCompatible,
+  loadAiSettings,
+} from '../storage/utools/aiSettings'
 import {
   getSedimentTemplateById,
   listTodoTemplates,
@@ -25,26 +32,28 @@ async function requestUtools(systemPrompt, userContent, model) {
   return String(result?.content || '').trim()
 }
 
-async function requestOpenAi({ baseUrl, apiKey, model, systemPrompt, userContent }) {
+async function requestOpenAi({ provider, baseUrl, apiKey, model, systemPrompt, userContent }) {
   const response = await fetch(`${baseUrl}/chat/completions`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       Authorization: `Bearer ${apiKey}`,
     },
-    body: JSON.stringify({
-      model,
-      temperature: 0.3,
-      max_tokens: MAX_TOKENS,
-      messages: [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: userContent },
-      ],
-    }),
+    body: JSON.stringify(
+      applyProviderRequestExtras(provider, model, {
+        model,
+        temperature: 0.3,
+        max_tokens: MAX_TOKENS,
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userContent },
+        ],
+      }),
+    ),
   })
   const payload = await response.json().catch(() => ({}))
   if (!response.ok) {
-    throw new Error(payload?.error?.message || `OpenAI 请求失败 (${response.status})`)
+    throw new Error(payload?.error?.message || `AI 请求失败 (${response.status})`)
   }
   return String(payload?.choices?.[0]?.message?.content || '').trim()
 }
@@ -67,7 +76,7 @@ async function requestAnthropic({ baseUrl, apiKey, model, systemPrompt, userCont
   })
   const payload = await response.json().catch(() => ({}))
   if (!response.ok) {
-    throw new Error(payload?.error?.message || `Anthropic 请求失败 (${response.status})`)
+    throw new Error(payload?.error?.message || `AI 请求失败 (${response.status})`)
   }
   const block = (payload?.content || []).find((item) => item.type === 'text')
   return String(block?.text || '').trim()
@@ -107,16 +116,17 @@ export async function generateTodoCopy({ template, project, todos = [] } = {}) {
     let raw = ''
     if (settings.provider === 'utools') {
       raw = await requestUtools(systemPrompt, userContent, settings.model)
-    } else if (settings.provider === 'openai') {
+    } else if (isOpenAiCompatible(settings.provider)) {
       if (!settings.apiKey) throw new Error('missing key')
       raw = await requestOpenAi({
+        provider: settings.provider,
         baseUrl: getResolvedBaseUrl(settings),
         apiKey: settings.apiKey,
         model: getResolvedModel(settings),
         systemPrompt,
         userContent,
       })
-    } else if (settings.provider === 'anthropic') {
+    } else if (isAnthropicProvider(settings.provider)) {
       if (!settings.apiKey) throw new Error('missing key')
       raw = await requestAnthropic({
         baseUrl: getResolvedBaseUrl(settings),

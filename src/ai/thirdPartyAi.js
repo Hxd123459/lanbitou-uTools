@@ -1,10 +1,17 @@
-import { AI_PROVIDERS, getResolvedBaseUrl, getResolvedModel } from '../storage/utools/aiSettings'
+import {
+  AI_PROVIDERS,
+  applyProviderRequestExtras,
+  getResolvedBaseUrl,
+  getResolvedModel,
+  isOpenAiCompatible,
+  isAnthropicProvider,
+} from '../storage/utools/aiSettings'
 import { parseTitleResultFromAssistantMessage } from './titleParser'
 
 const TITLE_REQUEST_MAX_TOKENS = 256
 const TITLE_RETRY_MAX_TOKENS = 512
 
-function buildTitleRequestBody({ model, system, user, maxTokens, jsonMode }) {
+function buildTitleRequestBody({ provider, model, system, user, maxTokens, jsonMode }) {
   const body = {
     model,
     temperature: 0.1,
@@ -19,10 +26,22 @@ function buildTitleRequestBody({ model, system, user, maxTokens, jsonMode }) {
     body.response_format = { type: 'json_object' }
   }
 
-  return body
+  return applyProviderRequestExtras(provider, model, body)
+}
+
+function readMessageContent(message) {
+  if (!message) return ''
+  const content = message.content
+  if (typeof content === 'string' && content.trim()) return content
+  if (Array.isArray(content)) {
+    const text = content.map((part) => part?.text || '').join('')
+    if (text.trim()) return text
+  }
+  return String(message.reasoning_content || message.reasoning || '')
 }
 
 async function requestOpenAiMessage({
+  provider,
   baseUrl,
   apiKey,
   model,
@@ -38,13 +57,13 @@ async function requestOpenAiMessage({
       Authorization: `Bearer ${apiKey}`,
     },
     body: JSON.stringify(
-      buildTitleRequestBody({ model, system, user, maxTokens, jsonMode }),
+      buildTitleRequestBody({ provider, model, system, user, maxTokens, jsonMode }),
     ),
   })
 
   const payload = await response.json().catch(() => ({}))
   if (!response.ok) {
-    const msg = payload?.error?.message || `OpenAI 请求失败 (${response.status})`
+    const msg = payload?.error?.message || `AI 请求失败 (${response.status})`
     throw new Error(msg)
   }
 
@@ -52,6 +71,7 @@ async function requestOpenAiMessage({
 }
 
 async function requestOpenAi({
+  provider,
   baseUrl,
   apiKey,
   model,
@@ -61,6 +81,7 @@ async function requestOpenAi({
   jsonMode = false,
 }) {
   const message = await requestOpenAiMessage({
+    provider,
     baseUrl,
     apiKey,
     model,
@@ -69,7 +90,7 @@ async function requestOpenAi({
     maxTokens,
     jsonMode,
   })
-  return message?.content || ''
+  return readMessageContent(message)
 }
 
 async function requestAnthropicMessage({
@@ -98,7 +119,7 @@ async function requestAnthropicMessage({
 
   const payload = await response.json().catch(() => ({}))
   if (!response.ok) {
-    const msg = payload?.error?.message || `Anthropic 请求失败 (${response.status})`
+    const msg = payload?.error?.message || `AI 请求失败 (${response.status})`
     throw new Error(msg)
   }
 
@@ -124,10 +145,11 @@ async function callThirdPartyChatMessage({
   const resolvedModel = model || AI_PROVIDERS[provider]?.defaultModel
   const resolvedBaseUrl = baseUrl || AI_PROVIDERS[provider]?.defaultBaseUrl
   if (!apiKey) throw new Error('请先填写 API Key')
-  if (!resolvedBaseUrl) throw new Error('请先填写 Base URL')
+  if (!resolvedBaseUrl) throw new Error('请先填写接口地址')
   if (!resolvedModel) throw new Error('请先填写模型名称')
 
   const args = {
+    provider,
     baseUrl: resolvedBaseUrl,
     apiKey,
     model: resolvedModel,
@@ -137,10 +159,10 @@ async function callThirdPartyChatMessage({
     jsonMode,
   }
 
-  if (provider === 'openai') {
+  if (isOpenAiCompatible(provider)) {
     return requestOpenAiMessage(args)
   }
-  if (provider === 'anthropic') {
+  if (isAnthropicProvider(provider)) {
     return requestAnthropicMessage(args)
   }
   throw new Error('不支持的服务商')
@@ -159,10 +181,11 @@ export async function callThirdPartyChat({
   const resolvedModel = model || AI_PROVIDERS[provider]?.defaultModel
   const resolvedBaseUrl = baseUrl || AI_PROVIDERS[provider]?.defaultBaseUrl
   if (!apiKey) throw new Error('请先填写 API Key')
-  if (!resolvedBaseUrl) throw new Error('请先填写 Base URL')
+  if (!resolvedBaseUrl) throw new Error('请先填写接口地址')
   if (!resolvedModel) throw new Error('请先填写模型名称')
 
   const args = {
+    provider,
     baseUrl: resolvedBaseUrl,
     apiKey,
     model: resolvedModel,
@@ -172,10 +195,10 @@ export async function callThirdPartyChat({
     jsonMode,
   }
 
-  if (provider === 'openai') {
+  if (isOpenAiCompatible(provider)) {
     return requestOpenAi(args)
   }
-  if (provider === 'anthropic') {
+  if (isAnthropicProvider(provider)) {
     return requestAnthropic(args)
   }
   throw new Error('不支持的服务商')
@@ -235,6 +258,31 @@ export async function generateTitleViaThirdParty(settings, systemPrompt, userCon
   }
 
   return null
+}
+
+export function formatAiRequestError(error, settings) {
+  const raw = String(error?.message || '连接失败')
+  const lower = raw.toLowerCase()
+  const provider = AI_PROVIDERS[settings?.provider]
+  const modelHint = provider?.defaultModel ? `，可改用 ${provider.defaultModel}` : ''
+
+  if (/failed to fetch|networkerror|network request|enotfound|econnrefused/i.test(raw)) {
+    return '连不上服务，请检查网络'
+  }
+  if (/401|unauthorized|invalid.*api.?key|incorrect api key|api[_ ]?key.*invalid/i.test(lower)) {
+    return 'API Key 无效，请检查是否复制完整'
+  }
+  if (/403|permission|not allowed|insufficient/i.test(lower) && /key|auth|quota/i.test(lower)) {
+    return '当前 Key 没有权限或额度不足'
+  }
+  if (/model|does not exist|not found|not support|invalid model|unknown model/i.test(lower)) {
+    return `模型不可用${modelHint}`
+  }
+  if (raw.includes('模型未返回内容') || /empty content|no content/i.test(lower)) {
+    return `模型没有返回内容${modelHint}`
+  }
+  if (raw.includes('请先填写')) return raw
+  return raw
 }
 
 export async function testThirdPartyConnection(settings) {
