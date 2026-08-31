@@ -1,7 +1,7 @@
 import { PROJECT_PREFIX } from './constants'
 import { dbAllDocs, dbGet, dbPut } from './dbClient'
 import { createId, formatDateTime } from './utils'
-import { MAX_PROJECTS, MAX_TAGS_PER_PROJECT } from '../../constants/todoLimits'
+import { MAX_TAGS_PER_PROJECT } from '../../constants/todoLimits'
 
 function projectDocId(id) {
   return `${PROJECT_PREFIX}${id}`
@@ -149,9 +149,6 @@ export async function createProject({
   if (!trimmed) throw new Error('事情名称不能为空')
 
   const existing = await loadAllProjectDocs()
-  if (existing.length >= MAX_PROJECTS) {
-    throw new Error(`最多只能创建 ${MAX_PROJECTS} 件事情`)
-  }
 
   const normalizedTags = normalizeTagIds(tagIds)
   if (Array.isArray(tagIds) && tagIds.filter(Boolean).length > MAX_TAGS_PER_PROJECT) {

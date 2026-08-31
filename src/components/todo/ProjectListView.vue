@@ -17,8 +17,6 @@
         <AppButton
           type="button"
           class="btn btn-primary"
-          :disabled="!canCreate"
-          :title="canCreate ? undefined : `最多 ${MAX_PROJECTS} 件事情`"
           @click="emit('create')"
         >
           新建事情
@@ -231,12 +229,11 @@
 </template>
 
 <script setup>
-import { computed, ref, watch } from 'vue'
+import { ref, watch } from 'vue'
 import { motion } from 'motion-v'
 import { VueDraggable } from 'vue-draggable-plus'
 import AppButton from '../motion/AppButton.vue'
 import { useMotionPresets } from '../../composables/useMotionPresets'
-import { MAX_PROJECTS } from '../../constants/todoLimits'
 import { formatDateTime } from '../../storage/utools/utils'
 
 const props = defineProps({
@@ -263,8 +260,6 @@ const deletingId = ref(null)
 const deleteSaving = ref(false)
 const sortSaving = ref(false)
 const sortableProjects = ref([])
-
-const canCreate = computed(() => (props.projects || []).length < MAX_PROJECTS)
 
 const syncSortableProjects = () => {
   const list = Array.isArray(props.projects) ? props.projects : []

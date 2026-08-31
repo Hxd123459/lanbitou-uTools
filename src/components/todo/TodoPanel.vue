@@ -110,7 +110,6 @@ import {
 } from '../../api/structFolder'
 import { extractTodosFromNotes, isTodoExtractAiAvailable } from '../../ai/todoExtractService'
 import { formatDateTime } from '../../storage/utools/utils'
-import { MAX_PROJECTS } from '../../constants/todoLimits'
 import {
   clearPendingTodoSync,
   getPendingTodoSync,
@@ -456,10 +455,6 @@ const openTodoAt = async ({ projectId, todoId }) => {
 }
 
 const openCreateModal = () => {
-  if (projects.value.length >= MAX_PROJECTS) {
-    notifyToast(`最多只能创建 ${MAX_PROJECTS} 件事情`)
-    return
-  }
   editingProject.value = null
   formVisible.value = true
 }
